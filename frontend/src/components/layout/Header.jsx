@@ -35,9 +35,9 @@ const Header = () => {
   };
 
   const navLinks = [
-    { label: 'Basketball', href: '/products?sport=Basketball' },
-    { label: 'Volleyball', href: '/products?sport=Volleyball' },
-    { label: 'Football', href: '/products?sport=Football' },
+    { label: 'Basketball', href: '/products?sport=basketball' },
+    { label: 'Volleyball', href: '/products?sport=volleyball' },
+    { label: 'Football', href: '/products?sport=football' },
     { label: 'All Products', href: '/products' },
   ];
 

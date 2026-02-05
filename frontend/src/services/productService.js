@@ -45,7 +45,18 @@ export const productService = {
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
     return response.data;
-  }
+  },
+
+  // Reviews
+  getReviews: async (slug, params = {}) => {
+    const response = await api.get(`/products/${slug}/reviews`, { params });
+    return response.data;
+  },
+
+  createReview: async (slug, reviewData) => {
+    const response = await api.post(`/products/${slug}/reviews`, reviewData);
+    return response.data;
+  },
 };
 
 export default productService;

@@ -122,7 +122,7 @@ const Home = () => {
               <Link to="/products" className="btn-primary-light text-sm md:text-base">
                 Shop All Products
               </Link>
-              <Link to="/products?category=jerseys" className="btn-secondary-light text-sm md:text-base">
+              <Link to="/products?category=jersey" className="btn-secondary-light text-sm md:text-base">
                 Browse Jerseys
               </Link>
             </div>
@@ -183,7 +183,7 @@ const Home = () => {
                   ))}
                 </ul>
                 <Link
-                  to="/products?category=jerseys"
+                  to="/products?category=jersey"
                   className="inline-flex items-center gap-2 bg-white text-primary-700 px-5 py-2.5 md:px-6 md:py-3 rounded-full font-semibold text-sm md:text-base hover:bg-gray-100 transition-colors"
                 >
                   Try It Now

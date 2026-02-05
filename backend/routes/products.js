@@ -23,9 +23,9 @@ router.get('/', async (req, res) => {
 
     const filter = { active: true };
 
-    if (sport) filter.sport = sport;
+    if (sport) filter.sport = { $regex: new RegExp(`^${sport}$`, 'i') };
     if (team) filter.team = { $regex: team, $options: 'i' };
-    if (category) filter.category = category;
+    if (category) filter.category = { $regex: new RegExp(`^${category}$`, 'i') };
     if (featured) filter.featured = featured === 'true';
 
     if (minPrice || maxPrice) {

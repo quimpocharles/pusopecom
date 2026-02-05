@@ -73,6 +73,17 @@ const productSchema = new mongoose.Schema({
   totalStock: {
     type: Number,
     default: 0
+  },
+  avgRating: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  reviewCount: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, {
   timestamps: true

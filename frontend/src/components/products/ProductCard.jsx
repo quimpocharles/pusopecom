@@ -8,16 +8,12 @@ const ProductCard = ({ product, onBuyNow }) => {
 
   const effectivePrice = product.effectivePrice || product.salePrice || product.price;
   const hasDiscount = product.salePrice && product.salePrice < product.price;
-  const discountPercent = hasDiscount
-    ? Math.round(((product.price - product.salePrice) / product.price) * 100)
-    : 0;
 
   const isTryOnEligible = ['jersey', 'jerseys', 'tshirt', 'shirts', 'tops']
     .includes(product.category?.toLowerCase());
 
   // Primary image and hover image
   const primaryImage = product.images?.[0] || '/placeholder.jpg';
-  // If there's a second image use it, otherwise swap the placeholder color scheme
   const hoverImage = product.images?.[1]
     || primaryImage.replace(/placehold\.co\/600x600\/([A-Fa-f0-9]+)\/([A-Fa-f0-9]+)/, (_, bg, fg) => `placehold.co/600x600/${fg}/${bg}`);
 
@@ -29,11 +25,20 @@ const ProductCard = ({ product, onBuyNow }) => {
     }
   };
 
+  // Category display label
+  const categoryLabel = {
+    jersey: 'Jersey',
+    tshirt: 'T-Shirt',
+    cap: 'Cap',
+    shorts: 'Shorts',
+    accessories: 'Accessory',
+  }[product.category] || product.category;
+
   return (
-    <Link to={`/products/${product.slug}`} className="product-card group block">
-      {/* Image Container */}
+    <Link to={`/products/${product.slug}`} className="group block">
+      {/* Image Card */}
       <div
-        className="product-card-image relative bg-gray-100"
+        className="relative bg-gray-100 rounded-2xl overflow-hidden aspect-square"
         onMouseEnter={() => setImgHovered(true)}
         onMouseLeave={() => setImgHovered(false)}
       >
@@ -59,12 +64,12 @@ const ProductCard = ({ product, onBuyNow }) => {
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
           {hasDiscount && (
-            <span className="badge bg-accent-500 text-white text-xs">
-              -{discountPercent}%
+            <span className="bg-accent-500 text-white text-xs font-medium px-2.5 py-1 rounded-full">
+              Sale
             </span>
           )}
           {isTryOnEligible && (
-            <span className="badge bg-primary-600 text-white text-xs flex items-center gap-1">
+            <span className="bg-primary-600 text-white text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1">
               <SparklesIcon className="w-3 h-3" />
               Try-On
             </span>
@@ -91,35 +96,53 @@ const ProductCard = ({ product, onBuyNow }) => {
         )}
       </div>
 
-      {/* Content */}
-      <div className="p-4">
-        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-          {product.team || product.sport}
-        </p>
-
-        <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-primary-600 transition-colors">
-          {product.name}
-        </h3>
-
-        <div className="flex items-center gap-1 mb-2">
-          {[...Array(5)].map((_, i) => (
-            <StarIcon
-              key={i}
-              className={`w-3.5 h-3.5 ${i < 4 ? 'text-secondary-500' : 'text-gray-200'}`}
-            />
-          ))}
-          <span className="text-xs text-gray-500 ml-1">4.0</span>
+      {/* Product Info — MoreLabs style rows */}
+      <div className="mt-4 space-y-1">
+        {/* Row 1: Name + Stars */}
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-semibold text-gray-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-primary-600 transition-colors">
+            {product.name}
+          </h3>
+          {product.reviewCount > 0 && (
+            <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+              <div className="flex">
+                {[...Array(5)].map((_, i) => (
+                  <StarIcon
+                    key={i}
+                    className={`w-3 h-3 md:w-3.5 md:h-3.5 ${i < Math.round(product.avgRating) ? 'text-primary-600' : 'text-gray-200'}`}
+                  />
+                ))}
+              </div>
+              <span className="text-xs text-gray-500 hidden sm:inline">{product.reviewCount} reviews</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-baseline gap-2">
-          <span className="text-lg font-bold text-gray-900">
-            ₱{effectivePrice?.toLocaleString()}
-          </span>
-          {hasDiscount && (
-            <span className="text-sm text-gray-400 line-through">
-              ₱{product.price?.toLocaleString()}
+        {/* Row 2: Team/variant + Price */}
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-xs md:text-sm text-gray-500 truncate">
+            {product.team || product.sport}
+          </p>
+          <div className="flex items-baseline gap-1.5 flex-shrink-0">
+            {hasDiscount && (
+              <span className="text-xs text-gray-400 line-through">
+                ₱{product.price?.toLocaleString()}
+              </span>
+            )}
+            <span className="text-sm md:text-base font-semibold text-gray-900">
+              ₱{effectivePrice?.toLocaleString()}
             </span>
-          )}
+          </div>
+        </div>
+
+        {/* Row 3: Category + learn more */}
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-xs text-gray-400">
+            {categoryLabel}
+          </p>
+          <span className="text-xs font-medium text-gray-900 underline underline-offset-2 group-hover:text-primary-600 transition-colors">
+            learn more
+          </span>
         </div>
       </div>
     </Link>
