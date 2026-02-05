@@ -1,6 +1,6 @@
 # Puso Pilipinas - Sports Merchandise Store
 
-A full-stack MERN ecommerce platform for Philippine sports merchandise, featuring Maya payment integration and email notifications.
+A full-stack MERN ecommerce platform for Philippine sports merchandise, featuring a MoreLabs-inspired storefront design, Maya payment integration, and email notifications.
 
 ## Tech Stack
 
@@ -23,16 +23,50 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 
 ## Features
 
-- ✅ User authentication (register, login, email verification, password reset)
-- ✅ Product catalog with filtering (sport, team, category, size, price)
-- ✅ Shopping cart with persistent storage
-- ✅ Checkout flow with Maya payment integration
-- ✅ Order management and tracking
-- ✅ Email notifications (verification, order confirmation)
-- ✅ Guest checkout option
-- ✅ Admin dashboard capabilities
-- ✅ Responsive design (mobile-first)
-- ✅ NBA Store-inspired UI/UX
+- User authentication (register, login, email verification, password reset)
+- Product catalog with filtering (sport, team, category, size, price)
+- Shopping cart with persistent storage
+- Checkout flow with Maya payment integration
+- Order management and tracking
+- Email notifications (verification, order confirmation)
+- Guest checkout option
+- Admin dashboard capabilities
+- Mobile-first responsive design
+- MoreLabs-inspired homepage design
+
+### Homepage Sections
+
+The homepage follows a MoreLabs.com-inspired layout with the following sections:
+
+1. **Marquee Announcement Bar** - Scrolling ticker with shipping info and promos
+2. **Hero Section** - Full-width gradient banner with CTAs
+3. **Social Proof Bar** - Star ratings, sales count, authenticity badge
+4. **Virtual Try-On Highlight** - AI-powered jersey try-on feature showcase
+5. **Shop by Sport** - Tabbed carousel (Basketball, Volleyball, Football) with product cards
+6. **Latest Collection** - Image left, text right layout for newest collection
+7. **Featured Products** - Interactive section where clicking product names swaps the image and description
+8. **Shop by League** - Horizontal scroll with circular league logos (Gilas, PBA, UAAP, PVL, NCAA, Azkals, Alas Pilipinas)
+9. **Trust Section** - Authenticity, shipping, returns, and try-on badges
+10. **Instafeed / Social Section** - 8 circular images arranged around centered text (desktop: CSS grid, mobile: stacked rows)
+11. **Newsletter** - Email signup with gradient background
+
+### UI/UX Details
+
+- **Button hover fill-up effect** - Color fills from bottom to top using CSS `::before` pseudo-elements with `translateY` transitions
+- **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button
+- **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors
+- **Shop by League circles** - Shows 3.5 circles on screen with horizontal scroll, hover scale effect
+- **Featured product switcher** - Clickable product names with active underline; image and description swap on click
+- **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
+
+### Seeded Data
+
+Run `node backend/seed-100.js` to populate the database with 100 placeholder products:
+- 50 Basketball products (PBA teams, UAAP teams, Gilas Pilipinas)
+- 30 Volleyball products (PVL teams, Alas Pilipinas)
+- 20 Football products (PFL teams, Philippine Azkals)
+- Categories: jerseys, t-shirts, caps, shorts, accessories
+- 16 featured items, ~26 on sale
 
 ## Prerequisites
 
@@ -101,7 +135,14 @@ Create a `.env` file in the `frontend` directory:
 VITE_API_URL=http://localhost:5000/api
 ```
 
-### 4. Gmail App Password Setup
+### 4. Seed Products (Optional)
+
+```bash
+cd backend
+node seed-100.js
+```
+
+### 5. Gmail App Password Setup
 
 1. Go to your Google Account settings
 2. Enable 2-Factor Authentication
@@ -109,7 +150,7 @@ VITE_API_URL=http://localhost:5000/api
 4. Generate a new app password for "Mail"
 5. Use this password in your `EMAIL_APP_PASSWORD` variable
 
-### 5. Maya Payment Setup
+### 6. Maya Payment Setup
 
 1. Sign up at https://developers.maya.ph/
 2. Get your sandbox API keys from the dashboard
@@ -148,6 +189,7 @@ puso-shop/
 │   ├── services/        # Business logic (email, Maya payment)
 │   ├── middleware/      # Authentication middleware
 │   ├── config/          # Configuration files
+│   ├── seed-100.js      # Product seeder (100 items)
 │   ├── server.js        # Express server setup
 │   └── package.json
 │
@@ -155,13 +197,14 @@ puso-shop/
 │   ├── src/
 │   │   ├── components/  # React components
 │   │   │   ├── common/      # Reusable components
-│   │   │   ├── layout/      # Layout components
-│   │   │   ├── products/    # Product components
-│   │   │   └── cart/        # Cart components
-│   │   ├── pages/       # Page components
+│   │   │   ├── layout/      # Header, Footer, Layout
+│   │   │   ├── products/    # ProductCard (hover swap, Buy Now)
+│   │   │   └── cart/        # CartDrawer (size/quantity selector)
+│   │   ├── pages/       # Page components (Home, Products, etc.)
 │   │   ├── services/    # API service layer
-│   │   ├── store/       # Zustand stores
+│   │   ├── store/       # Zustand stores (cart, auth)
 │   │   ├── utils/       # Utility functions
+│   │   ├── index.css    # Global styles (button fill-up effects)
 │   │   ├── App.jsx      # Main app component
 │   │   └── main.jsx     # Entry point
 │   ├── public/
@@ -265,48 +308,20 @@ The application sends HTML-formatted, mobile-responsive emails for:
 - Input validation with express-validator
 - MongoDB injection prevention
 
-## Testing
+## Design Inspiration
 
-### Sample Products
-
-You can manually add products through the API or create a seed script. Example product:
-
-```json
-{
-  "name": "Ginebra Home Jersey 2024",
-  "slug": "ginebra-home-jersey-2024",
-  "description": "Official Barangay Ginebra home jersey",
-  "price": 1299,
-  "salePrice": 999,
-  "category": "jersey",
-  "sport": "basketball",
-  "team": "Barangay Ginebra San Miguel",
-  "images": ["https://example.com/image.jpg"],
-  "sizes": [
-    { "size": "S", "stock": 10 },
-    { "size": "M", "stock": 15 },
-    { "size": "L", "stock": 12 },
-    { "size": "XL", "stock": 8 }
-  ],
-  "featured": true,
-  "active": true
-}
-```
+- [MoreLabs](https://morelabs.com) - Homepage layout, button hover animations, product interactions, circle collections section, instafeed layout
+- Philippine sports culture - Color palette (Deep Navy, Championship Gold, Flag Red)
 
 ## Support
 
 For issues or questions:
 - Create an issue in the GitHub repository
-- Contact: your-email@example.com
 
 ## License
 
 MIT License
 
-## Credits
-
-Built with inspiration from NBA Store (store.nba.com)
-
 ---
 
-Made with ❤️ for Philippine Sports
+Made with pride for Philippine Sports
