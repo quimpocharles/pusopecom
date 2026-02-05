@@ -1,0 +1,292 @@
+/* Import Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-gray-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Better focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary-600 ring-offset-2;
+  }
+}
+
+@layer components {
+  /* ---- Fill-up hover effect (shared base) ---- */
+  .btn-primary,
+  .btn-primary-light,
+  .btn-secondary,
+  .btn-secondary-light,
+  .btn-outline,
+  .btn-gold,
+  .btn-tryon {
+    @apply relative overflow-hidden isolate;
+  }
+
+  .btn-primary::before,
+  .btn-primary-light::before,
+  .btn-secondary::before,
+  .btn-secondary-light::before,
+  .btn-outline::before,
+  .btn-gold::before,
+  .btn-tryon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: inherit;
+  }
+
+  .btn-primary:hover::before,
+  .btn-primary-light:hover::before,
+  .btn-secondary:hover::before,
+  .btn-secondary-light:hover::before,
+  .btn-outline:hover::before,
+  .btn-gold:hover::before,
+  .btn-tryon:hover::before {
+    transform: translateY(0);
+  }
+
+  /* Primary Button — navy bg, white text */
+  .btn-primary {
+    @apply inline-flex items-center justify-center bg-primary-600 text-white px-6 py-3 rounded-full font-semibold
+           active:scale-[0.98] transition-all duration-200
+           disabled:bg-gray-300 disabled:cursor-not-allowed
+           shadow-sm hover:shadow-md;
+  }
+  .btn-primary::before {
+    background-color: #081d4f; /* primary-700 */
+  }
+
+  /* Primary Light — white bg, navy text (for use on dark backgrounds) */
+  .btn-primary-light {
+    @apply inline-flex items-center justify-center bg-white text-primary-600 px-6 py-3 rounded-full font-semibold
+           active:scale-[0.98] transition-all duration-200
+           shadow-sm hover:shadow-md;
+  }
+  .btn-primary-light::before {
+    background-color: #0A2463; /* primary-600 */
+  }
+  .btn-primary-light:hover {
+    color: #fff;
+  }
+
+  /* Secondary Button — white bg, navy border */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600
+           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           transition-all duration-200;
+  }
+  .btn-secondary::before {
+    background-color: #0A2463; /* primary-600 */
+  }
+  .btn-secondary:hover {
+    @apply text-white border-primary-600;
+  }
+
+  /* Secondary Light — transparent, white border (for use on dark backgrounds) */
+  .btn-secondary-light {
+    @apply inline-flex items-center justify-center bg-transparent text-white border-2 border-white
+           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           transition-all duration-200;
+  }
+  .btn-secondary-light::before {
+    background-color: #fff;
+  }
+  .btn-secondary-light:hover {
+    color: #0A2463;
+    border-color: #fff;
+  }
+
+  /* Outline Button */
+  .btn-outline {
+    @apply inline-flex items-center justify-center border-2 border-gray-200 text-gray-700
+           px-6 py-3 rounded-full font-semibold
+           active:scale-[0.98] transition-all duration-200;
+  }
+  .btn-outline::before {
+    background-color: #0A2463; /* primary-600 */
+  }
+  .btn-outline:hover {
+    @apply text-white border-primary-600;
+  }
+
+  /* Gold Accent Button */
+  .btn-gold {
+    @apply inline-flex items-center justify-center bg-secondary-500 text-primary-900
+           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+  .btn-gold::before {
+    background-color: #d97706; /* secondary-600 deeper gold */
+  }
+
+  /* Try-On Button */
+  .btn-tryon {
+    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-accent-500
+           text-white px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           transition-all duration-200 shadow-md hover:shadow-lg;
+  }
+  .btn-tryon::before {
+    background: linear-gradient(to right, #081d4f, #991b1b); /* darker gradient */
+  }
+
+  /* Input Fields */
+  .input-field {
+    @apply w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl
+           focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent
+           focus:bg-white transition-all duration-200 placeholder:text-gray-400;
+  }
+
+  /* Card - MoreLabs style with subtle shadow */
+  .card {
+    @apply bg-white rounded-2xl shadow-card overflow-hidden
+           hover:shadow-card-hover transition-shadow duration-300;
+  }
+
+  /* Product Card */
+  .product-card {
+    @apply bg-white rounded-2xl overflow-hidden cursor-pointer;
+  }
+
+  .product-card-image {
+    @apply aspect-square bg-gray-100 overflow-hidden;
+  }
+
+  .product-card-image img {
+    @apply w-full h-full object-cover transition-transform duration-500;
+  }
+
+  /* Container */
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Section Spacing - MoreLabs uses generous whitespace */
+  .section {
+    @apply py-16 md:py-24;
+  }
+
+  .section-sm {
+    @apply py-10 md:py-16;
+  }
+
+  /* Badge Styles */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-100 text-primary-700;
+  }
+
+  .badge-secondary {
+    @apply bg-secondary-100 text-secondary-700;
+  }
+
+  .badge-accent {
+    @apply bg-accent-100 text-accent-600;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-700;
+  }
+
+  /* Trust Badge */
+  .trust-badge {
+    @apply flex items-center gap-3 p-4 bg-gray-50 rounded-xl;
+  }
+
+  /* Review Stars */
+  .stars {
+    @apply flex items-center gap-0.5 text-secondary-500;
+  }
+
+  /* Marquee/Announcement Bar */
+  .announcement-bar {
+    @apply bg-primary-600 text-white py-2.5 text-sm font-medium text-center;
+  }
+
+  /* Divider */
+  .divider {
+    @apply h-px bg-gray-200 my-8;
+  }
+
+  /* Price Display - MoreLabs style */
+  .price {
+    @apply text-2xl font-bold text-gray-900;
+  }
+
+  .price-original {
+    @apply text-lg text-gray-400 line-through;
+  }
+
+  .price-sale {
+    @apply text-2xl font-bold text-accent-500;
+  }
+
+  /* Navigation link */
+  .nav-link {
+    @apply text-gray-600 hover:text-primary-600 font-medium transition-colors duration-200;
+  }
+
+  .nav-link-active {
+    @apply text-primary-600 font-semibold;
+  }
+}
+
+/* Marquee Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@layer utilities {
+  /* Text balance for headings */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Hide scrollbar but allow scroll */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-accent-500;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md;
+  }
+}
