@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+Disallow: /complete-profile
+Disallow: /orders
+
+Sitemap: https://pusopilipinas.com/api/sitemap.xml

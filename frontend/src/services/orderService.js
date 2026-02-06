@@ -17,6 +17,11 @@ export const orderService = {
   },
 
   // Admin functions
+  getOrderStats: async () => {
+    const response = await api.get('/orders/admin/stats');
+    return response.data;
+  },
+
   getAllOrders: async (params = {}) => {
     const response = await api.get('/orders/admin/all', { params });
     return response.data;

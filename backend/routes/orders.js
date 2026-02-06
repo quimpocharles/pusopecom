@@ -20,7 +20,10 @@ router.post('/',
     body('shippingAddress.address').trim().notEmpty(),
     body('shippingAddress.city').trim().notEmpty(),
     body('shippingAddress.province').trim().notEmpty(),
-    body('shippingAddress.zipCode').trim().notEmpty()
+    body('shippingAddress.zipCode').trim().notEmpty(),
+    body('shippingAddress.country').optional().trim(),
+    body('shippingAddress.region').optional().trim(),
+    body('shippingAddress.barangay').optional().trim()
   ],
   async (req, res) => {
     try {
@@ -50,11 +53,27 @@ router.post('/',
         }
 
         // Check stock availability
-        const sizeStock = product.sizes.find(s => s.size === item.size);
+        let sizeStock;
+        let itemImage = product.images[0];
+
+        if (item.color && product.colors?.length > 0) {
+          const colorVariant = product.colors.find(c => c.color === item.color);
+          if (!colorVariant) {
+            return res.status(400).json({
+              success: false,
+              message: `Color ${item.color} not found for ${product.name}`
+            });
+          }
+          sizeStock = colorVariant.sizes.find(s => s.size === item.size);
+          if (colorVariant.image) itemImage = colorVariant.image;
+        } else {
+          sizeStock = product.sizes.find(s => s.size === item.size);
+        }
+
         if (!sizeStock || sizeStock.stock < item.quantity) {
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock for ${product.name} - Size ${item.size}`
+            message: `Insufficient stock for ${product.name}${item.color ? ` - ${item.color}` : ''} - Size ${item.size}`
           });
         }
 
@@ -67,7 +86,8 @@ router.post('/',
           price,
           quantity: item.quantity,
           size: item.size,
-          image: product.images[0]
+          color: item.color || undefined,
+          image: itemImage
         });
 
         // Reduce stock
@@ -125,6 +145,93 @@ router.post('/',
       res.status(500).json({
         success: false,
         message: 'Failed to create order'
+      });
+    }
+  }
+);
+
+// Get admin dashboard stats
+router.get('/admin/stats',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [
+        revenueResult,
+        monthlyRevenueResult,
+        topProducts,
+        statusCounts,
+        lowStockProducts
+      ] = await Promise.all([
+        // Total revenue from paid orders
+        Order.aggregate([
+          { $match: { paymentStatus: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+        ]),
+
+        // Revenue this month from paid orders
+        Order.aggregate([
+          { $match: { paymentStatus: 'paid', createdAt: { $gte: startOfMonth } } },
+          { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+        ]),
+
+        // Top 5 selling products (from paid orders)
+        Order.aggregate([
+          { $match: { paymentStatus: 'paid' } },
+          { $unwind: '$items' },
+          {
+            $group: {
+              _id: '$items.product',
+              name: { $first: '$items.name' },
+              image: { $first: '$items.image' },
+              totalQuantity: { $sum: '$items.quantity' }
+            }
+          },
+          { $sort: { totalQuantity: -1 } },
+          { $limit: 5 }
+        ]),
+
+        // Orders by status
+        Order.aggregate([
+          { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
+        ]),
+
+        // Low stock products (totalStock <= 5 and active)
+        Product.find({ active: true, totalStock: { $lte: 5 } })
+          .select('name slug totalStock images')
+          .sort('totalStock')
+          .limit(10)
+          .lean()
+      ]);
+
+      const revenue = revenueResult[0] || { total: 0, count: 0 };
+      const monthlyRevenue = monthlyRevenueResult[0] || { total: 0, count: 0 };
+
+      const ordersByStatus = {};
+      for (const s of statusCounts) {
+        ordersByStatus[s._id] = s.count;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          totalRevenue: revenue.total,
+          paidOrdersCount: revenue.count,
+          revenueThisMonth: monthlyRevenue.total,
+          monthlyOrdersCount: monthlyRevenue.count,
+          topSellingProducts: topProducts,
+          ordersByStatus,
+          lowStockProducts
+        }
+      });
+    } catch (error) {
+      console.error('Get admin stats error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve admin stats'
       });
     }
   }
@@ -231,7 +338,13 @@ router.post('/webhooks/maya', async (req, res) => {
         for (const item of order.items) {
           const product = await Product.findById(item.product);
           if (product) {
-            const sizeStock = product.sizes.find(s => s.size === item.size);
+            let sizeStock;
+            if (item.color && product.colors?.length > 0) {
+              const colorVariant = product.colors.find(c => c.color === item.color);
+              if (colorVariant) sizeStock = colorVariant.sizes.find(s => s.size === item.size);
+            } else {
+              sizeStock = product.sizes.find(s => s.size === item.size);
+            }
             if (sizeStock) {
               sizeStock.stock += item.quantity;
               await product.save();

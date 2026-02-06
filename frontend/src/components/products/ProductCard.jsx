@@ -98,6 +98,23 @@ const ProductCard = ({ product, onBuyNow }) => {
 
       {/* Product Info — MoreLabs style rows */}
       <div className="mt-4 space-y-1">
+        {/* Color swatches */}
+        {product.colors?.length > 0 && (
+          <div className="flex items-center gap-1 mb-0.5">
+            {product.colors.slice(0, 5).map((c) => (
+              <span
+                key={c._id || c.color}
+                className="w-3.5 h-3.5 rounded-full border border-gray-200"
+                style={c.hex ? { backgroundColor: c.hex } : undefined}
+                title={c.color}
+              />
+            ))}
+            {product.colors.length > 5 && (
+              <span className="text-[10px] text-gray-400">+{product.colors.length - 5}</span>
+            )}
+          </div>
+        )}
+
         {/* Row 1: Name + Stars */}
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-semibold text-gray-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-primary-600 transition-colors">

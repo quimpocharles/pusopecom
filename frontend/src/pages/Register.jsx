@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import authService from '../services/authService';
 import Layout from '../components/layout/Layout';
+import GoogleLoginButton from '../components/auth/GoogleLoginButton';
+import SocialDivider from '../components/auth/SocialDivider';
+import SEO from '../components/common/SEO';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -12,6 +15,20 @@ const Register = () => {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm();
   const password = watch('password');
+
+  const handleSocialSuccess = (user) => {
+    // Social registration - check if profile needs completion
+    const needsProfile = !user?.ageVerified || !user?.phone || !user?.addresses?.length;
+    if (needsProfile) {
+      navigate('/complete-profile');
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleSocialError = (message) => {
+    setError(message);
+  };
 
   const onSubmit = async (data) => {
     setLoading(true);
@@ -59,6 +76,7 @@ const Register = () => {
 
   return (
     <Layout>
+      <SEO title="Create Account" noIndex />
       <div className="container-custom py-12">
         <div className="max-w-md mx-auto">
           <div className="card p-8">
@@ -69,6 +87,15 @@ const Register = () => {
                 {error}
               </div>
             )}
+
+            {/* Social Login */}
+            <GoogleLoginButton
+              onSuccess={handleSocialSuccess}
+              onError={handleSocialError}
+              disabled={loading}
+            />
+
+            <SocialDivider />
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">

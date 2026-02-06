@@ -24,6 +24,9 @@ const orderItemSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  color: {
+    type: String
+  },
   image: {
     type: String,
     required: true
@@ -39,6 +42,10 @@ const shippingAddressSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  country: {
+    type: String,
+    default: 'Philippines'
+  },
   address: {
     type: String,
     required: true
@@ -50,6 +57,12 @@ const shippingAddressSchema = new mongoose.Schema({
   province: {
     type: String,
     required: true
+  },
+  region: {
+    type: String
+  },
+  barangay: {
+    type: String
   },
   zipCode: {
     type: String,
@@ -124,8 +137,8 @@ const orderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate order number before saving
-orderSchema.pre('save', async function(next) {
+// Generate order number before validation
+orderSchema.pre('validate', function(next) {
   if (!this.orderNumber) {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();

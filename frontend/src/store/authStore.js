@@ -22,6 +22,18 @@ const useAuthStore = create((set) => ({
     }
   },
 
+  googleLogin: async (credential) => {
+    set({ loading: true });
+    try {
+      const response = await authService.googleLogin(credential);
+      set({ user: response.user, isAuthenticated: true, loading: false });
+      return response;
+    } catch (error) {
+      set({ loading: false });
+      throw error;
+    }
+  },
+
   logout: () => {
     authService.logout();
     set({ user: null, isAuthenticated: false });

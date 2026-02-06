@@ -14,6 +14,8 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import VirtualTryOn from '../components/products/VirtualTryOn';
 import productService from '../services/productService';
 import useCartStore from '../store/cartStore';
+import useAuthStore from '../store/authStore';
+import SEO from '../components/common/SEO';
 
 // Star rating display component
 const Stars = ({ rating, size = 'sm' }) => {
@@ -58,6 +60,7 @@ const StarSelect = ({ value, onChange }) => (
 const ProductDetail = () => {
   const { slug } = useParams();
   const addItem = useCartStore((state) => state.addItem);
+  const { user, isAuthenticated } = useAuthStore();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,7 @@ const ProductDetail = () => {
   const [error, setError] = useState('');
   const [addedToCart, setAddedToCart] = useState(false);
   const [showTryOn, setShowTryOn] = useState(false);
+  const [selectedColor, setSelectedColor] = useState(null);
 
   // Reviews state
   const [reviews, setReviews] = useState([]);
@@ -74,7 +78,7 @@ const ProductDetail = () => {
   const [reviewPage, setReviewPage] = useState(1);
   const [reviewPagination, setReviewPagination] = useState({});
   const [showReviewForm, setShowReviewForm] = useState(false);
-  const [reviewForm, setReviewForm] = useState({ author: '', email: '', rating: 5, title: '', body: '' });
+  const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', body: '' });
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
 
@@ -83,9 +87,16 @@ const ProductDetail = () => {
       try {
         const response = await productService.getProductBySlug(slug);
         setProduct(response.data);
-        if (response.data.sizes.length > 0) {
-          const inStock = response.data.sizes.find(s => s.stock > 0);
-          setSelectedSize(inStock ? inStock.size : response.data.sizes[0].size);
+        const p = response.data;
+        if (p.colors?.length > 0) {
+          const firstInStock = p.colors.find(c => c.sizes.some(s => s.stock > 0));
+          const col = firstInStock || p.colors[0];
+          setSelectedColor(col.color);
+          const inStock = col.sizes.find(s => s.stock > 0);
+          setSelectedSize(inStock ? inStock.size : col.sizes[0]?.size || '');
+        } else if (p.sizes.length > 0) {
+          const inStock = p.sizes.find(s => s.stock > 0);
+          setSelectedSize(inStock ? inStock.size : p.sizes[0].size);
         }
       } catch (err) {
         console.error('Failed to fetch product:', err);
@@ -113,27 +124,35 @@ const ProductDetail = () => {
   }, [slug, reviewPage]);
 
   const handleAddToCart = () => {
+    if (product.colors?.length > 0 && !selectedColor) {
+      setError('Please select a color');
+      return;
+    }
     if (!selectedSize) {
       setError('Please select a size');
       return;
     }
-    const sizeStock = product.sizes.find(s => s.size === selectedSize);
+
+    let sizeStock;
+    if (product.colors?.length > 0 && selectedColor) {
+      const colorObj = product.colors.find(c => c.color === selectedColor);
+      sizeStock = colorObj?.sizes.find(s => s.size === selectedSize);
+    } else {
+      sizeStock = product.sizes.find(s => s.size === selectedSize);
+    }
+
     if (!sizeStock || sizeStock.stock < quantity) {
       setError('Not enough stock available');
       return;
     }
     setError('');
-    addItem(product, selectedSize, quantity);
+    addItem(product, selectedSize, quantity, selectedColor);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
-    if (!reviewForm.author.trim()) {
-      setReviewError('Please enter your name');
-      return;
-    }
     setReviewSubmitting(true);
     setReviewError('');
     try {
@@ -145,7 +164,7 @@ const ProductDetail = () => {
       setReviewPagination(response.pagination);
       setReviewPage(1);
       setShowReviewForm(false);
-      setReviewForm({ author: '', email: '', rating: 5, title: '', body: '' });
+      setReviewForm({ rating: 5, title: '', body: '' });
     } catch (err) {
       setReviewError(err.response?.data?.message || 'Failed to submit review');
     } finally {
@@ -177,17 +196,59 @@ const ProductDetail = () => {
 
   const effectivePrice = product.salePrice || product.price;
   const hasDiscount = product.salePrice && product.salePrice < product.price;
-  const selectedSizeStock = product.sizes.find(s => s.size === selectedSize)?.stock || 0;
+  const hasColors = product.colors?.length > 0;
+  const selectedColorObj = hasColors ? product.colors.find(c => c.color === selectedColor) : null;
+  const availableSizes = hasColors && selectedColorObj ? selectedColorObj.sizes : product.sizes;
+  const selectedSizeStock = availableSizes.find(s => s.size === selectedSize)?.stock || 0;
+  const colorImage = selectedColorObj?.image;
+  const displayImages = colorImage ? [colorImage, ...product.images.filter(img => img !== colorImage)] : product.images;
   const categoryLabel = { jersey: 'Jersey', tshirt: 'T-Shirt', cap: 'Cap', shorts: 'Shorts', accessories: 'Accessory' }[product.category] || product.category;
+  const genderLabel = { men: "Men's", women: "Women's", youth: 'Youth', unisex: 'Unisex' }[product.gender] || '';
+
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description,
+    image: product.images,
+    offers: {
+      '@type': 'Offer',
+      price: effectivePrice,
+      priceCurrency: 'PHP',
+      availability: product.totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    },
+    ...(product.reviewCount > 0 && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: product.avgRating,
+        reviewCount: product.reviewCount,
+      },
+    }),
+  };
 
   return (
     <Layout>
+      <SEO
+        title={product.name}
+        description={product.description?.slice(0, 160)}
+        ogImage={product.images?.[0]}
+        ogType="product"
+        jsonLd={productJsonLd}
+      />
       {/* Breadcrumb */}
       <div className="container-custom pt-4 pb-2">
         <nav className="flex items-center gap-1.5 text-xs text-gray-400">
           <Link to="/" className="hover:text-gray-600">Home</Link>
           <ChevronRightIcon className="w-3 h-3" />
           <Link to="/products" className="hover:text-gray-600">Shop</Link>
+          {product.gender && product.gender !== 'unisex' && (
+            <>
+              <ChevronRightIcon className="w-3 h-3" />
+              <Link to={`/products?gender=${product.gender}`} className="hover:text-gray-600">
+                {{ men: "Men's", women: "Women's", youth: 'Youth' }[product.gender]}
+              </Link>
+            </>
+          )}
           <ChevronRightIcon className="w-3 h-3" />
           <span className="text-gray-600 truncate">{product.name}</span>
         </nav>
@@ -202,7 +263,7 @@ const ProductDetail = () => {
             {/* Main Image */}
             <div className="aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-3 relative">
               <img
-                src={product.images[selectedImage]}
+                src={displayImages[selectedImage] || product.images[0]}
                 alt={product.name}
                 className="w-full h-full object-cover"
               />
@@ -218,9 +279,9 @@ const ProductDetail = () => {
             </div>
 
             {/* Thumbnails */}
-            {product.images.length > 1 && (
+            {displayImages.length > 1 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                {product.images.map((image, index) => (
+                {displayImages.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -239,7 +300,7 @@ const ProductDetail = () => {
           <div className="lg:pt-2">
             {/* Team / Sport badge */}
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              {product.team || product.sport} &middot; {categoryLabel}
+              {product.team || product.sport} &middot; {genderLabel && <>{genderLabel} &middot; </>}{categoryLabel}
             </p>
 
             {/* Product Name */}
@@ -285,6 +346,50 @@ const ProductDetail = () => {
             {/* Divider */}
             <hr className="border-gray-200 mb-6" />
 
+            {/* Color Selection */}
+            {hasColors && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900">Color</h3>
+                  {selectedColor && (
+                    <span className="text-xs text-gray-400">{selectedColor}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {product.colors.map((colorObj) => {
+                    const colorInStock = colorObj.sizes.some(s => s.stock > 0);
+                    return (
+                      <button
+                        key={colorObj._id}
+                        onClick={() => {
+                          setSelectedColor(colorObj.color);
+                          setSelectedImage(0);
+                          const inStock = colorObj.sizes.find(s => s.stock > 0);
+                          setSelectedSize(inStock ? inStock.size : colorObj.sizes[0]?.size || '');
+                          setQuantity(1);
+                          setError('');
+                        }}
+                        disabled={!colorInStock}
+                        title={colorObj.color}
+                        className={`w-10 h-10 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                          selectedColor === colorObj.color
+                            ? 'border-primary-600 ring-2 ring-primary-600 ring-offset-2'
+                            : !colorInStock
+                            ? 'border-gray-200 opacity-30 cursor-not-allowed'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                        style={colorObj.hex ? { backgroundColor: colorObj.hex } : undefined}
+                      >
+                        {!colorObj.hex && (
+                          <span className="text-[10px] font-medium text-gray-600">{colorObj.color.slice(0, 2)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Size Selection */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
@@ -294,7 +399,7 @@ const ProductDetail = () => {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {product.sizes.map((sizeObj) => (
+                {availableSizes.map((sizeObj) => (
                   <button
                     key={sizeObj.size}
                     onClick={() => { setSelectedSize(sizeObj.size); setError(''); setQuantity(1); }}
@@ -391,12 +496,21 @@ const ProductDetail = () => {
                   <p className="text-sm text-gray-500">No reviews yet. Be the first!</p>
                 )}
               </div>
-              <button
-                onClick={() => setShowReviewForm(!showReviewForm)}
-                className="btn-secondary text-sm self-start md:self-auto"
-              >
-                {showReviewForm ? 'Cancel' : 'Write a Review'}
-              </button>
+              {isAuthenticated ? (
+                <button
+                  onClick={() => setShowReviewForm(!showReviewForm)}
+                  className="btn-secondary text-sm self-start md:self-auto"
+                >
+                  {showReviewForm ? 'Cancel' : 'Write a Review'}
+                </button>
+              ) : (
+                <Link
+                  to={`/login?redirect=/products/${slug}`}
+                  className="btn-secondary text-sm self-start md:self-auto"
+                >
+                  Log in to Review
+                </Link>
+              )}
             </div>
 
             {/* Rating Distribution */}
@@ -427,37 +541,15 @@ const ProductDetail = () => {
             {/* Review Form */}
             {showReviewForm && (
               <form onSubmit={handleSubmitReview} className="mb-10 p-6 bg-white rounded-2xl">
-                <h3 className="font-semibold text-gray-900 mb-4">Write Your Review</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900">Write Your Review</h3>
+                  <p className="text-sm text-gray-500">Posting as <span className="font-medium text-gray-700">{user?.name || user?.email}</span></p>
+                </div>
                 <div className="space-y-4">
                   {/* Rating */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
                     <StarSelect value={reviewForm.rating} onChange={(v) => setReviewForm(p => ({ ...p, rating: v }))} />
-                  </div>
-
-                  {/* Name + Email */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                      <input
-                        type="text"
-                        value={reviewForm.author}
-                        onChange={(e) => setReviewForm(p => ({ ...p, author: e.target.value }))}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
-                        placeholder="Your name"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={reviewForm.email}
-                        onChange={(e) => setReviewForm(p => ({ ...p, email: e.target.value }))}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
-                        placeholder="your@email.com"
-                      />
-                    </div>
                   </div>
 
                   {/* Title */}

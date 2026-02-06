@@ -1,15 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+const matchItem = (item, productId, size, color) =>
+  item.product._id === productId &&
+  item.size === size &&
+  (item.color || null) === (color || null);
+
 const useCartStore = create(
   persist(
     (set, get) => ({
       items: [],
 
-      addItem: (product, size, quantity = 1) => {
+      addItem: (product, size, quantity = 1, color = null) => {
         set((state) => {
           const existingItemIndex = state.items.findIndex(
-            (item) => item.product._id === product._id && item.size === size
+            (item) => matchItem(item, product._id, size, color)
           );
 
           if (existingItemIndex > -1) {
@@ -24,6 +29,7 @@ const useCartStore = create(
               {
                 product,
                 size,
+                color,
                 quantity,
                 price: product.salePrice || product.price
               }
@@ -32,23 +38,23 @@ const useCartStore = create(
         });
       },
 
-      removeItem: (productId, size) => {
+      removeItem: (productId, size, color = null) => {
         set((state) => ({
           items: state.items.filter(
-            (item) => !(item.product._id === productId && item.size === size)
+            (item) => !matchItem(item, productId, size, color)
           )
         }));
       },
 
-      updateQuantity: (productId, size, quantity) => {
+      updateQuantity: (productId, size, color = null, quantity) => {
         if (quantity <= 0) {
-          get().removeItem(productId, size);
+          get().removeItem(productId, size, color);
           return;
         }
 
         set((state) => ({
           items: state.items.map((item) =>
-            item.product._id === productId && item.size === size
+            matchItem(item, productId, size, color)
               ? { ...item, quantity }
               : item
           )

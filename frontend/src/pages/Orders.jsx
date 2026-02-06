@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import SEO from '../components/common/SEO';
 
 const Orders = () => {
   const { user, isAuthenticated } = useAuthStore();
@@ -50,6 +51,7 @@ const Orders = () => {
 
   return (
     <Layout>
+      <SEO title="My Orders" noIndex />
       <div className="container-custom py-8">
         <h1 className="text-3xl font-bold mb-8">My Orders</h1>
 

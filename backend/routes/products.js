@@ -12,6 +12,8 @@ router.get('/', async (req, res) => {
       sport,
       team,
       category,
+      gender,
+      sale,
       minPrice,
       maxPrice,
       search,
@@ -23,9 +25,20 @@ router.get('/', async (req, res) => {
 
     const filter = { active: true };
 
-    if (sport) filter.sport = { $regex: new RegExp(`^${sport}$`, 'i') };
+    if (sport) {
+      const values = sport.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
+      filter.sport = values.length === 1 ? { $regex: values[0] } : { $in: values };
+    }
     if (team) filter.team = { $regex: team, $options: 'i' };
-    if (category) filter.category = { $regex: new RegExp(`^${category}$`, 'i') };
+    if (category) {
+      const values = category.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
+      filter.category = values.length === 1 ? { $regex: values[0] } : { $in: values };
+    }
+    if (gender) {
+      const values = gender.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
+      filter.gender = values.length === 1 ? { $regex: values[0] } : { $in: values };
+    }
+    if (sale === 'true') filter.salePrice = { $exists: true, $gt: 0 };
     if (featured) filter.featured = featured === 'true';
 
     if (minPrice || maxPrice) {
@@ -84,6 +97,123 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get all products including inactive (Admin only)
+router.get('/admin/all',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        search,
+        category,
+        sport
+      } = req.query;
+
+      const filter = {};
+      if (category) filter.category = category;
+      if (sport) filter.sport = sport;
+      if (search) {
+        filter.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { team: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const [products, total] = await Promise.all([
+        Product.find(filter)
+          .sort('-createdAt')
+          .skip(skip)
+          .limit(Number(limit))
+          .select('-__v'),
+        Product.countDocuments(filter)
+      ]);
+
+      res.json({
+        success: true,
+        data: products,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          pages: Math.ceil(total / Number(limit))
+        }
+      });
+    } catch (error) {
+      console.error('Get admin products error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve products'
+      });
+    }
+  }
+);
+
+// Get single product by ID (Admin only - for edit form, includes inactive)
+router.get('/admin/:id',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const product = await Product.findById(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: product
+      });
+    } catch (error) {
+      console.error('Get admin product error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve product'
+      });
+    }
+  }
+);
+
+// Search suggestions (autocomplete)
+router.get('/search/suggestions', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const products = await Product.find({
+      active: true,
+      name: { $regex: escaped, $options: 'i' }
+    })
+      .select('name slug images price salePrice')
+      .limit(6)
+      .lean();
+
+    res.json({
+      success: true,
+      data: products.map(p => ({
+        name: p.name,
+        slug: p.slug,
+        image: p.images?.[0] || null,
+        price: p.price,
+        salePrice: p.salePrice || null
+      }))
+    });
+  } catch (error) {
+    console.error('Search suggestions error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get suggestions' });
+  }
+});
+
 // Get single product by slug
 router.get('/:slug', async (req, res) => {
   try {
@@ -122,8 +252,7 @@ router.post('/',
     body('price').isFloat({ min: 0 }),
     body('category').isIn(['jersey', 'tshirt', 'cap', 'shorts', 'accessories']),
     body('sport').isIn(['basketball', 'volleyball', 'football', 'general']),
-    body('images').isArray({ min: 1 }),
-    body('sizes').isArray({ min: 1 })
+    body('images').isArray({ min: 1 })
   ],
   async (req, res) => {
     try {
@@ -233,7 +362,7 @@ router.get('/admin/stats',
   isAdmin,
   async (req, res) => {
     try {
-      const [total, active, featured, byCategory, bySport] = await Promise.all([
+      const [total, active, featured, byCategory, bySport, byGender] = await Promise.all([
         Product.countDocuments(),
         Product.countDocuments({ active: true }),
         Product.countDocuments({ featured: true }),
@@ -242,6 +371,9 @@ router.get('/admin/stats',
         ]),
         Product.aggregate([
           { $group: { _id: '$sport', count: { $sum: 1 } } }
+        ]),
+        Product.aggregate([
+          { $group: { _id: '$gender', count: { $sum: 1 } } }
         ])
       ]);
 
@@ -252,7 +384,8 @@ router.get('/admin/stats',
           active,
           featured,
           byCategory,
-          bySport
+          bySport,
+          byGender
         }
       });
     } catch (error) {

@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Review from '../models/Review.js';
 import Product from '../models/Product.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -79,15 +80,14 @@ router.get('/:slug/reviews', async (req, res) => {
   }
 });
 
-// POST /api/products/:slug/reviews
+// POST /api/products/:slug/reviews (authenticated users only)
 router.post(
   '/:slug/reviews',
+  authenticate,
   [
-    body('author').trim().notEmpty().withMessage('Name is required'),
     body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
     body('title').optional().trim(),
     body('body').optional().trim(),
-    body('email').optional().isEmail().normalizeEmail(),
   ],
   async (req, res) => {
     try {
@@ -103,8 +103,8 @@ router.post(
 
       const review = new Review({
         product: product._id,
-        author: req.body.author,
-        email: req.body.email || undefined,
+        author: req.user.name || req.user.email.split('@')[0],
+        email: req.user.email,
         rating: req.body.rating,
         title: req.body.title,
         body: req.body.body,

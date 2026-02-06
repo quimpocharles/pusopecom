@@ -4,8 +4,6 @@ import {
   ChevronRightIcon,
   SparklesIcon,
   TruckIcon,
-  ShieldCheckIcon,
-  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
@@ -13,6 +11,7 @@ import ProductCard from '../components/products/ProductCard';
 import CartDrawer from '../components/cart/CartDrawer';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import productService from '../services/productService';
+import SEO from '../components/common/SEO';
 
 const Home = () => {
   const [categoryProducts, setCategoryProducts] = useState([]);
@@ -22,6 +21,7 @@ const Home = () => {
   const [activeCategory, setActiveCategory] = useState('basketball');
   const [cartOpen, setCartOpen] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
+  const [openFaq, setOpenFaq] = useState(null);
   const carouselRef = useRef(null);
 
   const categories = [
@@ -78,6 +78,10 @@ const Home = () => {
 
   return (
     <Layout>
+      <SEO
+        title="Puso Pilipinas — Philippine Sports Merchandise"
+        description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, and football. Free shipping on select items."
+      />
       {/* Marquee Announcement Bar */}
       <div className="bg-primary-600 text-white py-2 md:py-2.5 overflow-x-hidden text-xs md:text-sm">
         <div className="animate-marquee whitespace-nowrap flex">
@@ -437,22 +441,74 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Trust Section */}
-      <section className="py-8 md:py-16 bg-gray-50">
-        <div className="container-custom">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
+      {/* FAQ Section */}
+      <section className="py-12 md:py-24 bg-gray-50">
+        <div className="container-custom max-w-3xl">
+          <h2 className="text-xl md:text-display-sm font-semibold text-center mb-3 md:mb-4">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-sm md:text-base text-gray-500 text-center mb-8 md:mb-12">
+            Everything you need to know about Puso Pilipinas
+          </p>
+
+          <div className="divide-y divide-gray-200">
             {[
-              { icon: ShieldCheckIcon, title: '100% Authentic', desc: 'Official licensed products' },
-              { icon: TruckIcon, title: 'Free Shipping', desc: 'On orders over ₱2,000' },
-              { icon: ArrowPathIcon, title: 'Easy Returns', desc: '30-day return policy' },
-              { icon: SparklesIcon, title: 'Virtual Try-On', desc: 'See it before you buy' }
-            ].map((item, index) => (
-              <div key={index} className="text-center">
-                <div className="w-10 h-10 md:w-14 md:h-14 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-2 md:mb-4">
-                  <item.icon className="w-5 h-5 md:w-7 md:h-7 text-primary-600" />
+              {
+                q: 'Are all your products authentic?',
+                a: 'Yes! Every product we sell is 100% officially licensed merchandise. We source directly from authorized distributors and brands to guarantee authenticity. Each item comes with official tags and packaging.',
+              },
+              {
+                q: 'How long does shipping take?',
+                a: 'Metro Manila orders are delivered within 2-3 business days. Provincial orders typically arrive within 5-7 business days. We offer free shipping on all orders over ₱2,000.',
+              },
+              {
+                q: 'What is your return policy?',
+                a: 'We offer a hassle-free 30-day return policy. If you\'re not satisfied with your purchase, simply contact our support team and we\'ll arrange a return or exchange. Items must be in their original condition with tags attached.',
+              },
+              {
+                q: 'How does Virtual Try-On work?',
+                a: 'Our AI-powered Virtual Try-On lets you see how any jersey looks on you before buying. Simply upload a photo of yourself on the product page, and our technology will generate a realistic preview of you wearing the jersey.',
+              },
+              {
+                q: 'What sizes do you carry?',
+                a: 'We carry separate men\'s and women\'s product lines, as well as unisex options, in sizes from XS to 3XL for most jerseys and apparel. Each product page includes a detailed size chart with measurements in both inches and centimeters so you can find the perfect fit. Use the Men and Women filters in our shop to browse gender-specific collections.',
+              },
+              {
+                q: 'Do you ship internationally?',
+                a: 'Currently we ship within the Philippines. We\'re working on expanding to international shipping for our kababayans abroad. Sign up for our newsletter to be notified when international shipping becomes available.',
+              },
+            ].map((faq, index) => (
+              <div key={index}>
+                <button
+                  onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                  className="w-full flex items-center justify-between py-5 md:py-6 text-left group"
+                >
+                  <span className="font-medium text-sm md:text-base text-gray-900 pr-4 group-hover:text-primary-600 transition-colors">
+                    {faq.q}
+                  </span>
+                  <span className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-gray-400 group-hover:text-primary-600 transition-colors">
+                    <svg
+                      className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${openFaq === index ? 'rotate-45' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </span>
+                </button>
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-in-out"
+                  style={{
+                    maxHeight: openFaq === index ? '200px' : '0px',
+                    opacity: openFaq === index ? 1 : 0,
+                  }}
+                >
+                  <p className="text-sm md:text-base text-gray-600 pb-5 md:pb-6 leading-relaxed">
+                    {faq.a}
+                  </p>
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-0.5 md:mb-1 text-sm md:text-base">{item.title}</h3>
-                <p className="text-xs md:text-sm text-gray-500">{item.desc}</p>
               </div>
             ))}
           </div>

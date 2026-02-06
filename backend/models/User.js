@@ -10,6 +10,10 @@ const addressSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  country: {
+    type: String,
+    default: 'Philippines'
+  },
   address: {
     type: String,
     required: true
@@ -21,6 +25,12 @@ const addressSchema = new mongoose.Schema({
   province: {
     type: String,
     required: true
+  },
+  region: {
+    type: String
+  },
+  barangay: {
+    type: String
   },
   zipCode: {
     type: String,
@@ -43,8 +53,11 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters']
+    minlength: [6, 'Password must be at least 6 characters'],
+    required: function() {
+      // Password required only for local auth (no social IDs)
+      return !this.googleId && !this.facebookId;
+    }
   },
   firstName: {
     type: String,
@@ -59,6 +72,29 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     trim: true
+  },
+  ageVerified: {
+    type: Boolean,
+    default: false
+  },
+  avatar: {
+    type: String,
+    trim: true
+  },
+  googleId: {
+    type: String,
+    sparse: true,
+    index: true
+  },
+  facebookId: {
+    type: String,
+    sparse: true,
+    index: true
+  },
+  authProvider: {
+    type: String,
+    enum: ['local', 'google', 'facebook'],
+    default: 'local'
   },
   emailVerified: {
     type: Boolean,
@@ -85,7 +121,8 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
+  // Skip if no password or not modified
+  if (!this.password || !this.isModified('password')) {
     return next();
   }
 
@@ -100,6 +137,8 @@ userSchema.pre('save', async function(next) {
 
 // Method to compare passwords
 userSchema.methods.comparePassword = async function(candidatePassword) {
+  // Return false if no password (social auth user)
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 

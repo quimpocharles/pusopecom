@@ -3,6 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import useAuthStore from '../store/authStore';
 import Layout from '../components/layout/Layout';
+import GoogleLoginButton from '../components/auth/GoogleLoginButton';
+import SocialDivider from '../components/auth/SocialDivider';
+import SEO from '../components/common/SEO';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -13,14 +16,28 @@ const Login = () => {
 
   const { register, handleSubmit, formState: { errors } } = useForm();
 
+  const getRedirectPath = () => {
+    const searchParams = new URLSearchParams(location.search);
+    return searchParams.get('redirect') || location.state?.from?.pathname || '/';
+  };
+
+  // Check if profile needs completion
+  const isProfileIncomplete = (user) => {
+    return !user?.ageVerified || !user?.phone || !user?.addresses?.length;
+  };
+
   const onSubmit = async (data) => {
     setLoading(true);
     setError('');
 
     try {
-      await login(data);
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      const response = await login(data);
+      // Check if profile is incomplete
+      if (isProfileIncomplete(response.user)) {
+        navigate('/complete-profile', { replace: true });
+      } else {
+        navigate(getRedirectPath(), { replace: true });
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {
@@ -28,8 +45,22 @@ const Login = () => {
     }
   };
 
+  const handleSocialSuccess = (user) => {
+    // Check if profile is incomplete
+    if (isProfileIncomplete(user)) {
+      navigate('/complete-profile', { replace: true });
+    } else {
+      navigate(getRedirectPath(), { replace: true });
+    }
+  };
+
+  const handleSocialError = (message) => {
+    setError(message);
+  };
+
   return (
     <Layout>
+      <SEO title="Sign In" noIndex />
       <div className="container-custom py-12">
         <div className="max-w-md mx-auto">
           <div className="card p-8">
@@ -40,6 +71,15 @@ const Login = () => {
                 {error}
               </div>
             )}
+
+            {/* Social Login */}
+            <GoogleLoginButton
+              onSuccess={handleSocialSuccess}
+              onError={handleSocialError}
+              disabled={loading}
+            />
+
+            <SocialDivider />
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div>

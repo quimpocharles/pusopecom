@@ -119,6 +119,43 @@ function makeSlug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// Teams that are women's teams
+const womenTeams = new Set([
+  'Creamline Cool Smashers', 'Petro Gazz Angels', 'Chery Tiggo Crossovers',
+  'PLDT High Speed Hitters', 'Cignal HD Spikers', 'F2 Logistics Cargo Movers',
+  'Choco Mucho Flying Titans', 'Akari Chargers',
+  'NU Lady Bulldogs', 'La Salle Lady Spikers', 'Ateneo Lady Eagles',
+  'UST Golden Tigresses', 'Alas Pilipinas',
+]);
+
+// Teams that are men's teams
+const menTeams = new Set([
+  // PBA teams
+  'Barangay Ginebra San Miguel', 'San Miguel Beermen', 'TNT Tropang Giga',
+  'Magnolia Hotshots', 'Meralco Bolts', 'NLEX Road Warriors',
+  'Rain or Shine Elasto Painters', 'Phoenix Super LPG Fuel Masters',
+  'Converge FiberXers', 'Terrafirma Dyip', 'Blackwater Bossing',
+  'Northport Batang Pier', 'Gilas Pilipinas',
+  // UAAP men's basketball
+  'UST Growling Tigers', 'Ateneo Blue Eagles', 'La Salle Green Archers',
+  'UP Fighting Maroons', 'FEU Tamaraws', 'NU Bulldogs',
+  'Adamson Soaring Falcons', 'UE Red Warriors',
+  // Football
+  'Philippine Azkals', 'Kaya FC-Iloilo', 'United City FC',
+  'Stallion Laguna FC', 'Maharlika Manila FC', 'Cebu FC',
+  'Dynamic Herb Cebu FC', 'Mendiola FC 1991',
+]);
+
+function determineGender(team, category, youthRoll) {
+  // Caps and accessories are always unisex
+  if (category === 'cap' || category === 'accessories') return 'unisex';
+  // ~12% of jerseys and tshirts become youth
+  if ((category === 'jersey' || category === 'tshirt') && youthRoll < 0.12) return 'youth';
+  if (womenTeams.has(team)) return 'women';
+  if (menTeams.has(team)) return 'men';
+  return 'unisex';
+}
+
 function generatePlaceholderImage(teamName, bg, fg, category) {
   const label = encodeURIComponent(teamName.split(' ').slice(0, 2).join(' '));
   return `https://placehold.co/600x600/${bg}/${fg}?text=${label}+${category}`;
@@ -187,6 +224,7 @@ function generateProducts() {
         accessories: `Official ${team} ${label.toLowerCase()}. Licensed merchandise - the perfect gift for any ${team} fan. High-quality materials with official team branding.`,
       };
 
+      const gender = determineGender(team, category, Math.random());
       count++;
 
       products.push({
@@ -198,6 +236,7 @@ function generateProducts() {
         category,
         sport,
         team,
+        gender,
         images: [image],
         sizes,
         featured: count <= 16, // First 16 products are featured
@@ -238,9 +277,14 @@ const seedDatabase = async () => {
     const fball = products.filter(p => p.sport === 'football').length;
     const featured = products.filter(p => p.featured).length;
     const onSale = products.filter(p => p.salePrice).length;
+    const men = products.filter(p => p.gender === 'men').length;
+    const women = products.filter(p => p.gender === 'women').length;
+    const youth = products.filter(p => p.gender === 'youth').length;
+    const unisex = products.filter(p => p.gender === 'unisex').length;
 
     console.log(`\n✓ Seeding complete!`);
     console.log(`  Basketball: ${bball} | Volleyball: ${vball} | Football: ${fball}`);
+    console.log(`  Men: ${men} | Women: ${women} | Youth: ${youth} | Unisex: ${unisex}`);
     console.log(`  Featured: ${featured} | On Sale: ${onSale}`);
     console.log(`  Total: ${products.length} products`);
     console.log(`\nView at: http://localhost:5173/products`);

@@ -14,6 +14,36 @@ const sizeStockSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const colorSizeStockSchema = new mongoose.Schema({
+  size: {
+    type: String,
+    required: true,
+    enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'One Size']
+  },
+  stock: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
+  }
+}, { _id: false });
+
+const colorVariantSchema = new mongoose.Schema({
+  color: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  hex: {
+    type: String,
+    trim: true
+  },
+  image: {
+    type: String
+  },
+  sizes: [colorSizeStockSchema]
+}, { _id: true });
+
 const productSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -49,6 +79,16 @@ const productSchema = new mongoose.Schema({
     required: [true, 'Sport is required'],
     enum: ['basketball', 'volleyball', 'football', 'general']
   },
+  gender: {
+    type: String,
+    required: true,
+    enum: ['men', 'women', 'youth', 'unisex'],
+    default: 'unisex'
+  },
+  league: {
+    type: String,
+    trim: true
+  },
   team: {
     type: String,
     trim: true
@@ -62,6 +102,7 @@ const productSchema = new mongoose.Schema({
     required: true
   }],
   sizes: [sizeStockSchema],
+  colors: [colorVariantSchema],
   featured: {
     type: Boolean,
     default: false
@@ -91,9 +132,15 @@ const productSchema = new mongoose.Schema({
 
 // Calculate total stock before saving
 productSchema.pre('save', function(next) {
+  let total = 0;
   if (this.sizes && this.sizes.length > 0) {
-    this.totalStock = this.sizes.reduce((total, sizeObj) => total + sizeObj.stock, 0);
+    total += this.sizes.reduce((sum, s) => sum + s.stock, 0);
   }
+  if (this.colors && this.colors.length > 0) {
+    total += this.colors.reduce((sum, c) =>
+      sum + c.sizes.reduce((sSum, s) => sSum + s.stock, 0), 0);
+  }
+  this.totalStock = total;
   next();
 });
 

@@ -11,6 +11,8 @@ import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
 import tryonRoutes from './routes/tryon.js';
 import reviewRoutes from './routes/reviews.js';
+import leagueRoutes from './routes/leagues.js';
+import reportRoutes from './routes/reports.js';
 
 // Load environment variables
 dotenv.config();
@@ -101,6 +103,36 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);
+app.use('/api/leagues', leagueRoutes);
+app.use('/api/reports', reportRoutes);
+
+// Sitemap endpoint
+app.get('/api/sitemap.xml', async (req, res) => {
+  try {
+    const Product = mongoose.model('Product');
+    const products = await Product.find({ active: true }).select('slug updatedAt').lean();
+    const baseUrl = process.env.FRONTEND_URL || 'https://pusopilipinas.com';
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+
+    const staticPages = ['/', '/products'];
+    for (const page of staticPages) {
+      xml += `  <url><loc>${baseUrl}${page}</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n`;
+    }
+
+    for (const product of products) {
+      xml += `  <url><loc>${baseUrl}/products/${product.slug}</loc><lastmod>${product.updatedAt.toISOString()}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>\n`;
+    }
+
+    xml += '</urlset>';
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (error) {
+    console.error('Sitemap error:', error);
+    res.status(500).send('Failed to generate sitemap');
+  }
+});
 
 // 404 handler
 app.use((req, res) => {

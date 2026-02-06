@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
 import useCartStore from '../store/cartStore';
+import SEO from '../components/common/SEO';
 
 const Cart = () => {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ const Cart = () => {
   if (items.length === 0) {
     return (
       <Layout>
+        <SEO title="Shopping Cart" noIndex />
         <div className="container-custom py-12">
           <div className="text-center">
             <h1 className="text-3xl font-bold mb-4">Your Cart is Empty</h1>
@@ -29,6 +31,7 @@ const Cart = () => {
 
   return (
     <Layout>
+      <SEO title="Shopping Cart" noIndex />
       <div className="container-custom py-8">
         <h1 className="text-3xl font-bold mb-8">Shopping Cart</h1>
 
@@ -37,7 +40,7 @@ const Cart = () => {
           <div className="lg:col-span-2">
             <div className="space-y-4">
               {items.map((item) => (
-                <div key={`${item.product._id}-${item.size}`} className="card p-4">
+                <div key={`${item.product._id}-${item.size}-${item.color || ''}`} className="card p-4">
                   <div className="flex gap-4">
                     {/* Image */}
                     <Link
@@ -60,20 +63,20 @@ const Cart = () => {
                         {item.product.name}
                       </Link>
                       <p className="text-sm text-gray-600 mb-2">
-                        Size: {item.size}
+                        {item.color ? `${item.size} / ${item.color}` : `Size: ${item.size}`}
                       </p>
                       <div className="flex items-center gap-4">
                         {/* Quantity */}
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => updateQuantity(item.product._id, item.size, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity - 1)}
                             className="w-8 h-8 rounded border border-gray-300 hover:border-primary-600"
                           >
                             -
                           </button>
                           <span className="w-8 text-center">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.product._id, item.size, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity + 1)}
                             className="w-8 h-8 rounded border border-gray-300 hover:border-primary-600"
                           >
                             +
@@ -92,7 +95,7 @@ const Cart = () => {
 
                         {/* Remove */}
                         <button
-                          onClick={() => removeItem(item.product._id, item.size)}
+                          onClick={() => removeItem(item.product._id, item.size, item.color)}
                           className="text-red-600 hover:text-red-700"
                         >
                           <TrashIcon className="w-5 h-5" />

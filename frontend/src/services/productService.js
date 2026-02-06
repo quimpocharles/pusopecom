@@ -16,6 +16,11 @@ export const productService = {
     return response.data;
   },
 
+  getSearchSuggestions: async (q) => {
+    const response = await api.get('/products/search/suggestions', { params: { q } });
+    return response.data;
+  },
+
   searchProducts: async (searchTerm, filters = {}) => {
     const response = await api.get('/products', {
       params: {
@@ -44,6 +49,16 @@ export const productService = {
 
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
+    return response.data;
+  },
+
+  getAdminProducts: async (params = {}) => {
+    const response = await api.get('/products/admin/all', { params });
+    return response.data;
+  },
+
+  getProductById: async (id) => {
+    const response = await api.get(`/products/admin/${id}`);
     return response.data;
   },
 

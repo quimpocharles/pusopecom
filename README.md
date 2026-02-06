@@ -7,7 +7,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 ### Backend
 - Node.js + Express
 - MongoDB + Mongoose
-- JWT Authentication
+- JWT Authentication (local + Google OAuth)
 - Nodemailer (Gmail)
 - Maya Checkout API
 - Cloudinary (Image hosting)
@@ -17,22 +17,43 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - TailwindCSS
 - React Router v6
 - Zustand (State management)
-- React Query
-- React Hook Form + Zod
-- Framer Motion
+- React Hook Form
+- react-helmet-async (SEO)
+- Recharts (Admin reports)
 
 ## Features
 
-- User authentication (register, login, email verification, password reset)
-- Product catalog with filtering (sport, team, category, size, price)
-- Shopping cart with persistent storage
+### Storefront
+- Product catalog with filtering (sport, team, category, size, price, gender)
+- Product color variants with per-color sizes, stock, and images
+- Search autocomplete with debounced suggestions and keyboard navigation
+- Shopping cart with persistent storage (color-aware)
 - Checkout flow with Maya payment integration
-- Order management and tracking
-- Email notifications (verification, order confirmation)
 - Guest checkout option
-- Admin dashboard capabilities
+- Order management and tracking
+- Product reviews and ratings
+- Virtual try-on for jerseys
 - Mobile-first responsive design
 - MoreLabs-inspired homepage design
+
+### User Account
+- Authentication (register, login, email verification, password reset, Google OAuth)
+- Account dashboard with profile, addresses, and password management
+- PSGC-based Philippine address forms with region/province/city resolution
+- Multiple saved addresses with default selection
+- Email notifications (verification, order confirmation)
+
+### SEO
+- Per-page meta tags and Open Graph tags via react-helmet-async
+- JSON-LD structured data (Product schema with ratings)
+- Dynamic sitemap.xml generation from active products
+- robots.txt with admin/auth page exclusions
+
+### Admin
+- Product management (CRUD with color variant support)
+- Order management with status updates and tracking
+- Reports dashboard (sales trends, top products, order analytics, customer insights)
+- League and team management
 
 ### Homepage Sections
 
@@ -184,8 +205,8 @@ The application will be available at:
 ```
 puso-shop/
 ├── backend/
-│   ├── models/          # MongoDB models (User, Product, Order)
-│   ├── routes/          # API routes (auth, products, orders)
+│   ├── models/          # MongoDB models (User, Product, Order, League)
+│   ├── routes/          # API routes (auth, products, orders, reviews, reports, leagues)
 │   ├── services/        # Business logic (email, Maya payment)
 │   ├── middleware/      # Authentication middleware
 │   ├── config/          # Configuration files
@@ -196,18 +217,21 @@ puso-shop/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/  # React components
-│   │   │   ├── common/      # Reusable components
-│   │   │   ├── layout/      # Header, Footer, Layout
-│   │   │   ├── products/    # ProductCard (hover swap, Buy Now)
+│   │   │   ├── common/      # SEO, LoadingSpinner
+│   │   │   ├── layout/      # Header (with search autocomplete), Footer, Layout
+│   │   │   ├── products/    # ProductCard (hover swap, color swatches)
+│   │   │   ├── address/     # AddressForm (PSGC resolution)
+│   │   │   ├── admin/       # Admin report components
+│   │   │   ├── auth/        # OAuth components
 │   │   │   └── cart/        # CartDrawer (size/quantity selector)
-│   │   ├── pages/       # Page components (Home, Products, etc.)
-│   │   ├── services/    # API service layer
+│   │   ├── pages/       # Page components (Home, Products, Account, admin/*)
+│   │   ├── services/    # API service layer (product, auth, order, league, report)
 │   │   ├── store/       # Zustand stores (cart, auth)
 │   │   ├── utils/       # Utility functions
 │   │   ├── index.css    # Global styles (button fill-up effects)
 │   │   ├── App.jsx      # Main app component
-│   │   └── main.jsx     # Entry point
-│   ├── public/
+│   │   └── main.jsx     # Entry point (HelmetProvider)
+│   ├── public/          # robots.txt, static assets
 │   ├── index.html
 │   └── package.json
 │
@@ -220,24 +244,49 @@ puso-shop/
 - `POST /register` - Create new user account
 - `GET /verify-email?token=xxx` - Verify email address
 - `POST /login` - User login
+- `POST /google` - Google OAuth login
 - `POST /resend-verification` - Resend verification email
 - `POST /forgot-password` - Request password reset
 - `POST /reset-password` - Reset password with token
 - `GET /me` - Get current user
+- `PUT /profile` - Update profile (name, phone)
+- `PUT /password` - Change password
+- `POST /addresses` - Add shipping address
+- `PUT /addresses/:addressId` - Update shipping address
+- `DELETE /addresses/:addressId` - Delete shipping address
 
 ### Products (`/api/products`)
-- `GET /products` - Get all products (with filters)
-- `GET /products/:slug` - Get single product
-- `POST /products` - Create product (Admin)
-- `PUT /products/:id` - Update product (Admin)
-- `DELETE /products/:id` - Delete product (Admin)
+- `GET /` - Get all products (with filters: sport, team, category, gender, sale, price range, search)
+- `GET /search/suggestions?q=term` - Search autocomplete suggestions
+- `GET /:slug` - Get single product by slug
+- `GET /admin/all` - Get all products including inactive (Admin)
+- `GET /admin/:id` - Get product by ID (Admin)
+- `GET /admin/stats` - Product statistics (Admin)
+- `POST /` - Create product (Admin)
+- `PUT /:id` - Update product (Admin)
+- `DELETE /:id` - Soft-delete product (Admin)
 
 ### Orders (`/api/orders`)
-- `POST /orders` - Create order and initiate Maya checkout
-- `GET /orders/:orderNumber` - Get order details
-- `GET /orders/user/:userId` - Get user's orders
+- `POST /` - Create order and initiate Maya checkout
+- `GET /:orderNumber` - Get order details
+- `GET /user/:userId` - Get user's orders
+- `GET /admin/all` - Get all orders (Admin)
+- `GET /admin/stats` - Dashboard statistics (Admin)
+- `PATCH /:id/status` - Update order status (Admin)
 - `POST /webhooks/maya` - Maya payment webhook handler
-- `PATCH /orders/:id/status` - Update order status (Admin)
+
+### Reviews (`/api/reviews`)
+- `GET /products/:slug/reviews` - Get product reviews with summary
+- `POST /products/:slug/reviews` - Submit a review (authenticated)
+
+### Reports (`/api/reports`)
+- `GET /sales` - Sales analytics with date range (Admin)
+- `GET /products` - Product performance analytics (Admin)
+- `GET /orders` - Order analytics (Admin)
+- `GET /customers` - Customer insights (Admin)
+
+### Other
+- `GET /api/sitemap.xml` - Dynamic sitemap for SEO
 
 ## Database Models
 
@@ -251,18 +300,20 @@ puso-shop/
 ### Product
 - Name, slug, description
 - Price, sale price
-- Category, sport, team, player
+- Category, sport, team, player, league
 - Images (Cloudinary URLs)
-- Sizes with stock levels
-- Featured flag
+- Sizes with stock levels (simple mode)
+- Color variants with per-color sizes, stock, hex code, and image (variant mode)
+- Review stats (avg rating, review count)
+- Featured flag, active flag
 
 ### Order
-- Order number (unique)
+- Order number (unique, auto-generated)
 - User/guest info
-- Items with details
-- Shipping address
-- Payment info (Maya)
-- Order status, tracking
+- Items with details (including optional color)
+- Shipping address (with PSGC fields)
+- Payment info (Maya checkout ID, URL)
+- Order status, tracking number
 
 ## Payment Flow
 

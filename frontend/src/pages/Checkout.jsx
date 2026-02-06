@@ -1,23 +1,40 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import {
+  regions,
+  provinces,
+  cities,
+} from 'select-philippines-address';
 import Layout from '../components/layout/Layout';
+import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import SEO from '../components/common/SEO';
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, getCartTotal, clearCart } = useCartStore();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
+
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
     defaultValues: {
       email: user?.email || '',
-      fullName: user ? `${user.firstName} ${user.lastName}` : '',
-      phone: user?.phone || ''
+      fullName: defaultAddress?.fullName || (user ? `${user.firstName} ${user.lastName}` : ''),
+      phone: defaultAddress?.phone || user?.phone || '',
+      country: defaultAddress?.country || 'Philippines',
+      address: defaultAddress?.address || '',
+      city: '',
+      province: '',
+      region: '',
+      barangay: '',
+      zipCode: '',
+      notes: ''
     }
   });
 
@@ -35,6 +52,21 @@ const Checkout = () => {
     setError('');
 
     try {
+      const isPH = data.country === 'Philippines';
+      let regionText = data.region;
+      let provinceText = data.province;
+      let cityText = data.city;
+
+      // Resolve PSGC codes to text names for PH addresses
+      if (isPH && data.region) {
+        const regionList = await regions();
+        const provinceList = await provinces(data.region);
+        const cityList = await cities(data.province);
+        regionText = regionList.find(r => r.region_code === data.region)?.region_name || data.region;
+        provinceText = provinceList.find(p => p.province_code === data.province)?.province_name || data.province;
+        cityText = cityList.find(c => c.city_code === data.city)?.city_name || data.city;
+      }
+
       const orderData = {
         email: data.email,
         items: items.map(item => ({
@@ -42,14 +74,18 @@ const Checkout = () => {
           name: item.product.name,
           price: item.price,
           quantity: item.quantity,
-          size: item.size
+          size: item.size,
+          ...(item.color && { color: item.color })
         })),
         shippingAddress: {
           fullName: data.fullName,
           phone: data.phone,
+          country: data.country,
           address: data.address,
-          city: data.city,
-          province: data.province,
+          city: cityText,
+          province: provinceText,
+          region: regionText,
+          barangay: isPH ? data.barangay : undefined,
           zipCode: data.zipCode
         },
         notes: data.notes
@@ -72,6 +108,7 @@ const Checkout = () => {
 
   return (
     <Layout>
+      <SEO title="Checkout" noIndex />
       <div className="container-custom py-8">
         <h1 className="text-3xl font-bold mb-8">Checkout</h1>
 
@@ -139,63 +176,13 @@ const Checkout = () => {
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Street Address *
-                    </label>
-                    <input
-                      type="text"
-                      {...register('address', { required: 'Address is required' })}
-                      className="input-field"
-                    />
-                    {errors.address && (
-                      <p className="text-red-600 text-sm mt-1">{errors.address.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        City *
-                      </label>
-                      <input
-                        type="text"
-                        {...register('city', { required: 'City is required' })}
-                        className="input-field"
-                      />
-                      {errors.city && (
-                        <p className="text-red-600 text-sm mt-1">{errors.city.message}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Province *
-                      </label>
-                      <input
-                        type="text"
-                        {...register('province', { required: 'Province is required' })}
-                        className="input-field"
-                      />
-                      {errors.province && (
-                        <p className="text-red-600 text-sm mt-1">{errors.province.message}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      ZIP Code *
-                    </label>
-                    <input
-                      type="text"
-                      {...register('zipCode', { required: 'ZIP code is required' })}
-                      className="input-field"
-                    />
-                    {errors.zipCode && (
-                      <p className="text-red-600 text-sm mt-1">{errors.zipCode.message}</p>
-                    )}
-                  </div>
+                  {/* Address Form Component */}
+                  <AddressForm
+                    register={register}
+                    errors={errors}
+                    setValue={setValue}
+                    watch={watch}
+                  />
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -234,7 +221,7 @@ const Checkout = () => {
 
               <div className="space-y-3 mb-4">
                 {items.map((item) => (
-                  <div key={`${item.product._id}-${item.size}`} className="flex gap-3 pb-3 border-b">
+                  <div key={`${item.product._id}-${item.size}-${item.color || ''}`} className="flex gap-3 pb-3 border-b">
                     <img
                       src={item.product.images[0]}
                       alt={item.product.name}
@@ -242,7 +229,9 @@ const Checkout = () => {
                     />
                     <div className="flex-1">
                       <p className="font-semibold text-sm">{item.product.name}</p>
-                      <p className="text-xs text-gray-600">Size: {item.size}</p>
+                      <p className="text-xs text-gray-600">
+                        {item.color ? `${item.size} / ${item.color}` : `Size: ${item.size}`}
+                      </p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
                     <div className="text-right">
