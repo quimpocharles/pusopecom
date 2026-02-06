@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import productService from '../../services/productService';
 import leagueService from '../../services/leagueService';
 
@@ -38,7 +38,11 @@ const AdminProductForm = () => {
   const [leagues, setLeagues] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadingColorIdx, setUploadingColorIdx] = useState(null);
   const [error, setError] = useState('');
+  const fileInputRef = useRef(null);
+  const colorFileInputRefs = useRef({});
 
   useEffect(() => {
     if (isEdit) {
@@ -146,6 +150,55 @@ const AdminProductForm = () => {
       ...prev,
       images: prev.images.filter((_, i) => i !== index),
     }));
+  };
+
+  const handleImageUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError('');
+    try {
+      for (const file of files) {
+        const res = await productService.uploadImage(file);
+        if (res.success) {
+          setForm((prev) => ({
+            ...prev,
+            images: [...prev.images.filter(Boolean), res.data.url],
+          }));
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleColorImageUpload = async (colorIdx, file) => {
+    if (!file) return;
+    setUploadingColorIdx(colorIdx);
+    setError('');
+    try {
+      const res = await productService.uploadImage(file);
+      if (res.success) {
+        handleColorChange(colorIdx, 'image', res.data.url);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to upload color image');
+    } finally {
+      setUploadingColorIdx(null);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+    if (files.length > 0) handleImageUpload(files);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const handleSizeChange = (index, field, value) => {
@@ -450,37 +503,93 @@ const AdminProductForm = () => {
 
         {/* Images */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Images</h2>
-            <button
-              type="button"
-              onClick={addImage}
-              className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
-            >
-              <PlusIcon className="w-4 h-4" /> Add Image
-            </button>
+          <h2 className="text-lg font-semibold text-gray-900">Images</h2>
+
+          {/* Drop zone */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-colors"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                handleImageUpload(Array.from(e.target.files));
+                e.target.value = '';
+              }}
+            />
+            {uploading ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-gray-500">Uploading...</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <ArrowUpTrayIcon className="w-8 h-8 text-gray-400" />
+                <span className="text-sm text-gray-500">Drag & drop images here or click to browse</span>
+                <span className="text-xs text-gray-400">Max 5MB per image</span>
+              </div>
+            )}
           </div>
 
-          {form.images.map((url, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => handleImageChange(i, e.target.value)}
-                placeholder="https://example.com/image.jpg"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-              {form.images.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeImage(i)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                >
-                  <TrashIcon className="w-4 h-4" />
-                </button>
+          {/* Thumbnail grid */}
+          {form.images.filter(Boolean).length > 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {form.images.map((url, i) =>
+                url ? (
+                  <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                    <img src={url} alt={`Product ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null
               )}
             </div>
-          ))}
+          )}
+
+          {/* URL fallback */}
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-gray-500 uppercase">Or paste image URLs</span>
+              <button
+                type="button"
+                onClick={addImage}
+                className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
+              >
+                <PlusIcon className="w-3.5 h-3.5" /> Add URL
+              </button>
+            </div>
+            {form.images.map((url, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => handleImageChange(i, e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                {form.images.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Sizes & Stock */}
@@ -588,13 +697,56 @@ const AdminProductForm = () => {
                     </button>
                   </div>
 
-                  <input
-                    type="url"
-                    value={colorVar.image}
-                    onChange={(e) => handleColorChange(ci, 'image', e.target.value)}
-                    placeholder="Color-specific image URL (optional)"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                  {/* Color image upload */}
+                  <div className="space-y-2">
+                    {colorVar.image ? (
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex-shrink-0">
+                          <img src={colorVar.image} alt={colorVar.color || 'Color'} className="w-full h-full object-cover" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleColorChange(ci, 'image', '')}
+                          className="text-xs text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={uploadingColorIdx === ci}
+                        onClick={() => colorFileInputRefs.current[ci]?.click()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <input
+                          ref={(el) => (colorFileInputRefs.current[ci] = el)}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files[0]) handleColorImageUpload(ci, e.target.files[0]);
+                            e.target.value = '';
+                          }}
+                        />
+                        {uploadingColorIdx === ci ? (
+                          <div className="w-3.5 h-3.5 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <ArrowUpTrayIcon className="w-3.5 h-3.5" />
+                        )}
+                        {uploadingColorIdx === ci ? 'Uploading...' : 'Upload image'}
+                      </button>
+                      <span className="text-xs text-gray-400">or</span>
+                      <input
+                        type="url"
+                        value={colorVar.image}
+                        onChange={(e) => handleColorChange(ci, 'image', e.target.value)}
+                        placeholder="Paste URL"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  </div>
 
                   <div className="pl-4 border-l-2 border-gray-100 space-y-2">
                     <div className="flex items-center justify-between">
@@ -675,7 +827,7 @@ const AdminProductForm = () => {
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading || uploadingColorIdx !== null}
             className="px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium disabled:opacity-50"
           >
             {saving ? 'Saving...' : isEdit ? 'Update Product' : 'Create Product'}

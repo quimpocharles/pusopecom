@@ -1,9 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -13,9 +13,7 @@ import tryonRoutes from './routes/tryon.js';
 import reviewRoutes from './routes/reviews.js';
 import leagueRoutes from './routes/leagues.js';
 import reportRoutes from './routes/reports.js';
-
-// Load environment variables
-dotenv.config();
+import uploadRoutes from './routes/upload.js';
 
 // Create Express app
 const app = express();
@@ -105,6 +103,7 @@ app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);
 app.use('/api/leagues', leagueRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {

@@ -27,29 +27,29 @@ const Header = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [showSportsDropdown, setShowSportsDropdown] = useState(false);
-  const [showMobileSports, setShowMobileSports] = useState(false);
+  // const [showSportsDropdown, setShowSportsDropdown] = useState(false);
+  // const [showMobileSports, setShowMobileSports] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const sportsDropdownRef = useRef(null);
+  // const sportsDropdownRef = useRef(null);
   const searchContainerRef = useRef(null);
   const debounceRef = useRef(null);
 
   // Close sports dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (sportsDropdownRef.current && !sportsDropdownRef.current.contains(e.target)) {
-        setShowSportsDropdown(false);
-      }
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // useEffect(() => {
+  //   const handleClickOutside = (e) => {
+  //     if (sportsDropdownRef.current && !sportsDropdownRef.current.contains(e.target)) {
+  //       setShowSportsDropdown(false);
+  //     }
+  //     if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+  //       setShowSuggestions(false);
+  //     }
+  //   };
+  //   document.addEventListener('mousedown', handleClickOutside);
+  //   return () => document.removeEventListener('mousedown', handleClickOutside);
+  // }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -156,7 +156,7 @@ const Header = () => {
             ))}
 
             {/* Sports Dropdown */}
-            <div className="relative" ref={sportsDropdownRef}>
+            {/* <div className="relative" ref={sportsDropdownRef}>
               <button
                 onClick={() => setShowSportsDropdown(!showSportsDropdown)}
                 className="nav-link text-sm inline-flex items-center gap-1"
@@ -178,7 +178,7 @@ const Header = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
 
             <Link to="/products?sale=true" className="nav-link text-sm text-accent-500 font-semibold">
               Sale

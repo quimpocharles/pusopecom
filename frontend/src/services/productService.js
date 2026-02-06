@@ -62,6 +62,25 @@ export const productService = {
     return response.data;
   },
 
+  // Image uploads
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await api.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  uploadImages: async (files) => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('images', f));
+    const response = await api.post('/upload/multiple', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   // Reviews
   getReviews: async (slug, params = {}) => {
     const response = await api.get(`/products/${slug}/reviews`, { params });
