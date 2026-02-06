@@ -91,6 +91,11 @@ export const productService = {
     const response = await api.post(`/products/${slug}/reviews`, reviewData);
     return response.data;
   },
+
+  getMyReviewedProductIds: async () => {
+    const response = await api.get('/products/reviews/my');
+    return response.data;
+  },
 };
 
 export default productService;

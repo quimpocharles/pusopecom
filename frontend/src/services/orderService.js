@@ -30,6 +30,11 @@ export const orderService = {
   updateOrderStatus: async (orderId, statusData) => {
     const response = await api.patch(`/orders/${orderId}/status`, statusData);
     return response.data;
+  },
+
+  verifyPayment: async (orderNumber) => {
+    const response = await api.post(`/orders/${orderNumber}/verify-payment`);
+    return response.data;
   }
 };
 

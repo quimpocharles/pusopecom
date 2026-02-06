@@ -26,6 +26,7 @@ const emptyForm = {
   colors: [],
   useColors: false,
   featured: false,
+  tryOnEnabled: false,
   active: true,
 };
 
@@ -73,6 +74,7 @@ const AdminProductForm = () => {
             })) : [],
             useColors: hasColorVariants,
             featured: p.featured || false,
+            tryOnEnabled: p.tryOnEnabled || false,
             active: p.active !== false,
           });
         } catch (err) {
@@ -809,6 +811,16 @@ const AdminProductForm = () => {
                 className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
               />
               <span className="text-sm text-gray-700">Featured</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="tryOnEnabled"
+                checked={form.tryOnEnabled}
+                onChange={handleChange}
+                className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Virtual Try-On</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input

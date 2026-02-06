@@ -16,6 +16,11 @@ const OrderConfirmation = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
+        // If returning from Maya with success, verify payment status first
+        if (paymentStatus === 'success') {
+          await orderService.verifyPayment(orderNumber).catch(() => {});
+        }
+
         const response = await orderService.getOrderByNumber(orderNumber);
         setOrder(response.data);
       } catch (err) {
@@ -28,7 +33,7 @@ const OrderConfirmation = () => {
     if (orderNumber) {
       fetchOrder();
     }
-  }, [orderNumber]);
+  }, [orderNumber, paymentStatus]);
 
   if (loading) {
     return (

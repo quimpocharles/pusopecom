@@ -10,14 +10,7 @@ const Footer = () => {
       { label: 'Football', href: '/products?sport=football' },
       { label: 'All Products', href: '/products' },
     ],
-    support: [
-      { label: 'Contact Us', href: '/contact' },
-      { label: 'Shipping Info', href: '/shipping' },
-      { label: 'Returns', href: '/returns' },
-      { label: 'FAQ', href: '/faq' },
-    ],
-    company: [
-      { label: 'About Us', href: '/about' },
+    legal: [
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms of Service', href: '/terms' },
     ],
@@ -26,7 +19,7 @@ const Footer = () => {
   return (
     <footer className="bg-gray-50 border-t border-gray-200">
       <div className="container-custom py-10 md:py-16">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 md:gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
           {/* Brand */}
           <div className="col-span-2">
             <Link to="/" className="inline-block mb-4">
@@ -88,28 +81,11 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Support */}
+          {/* Legal */}
           <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Support</h4>
+            <h4 className="font-semibold text-gray-900 mb-4">Legal</h4>
             <ul className="space-y-3">
-              {footerLinks.support.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    to={link.href}
-                    className="text-gray-600 hover:text-primary-600 transition-colors text-sm"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Company */}
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Company</h4>
-            <ul className="space-y-3">
-              {footerLinks.company.map((link) => (
+              {footerLinks.legal.map((link) => (
                 <li key={link.label}>
                   <Link
                     to={link.href}
@@ -130,8 +106,7 @@ const Footer = () => {
           </p>
           <div className="flex items-center gap-6">
             <img src="/maya-logo.svg" alt="Maya" className="h-6 opacity-60" onError={(e) => e.target.style.display = 'none'} />
-            <img src="/gcash-logo.svg" alt="GCash" className="h-6 opacity-60" onError={(e) => e.target.style.display = 'none'} />
-            <span className="text-gray-400 text-sm">Secure payments</span>
+            <span className="text-gray-400 text-sm">Secure payments via Maya</span>
           </div>
         </div>
       </div>

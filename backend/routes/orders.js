@@ -238,6 +238,50 @@ router.get('/admin/stats',
 );
 
 // Get order by order number
+// Verify payment status with Maya (called when user returns from checkout)
+router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
+  try {
+    const order = await Order.findOne({ orderNumber: req.params.orderNumber });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Already resolved — no need to check again
+    if (order.paymentStatus === 'paid' || order.paymentStatus === 'failed') {
+      return res.json({ success: true, data: { paymentStatus: order.paymentStatus } });
+    }
+
+    if (!order.mayaPaymentId) {
+      return res.json({ success: true, data: { paymentStatus: order.paymentStatus } });
+    }
+
+    // Poll Maya for checkout status
+    const checkoutData = await getCheckoutStatus(order.mayaPaymentId);
+
+    if (checkoutData.paymentStatus === 'PAYMENT_SUCCESS') {
+      order.paymentStatus = 'paid';
+      order.orderStatus = 'confirmed';
+      await order.save();
+
+      // Send confirmation email
+      try {
+        await sendOrderConfirmationEmail(order.email, order);
+      } catch (emailError) {
+        console.error('Failed to send confirmation email:', emailError);
+      }
+    } else if (checkoutData.paymentStatus === 'PAYMENT_FAILED' || checkoutData.paymentStatus === 'PAYMENT_EXPIRED') {
+      order.paymentStatus = 'failed';
+      await order.save();
+    }
+
+    res.json({ success: true, data: { paymentStatus: order.paymentStatus } });
+  } catch (error) {
+    console.error('Verify payment error:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify payment' });
+  }
+});
+
 router.get('/:orderNumber', optionalAuth, async (req, res) => {
   try {
     const order = await Order.findOne({

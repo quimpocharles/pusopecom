@@ -189,6 +189,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
           </div>
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
             <p className="text-white text-sm font-medium">Try-on complete!</p>
+            <p className="text-white/70 text-xs mt-1">This is an AI-generated preview and may not reflect the actual fit.</p>
           </div>
         </div>
       );
@@ -295,6 +296,13 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
               </p>
             </div>
           )}
+
+          {/* Disclaimer */}
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs text-amber-700 leading-relaxed">
+              <span className="font-semibold">Disclaimer:</span> This is an AI-generated preview for visualization purposes only. Results may not accurately represent the actual product appearance, fit, or color. Sizing cannot be determined from this try-on. Please refer to our size chart for accurate measurements.
+            </p>
+          </div>
         </div>
       </div>
     </div>

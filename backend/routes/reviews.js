@@ -29,6 +29,18 @@ async function recalcStats(productId) {
   }
 }
 
+// GET /api/products/reviews/my — get product IDs the current user has reviewed
+router.get('/reviews/my', authenticate, async (req, res) => {
+  try {
+    const reviews = await Review.find({ email: req.user.email }).select('product').lean();
+    const reviewedProductIds = reviews.map(r => r.product.toString());
+    res.json({ success: true, data: reviewedProductIds });
+  } catch (error) {
+    console.error('Get my reviews error:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve reviews' });
+  }
+});
+
 // GET /api/products/:slug/reviews
 router.get('/:slug/reviews', async (req, res) => {
   try {
@@ -103,7 +115,9 @@ router.post(
 
       const review = new Review({
         product: product._id,
-        author: req.user.name || req.user.email.split('@')[0],
+        author: req.user.firstName
+          ? `${req.user.firstName} ${req.user.lastName ? req.user.lastName.charAt(0) + '.' : ''}`.trim()
+          : req.user.email.split('@')[0],
         email: req.user.email,
         rating: req.body.rating,
         title: req.body.title,

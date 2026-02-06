@@ -10,6 +10,12 @@ const getAuthHeader = () => {
   return `Basic ${auth}`;
 };
 
+const getSecretAuthHeader = () => {
+  const secretKey = process.env.MAYA_SECRET_KEY;
+  const auth = Buffer.from(`${secretKey}:`).toString('base64');
+  return `Basic ${auth}`;
+};
+
 export const createCheckout = async (order) => {
   try {
     const checkoutData = {
@@ -93,7 +99,7 @@ export const getCheckoutStatus = async (checkoutId) => {
       `${MAYA_API_URL}/checkout/v1/checkouts/${checkoutId}`,
       {
         headers: {
-          'Authorization': getAuthHeader()
+          'Authorization': getSecretAuthHeader()
         }
       }
     );
