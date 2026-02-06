@@ -1,7 +1,10 @@
 import express from 'express';
 import multer from 'multer';
 import axios from 'axios';
+import mongoose from 'mongoose';
 import { generateTryOn } from '../services/replicateService.js';
+import TryOnLog from '../models/TryOnLog.js';
+import Product from '../models/Product.js';
 
 const router = express.Router();
 
@@ -23,7 +26,7 @@ const upload = multer({
 // Virtual try-on endpoint
 router.post('/', upload.single('userImage'), async (req, res) => {
   try {
-    const { productImageUrl, productName } = req.body;
+    const { productImageUrl, productName, productId } = req.body;
 
     if (!req.file) {
       return res.status(400).json({
@@ -63,6 +66,24 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       productName || 'clothing item'
     );
 
+    // Fire-and-forget: log try-on attempt
+    const logProductId = productId && mongoose.Types.ObjectId.isValid(productId)
+      ? productId
+      : null;
+    const logPromise = (async () => {
+      let resolvedProductId = logProductId;
+      if (!resolvedProductId && productName) {
+        const found = await Product.findOne({ name: productName }).select('_id').lean();
+        if (found) resolvedProductId = found._id;
+      }
+      return TryOnLog.create({
+        product: resolvedProductId || undefined,
+        productName: productName || 'Unknown',
+        productImage: productImageUrl,
+        success: result.success
+      });
+    })().catch(err => console.error('TryOnLog write error:', err));
+
     if (result.success) {
       res.json({
         success: true,
@@ -77,6 +98,14 @@ router.post('/', upload.single('userImage'), async (req, res) => {
 
   } catch (error) {
     console.error('Try-on error:', error);
+
+    // Log failed attempt
+    TryOnLog.create({
+      productName: req.body?.productName || 'Unknown',
+      productImage: req.body?.productImageUrl,
+      success: false
+    }).catch(err => console.error('TryOnLog write error:', err));
+
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to process virtual try-on'

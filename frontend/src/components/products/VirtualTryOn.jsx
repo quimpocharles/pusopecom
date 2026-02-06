@@ -59,6 +59,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       formData.append('userImage', userImage);
       formData.append('productImageUrl', product.images[0]);
       formData.append('productName', product.name);
+      if (product._id) formData.append('productId', product._id);
 
       const response = await api.post('/tryon', formData, {
         headers: {

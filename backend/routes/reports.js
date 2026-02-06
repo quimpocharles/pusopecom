@@ -2,6 +2,7 @@ import express from 'express';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
+import TryOnLog from '../models/TryOnLog.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -523,6 +524,90 @@ router.get('/customers', async (req, res) => {
   } catch (error) {
     console.error('Customers report error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate customers report' });
+  }
+});
+
+// GET /api/reports/tryon
+router.get('/tryon', async (req, res) => {
+  try {
+    const dateFilter = getDateFilter(req.query);
+    const granularity = getGranularity(req.query.startDate, req.query.endDate);
+
+    const [tryOnOverTime, totals, mostTriedProducts, recentTryOns] = await Promise.all([
+      // Try-ons over time
+      TryOnLog.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: getDateGroupExpression(granularity),
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]),
+
+      // Totals
+      TryOnLog.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: null,
+            totalAttempts: { $sum: 1 },
+            successfulAttempts: { $sum: { $cond: [{ $eq: ['$success', true] }, 1, 0] } }
+          }
+        }
+      ]),
+
+      // Most tried products - top 10
+      TryOnLog.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: '$product',
+            productName: { $first: '$productName' },
+            productImage: { $first: '$productImage' },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]),
+
+      // Recent try-ons
+      TryOnLog.find(dateFilter)
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean()
+    ]);
+
+    const summary = totals[0] || { totalAttempts: 0, successfulAttempts: 0 };
+    const successRate = summary.totalAttempts > 0
+      ? Math.round((summary.successfulAttempts / summary.totalAttempts) * 10000) / 100
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        tryOnOverTime: tryOnOverTime.map(r => ({ date: r._id, count: r.count })),
+        totalAttempts: summary.totalAttempts,
+        successfulAttempts: summary.successfulAttempts,
+        successRate,
+        mostTriedProducts: mostTriedProducts.map(p => ({
+          productName: p.productName,
+          productImage: p.productImage,
+          count: p.count
+        })),
+        recentTryOns: recentTryOns.map(t => ({
+          productName: t.productName,
+          productImage: t.productImage,
+          success: t.success,
+          createdAt: t.createdAt
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Try-on report error:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate try-on report' });
   }
 });
 

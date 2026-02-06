@@ -19,6 +19,11 @@ export const reportService = {
   getCustomersReport: async (params = {}) => {
     const response = await api.get('/reports/customers', { params });
     return response.data;
+  },
+
+  getTryOnReport: async (params = {}) => {
+    const response = await api.get('/reports/tryon', { params });
+    return response.data;
   }
 };
 

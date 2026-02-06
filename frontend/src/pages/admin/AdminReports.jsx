@@ -4,6 +4,7 @@ import SalesSection from '../../components/admin/reports/SalesSection';
 import ProductsSection from '../../components/admin/reports/ProductsSection';
 import OrdersSection from '../../components/admin/reports/OrdersSection';
 import CustomersSection from '../../components/admin/reports/CustomersSection';
+import TryOnSection from '../../components/admin/reports/TryOnSection';
 
 const AdminReports = () => {
   const [selectedPreset, setSelectedPreset] = useState('30d');
@@ -33,6 +34,7 @@ const AdminReports = () => {
       <ProductsSection dateParams={dateParams} />
       <OrdersSection dateParams={dateParams} />
       <CustomersSection dateParams={dateParams} />
+      <TryOnSection dateParams={dateParams} />
     </div>
   );
 };

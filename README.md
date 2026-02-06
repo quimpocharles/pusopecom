@@ -32,7 +32,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Guest checkout option
 - Order management and tracking
 - Product reviews and ratings
-- Virtual try-on for jerseys
+- Virtual try-on for jerseys with analytics tracking
 - Mobile-first responsive design
 - MoreLabs-inspired homepage design
 
@@ -52,7 +52,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 ### Admin
 - Product management (CRUD with color variant support)
 - Order management with status updates and tracking
-- Reports dashboard (sales trends, top products, order analytics, customer insights)
+- Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - League and team management
 
 ### Homepage Sections
@@ -284,6 +284,10 @@ puso-shop/
 - `GET /products` - Product performance analytics (Admin)
 - `GET /orders` - Order analytics (Admin)
 - `GET /customers` - Customer insights (Admin)
+- `GET /tryon` - Virtual try-on analytics (Admin)
+
+### Virtual Try-On (`/api/tryon`)
+- `POST /` - Generate virtual try-on image (logs attempt for analytics)
 
 ### Other
 - `GET /api/sitemap.xml` - Dynamic sitemap for SEO
@@ -314,6 +318,12 @@ puso-shop/
 - Shipping address (with PSGC fields)
 - Payment info (Maya checkout ID, URL)
 - Order status, tracking number
+
+### TryOnLog
+- Product reference (ObjectId)
+- Product name, image (denormalized)
+- Success flag
+- Timestamps
 
 ## Payment Flow
 
