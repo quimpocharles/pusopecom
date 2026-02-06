@@ -7,6 +7,7 @@ import {
   UsersIcon,
   TrophyIcon,
   ChartBarIcon,
+  Cog6ToothIcon,
   ArrowLeftIcon,
   Bars3Icon,
   XMarkIcon
@@ -19,6 +20,7 @@ const navItems = [
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
+  { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon },
 ];
 
 const AdminLayout = () => {

@@ -1,5 +1,26 @@
-/* Import Inter font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@font-face {
+  font-family: 'Pro Sans';
+  src: url('./assets/fonts/prox-reg.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pro Sans';
+  src: url('./assets/fonts/prox-semi.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Pro Sans';
+  src: url('./assets/fonts/prox-semi.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -29,7 +50,8 @@
   .btn-secondary-light,
   .btn-outline,
   .btn-gold,
-  .btn-tryon {
+  .btn-tryon,
+  .hover-fill {
     @apply relative overflow-hidden isolate;
   }
 
@@ -39,7 +61,8 @@
   .btn-secondary-light::before,
   .btn-outline::before,
   .btn-gold::before,
-  .btn-tryon::before {
+  .btn-tryon::before,
+  .hover-fill::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -55,13 +78,25 @@
   .btn-secondary-light:hover::before,
   .btn-outline:hover::before,
   .btn-gold:hover::before,
-  .btn-tryon:hover::before {
+  .btn-tryon:hover::before,
+  .hover-fill:hover::before {
     transform: translateY(0);
+  }
+
+  /* Fill-up variants for inline buttons */
+  .hover-fill-navy::before {
+    background-color: #0A2463;
+  }
+  .hover-fill-navy:hover {
+    color: #fff;
+  }
+  .hover-fill-dark::before {
+    background-color: rgba(0, 0, 0, 0.15);
   }
 
   /* Primary Button — navy bg, white text */
   .btn-primary {
-    @apply inline-flex items-center justify-center bg-primary-600 text-white px-6 py-3 rounded-full font-semibold
+    @apply inline-flex items-center justify-center bg-primary-600 text-white px-6 py-3 rounded-xl font-semibold
            active:scale-[0.98] transition-all duration-200
            disabled:bg-gray-300 disabled:cursor-not-allowed
            shadow-sm hover:shadow-md;
@@ -72,7 +107,7 @@
 
   /* Primary Light — white bg, navy text (for use on dark backgrounds) */
   .btn-primary-light {
-    @apply inline-flex items-center justify-center bg-white text-primary-600 px-6 py-3 rounded-full font-semibold
+    @apply inline-flex items-center justify-center bg-white text-primary-600 px-6 py-3 rounded-xl font-semibold
            active:scale-[0.98] transition-all duration-200
            shadow-sm hover:shadow-md;
   }
@@ -86,7 +121,7 @@
   /* Secondary Button — white bg, navy border */
   .btn-secondary {
     @apply inline-flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600
-           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
            transition-all duration-200;
   }
   .btn-secondary::before {
@@ -99,7 +134,7 @@
   /* Secondary Light — transparent, white border (for use on dark backgrounds) */
   .btn-secondary-light {
     @apply inline-flex items-center justify-center bg-transparent text-white border-2 border-white
-           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
            transition-all duration-200;
   }
   .btn-secondary-light::before {
@@ -113,7 +148,7 @@
   /* Outline Button */
   .btn-outline {
     @apply inline-flex items-center justify-center border-2 border-gray-200 text-gray-700
-           px-6 py-3 rounded-full font-semibold
+           px-6 py-3 rounded-xl font-semibold
            active:scale-[0.98] transition-all duration-200;
   }
   .btn-outline::before {
@@ -126,7 +161,7 @@
   /* Gold Accent Button */
   .btn-gold {
     @apply inline-flex items-center justify-center bg-secondary-500 text-primary-900
-           px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
            transition-all duration-200 shadow-sm hover:shadow-md;
   }
   .btn-gold::before {
@@ -136,7 +171,7 @@
   /* Try-On Button */
   .btn-tryon {
     @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-accent-500
-           text-white px-6 py-3 rounded-full font-semibold active:scale-[0.98]
+           text-white px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
            transition-all duration-200 shadow-md hover:shadow-lg;
   }
   .btn-tryon::before {

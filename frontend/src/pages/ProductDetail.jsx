@@ -172,8 +172,7 @@ const ProductDetail = () => {
     }
   };
 
-  const isTryOnEligible = product &&
-    ['jersey', 'jerseys', 'tshirt', 'shirts', 'tops'].includes(product.category?.toLowerCase());
+  const isTryOnEligible = product?.tryOnEnabled;
 
   if (loading) {
     return (
@@ -270,7 +269,7 @@ const ProductDetail = () => {
               {isTryOnEligible && (
                 <button
                   onClick={() => setShowTryOn(true)}
-                  className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm text-primary-700 px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1.5 shadow-md hover:bg-white transition-colors"
+                  className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm text-primary-700 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md hover:bg-white transition-colors"
                 >
                   <SparklesIcon className="w-4 h-4" />
                   Virtual Try-On
@@ -404,7 +403,7 @@ const ProductDetail = () => {
                     key={sizeObj.size}
                     onClick={() => { setSelectedSize(sizeObj.size); setError(''); setQuantity(1); }}
                     disabled={sizeObj.stock === 0}
-                    className={`min-w-[3rem] px-4 py-2.5 rounded-full text-sm font-medium border transition-all duration-200 ${
+                    className={`min-w-[3rem] px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 ${
                       selectedSize === sizeObj.size
                         ? 'bg-primary-600 text-white border-primary-600'
                         : sizeObj.stock === 0
@@ -421,7 +420,7 @@ const ProductDetail = () => {
             {/* Quantity */}
             <div className="mb-8">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Quantity</h3>
-              <div className="inline-flex items-center border border-gray-200 rounded-full">
+              <div className="inline-flex items-center border border-gray-200 rounded-xl">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
@@ -448,12 +447,12 @@ const ProductDetail = () => {
             <button
               onClick={handleAddToCart}
               disabled={product.totalStock === 0 || selectedSizeStock === 0}
-              className={`w-full py-4 rounded-full font-semibold text-base transition-all duration-300 ${
+              className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-300 ${
                 addedToCart
                   ? 'bg-green-600 text-white'
                   : product.totalStock === 0
                   ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'bg-primary-600 text-white hover:bg-primary-700 active:scale-[0.98]'
+                  : 'hover-fill hover-fill-dark bg-primary-600 text-white active:scale-[0.98]'
               }`}
             >
               {addedToCart ? 'Added to Cart ✓' : product.totalStock === 0 ? 'Out of Stock' : 'Add to Cart'}
@@ -581,7 +580,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={reviewSubmitting}
-                    className="bg-primary-600 text-white px-8 py-3 rounded-full font-semibold text-sm hover:bg-primary-700 transition-colors disabled:opacity-50"
+                    className="hover-fill hover-fill-dark bg-primary-600 text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
                   </button>

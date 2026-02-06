@@ -14,6 +14,7 @@ import reviewRoutes from './routes/reviews.js';
 import leagueRoutes from './routes/leagues.js';
 import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/upload.js';
+import settingsRoutes from './routes/settings.js';
 
 // Create Express app
 const app = express();
@@ -104,6 +105,7 @@ app.use('/api/products', reviewRoutes);
 app.use('/api/leagues', leagueRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {

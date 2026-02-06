@@ -1,4 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
+import heroImage from '../assets/images/banner-home.jpg';
+import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
+import collectionImage from '../assets/images/dwight.jpg';
 import { Link } from 'react-router-dom';
 import {
   ChevronRightIcon,
@@ -11,6 +14,7 @@ import ProductCard from '../components/products/ProductCard';
 import CartDrawer from '../components/cart/CartDrawer';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import productService from '../services/productService';
+import settingsService from '../services/settingsService';
 import SEO from '../components/common/SEO';
 
 const Home = () => {
@@ -22,6 +26,11 @@ const Home = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
+  const [tryOnSettings, setTryOnSettings] = useState({
+    title: 'Try on the Gilas Pilipinas shirt!',
+    image: '',
+    productUrl: '/products/gilas-pilipinas-t-shirt',
+  });
   const carouselRef = useRef(null);
 
   const categories = [
@@ -29,6 +38,25 @@ const Home = () => {
     { id: 'volleyball', label: 'Volleyball', icon: '🏐' },
     { id: 'football', label: 'Football', icon: '⚽' },
   ];
+
+  // Fetch site settings for try-on section
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await settingsService.getSettings();
+        if (res.data?.tryOn) {
+          setTryOnSettings((prev) => ({
+            title: res.data.tryOn.title || prev.title,
+            image: res.data.tryOn.image || prev.image,
+            productUrl: res.data.tryOn.productUrl || prev.productUrl,
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   // Fetch featured products
   useEffect(() => {
@@ -109,14 +137,20 @@ const Home = () => {
       </div>
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white">
-        <div className="container-custom py-12 md:py-32">
+      <section className="relative text-white overflow-hidden">
+        <img
+          src={heroImage}
+          alt="Puso Pilipinas hero banner"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-900/85 via-primary-800/70 to-primary-900/40" />
+        <div className="container-custom py-12 md:py-32 relative z-10">
           <div className="max-w-3xl">
             <p className="text-secondary-400 font-semibold mb-3 md:mb-4 tracking-wide uppercase text-xs md:text-sm">
               Official Licensed Merchandise
             </p>
             <h1 className="text-3xl md:text-display lg:text-display-lg mb-4 md:mb-6 font-bold text-balance">
-              Wear Your Team's Pride
+              Show Your PUSO ❤️
             </h1>
             <p className="text-base md:text-2xl text-white/80 mb-6 md:mb-8 max-w-xl">
               Authentic jerseys and gear from PBA, UAAP, PVL, and more.
@@ -134,28 +168,31 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Social Proof Bar */}
-      <section className="bg-gray-50 border-b border-gray-100">
-        <div className="container-custom py-4 md:py-6">
-          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-16 text-center text-sm md:text-base">
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <div className="flex text-secondary-500">
-                {[...Array(5)].map((_, i) => (
-                  <StarSolid key={i} className="w-4 h-4 md:w-5 md:h-5" />
-                ))}
-              </div>
-              <span className="font-semibold text-gray-900">4.9/5</span>
-              <span className="text-gray-500">(2,500+ reviews)</span>
+      {/* Marquee Announcement Bar */}
+      <div className="bg-primary-600 text-white py-2 md:py-2.5 overflow-x-hidden text-xs md:text-sm">
+        <div className="animate-marquee whitespace-nowrap flex">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="flex items-center gap-6 md:gap-12 px-4 md:px-6">
+              <span className="flex items-center gap-2">
+                <SparklesIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-secondary-400" />
+                <span>Try jerseys virtually before you buy!</span>
+              </span>
+              <span className="text-white/40">✦</span>
+              <span className="flex items-center gap-2">
+                <TruckIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span><strong>FREE SHIPPING</strong> on orders over ₱2,000</span>
+              </span>
+              <span className="text-white/40">✦</span>
+              <span>Authentic licensed merchandise</span>
+              <span className="text-white/40">✦</span>
+              <span className="flex items-center gap-2">
+                <span>Support Philippine Sports 🇵🇭</span>
+              </span>
+              <span className="text-white/40">✦</span>
             </div>
-            <div className="text-gray-500">
-              <span className="font-semibold text-gray-900">50,000+</span> jerseys sold
-            </div>
-            <div className="text-gray-500">
-              <span className="font-semibold text-gray-900">100%</span> authentic products
-            </div>
-          </div>
+          ))}
         </div>
-      </section>
+      </div>
 
       {/* Virtual Try-On Feature Highlight */}
       <section className="py-10 md:py-16 lg:py-24 bg-white">
@@ -163,15 +200,15 @@ const Home = () => {
           <div className="bg-gradient-to-r from-primary-600 to-accent-500 rounded-2xl md:rounded-3xl overflow-hidden">
             <div className="grid md:grid-cols-2 gap-6 md:gap-8 items-center">
               <div className="p-6 md:p-12 text-white">
-                <div className="inline-flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5 md:px-4 md:py-2 mb-4 md:mb-6">
+                <div className="inline-flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5 md:px-4 md:py-2 mb-4 md:mb-6">
                   <SparklesIcon className="w-4 h-4 md:w-5 md:h-5" />
                   <span className="font-semibold text-xs md:text-sm">AI-Powered Feature</span>
                 </div>
                 <h2 className="text-2xl md:text-4xl font-bold mb-3 md:mb-4">
-                  Virtual Try-On
+                  {tryOnSettings.title}
                 </h2>
                 <p className="text-sm md:text-lg text-white/90 mb-4 md:mb-6">
-                  See how any jersey looks on you before buying! Upload your photo
+                  Virtual Try-on allow you to see how any shirt or jersey looks on you before buying! Upload your photo
                   and our AI will show you wearing your favorite team's gear.
                 </p>
                 <ul className="space-y-2 md:space-y-3 mb-6 md:mb-8 text-sm md:text-base">
@@ -187,8 +224,8 @@ const Home = () => {
                   ))}
                 </ul>
                 <Link
-                  to="/products?category=jersey"
-                  className="inline-flex items-center gap-2 bg-white text-primary-700 px-5 py-2.5 md:px-6 md:py-3 rounded-full font-semibold text-sm md:text-base hover:bg-gray-100 transition-colors"
+                  to={tryOnSettings.productUrl}
+                  className="hover-fill hover-fill-navy inline-flex items-center gap-2 bg-white text-primary-700 px-5 py-2.5 md:px-6 md:py-3 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98]"
                 >
                   Try It Now
                   <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -196,20 +233,12 @@ const Home = () => {
               </div>
               <div className="hidden md:block p-8">
                 <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 max-w-sm mx-auto">
-                  <div className="aspect-[3/4] bg-white/20 rounded-xl flex items-center justify-center mb-4">
-                    <div className="text-center">
-                      <SparklesIcon className="w-16 h-16 mx-auto mb-4 text-white/60" />
-                      <p className="text-white/80 font-medium">Your try-on preview</p>
-                      <p className="text-white/60 text-sm">appears here</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1 bg-white/20 rounded-lg p-3 text-center">
-                      <p className="text-white/60 text-xs">Upload Photo</p>
-                    </div>
-                    <div className="flex-1 bg-white rounded-lg p-3 text-center">
-                      <p className="text-primary-700 text-xs font-semibold">Generate</p>
-                    </div>
+                  <div className="aspect-[3/4] rounded-xl overflow-hidden mb-4">
+                    <img
+                      src={tryOnSettings.image || tryOnPreviewFallback}
+                      alt="Virtual try-on demo"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -226,12 +255,12 @@ const Home = () => {
             <p className="text-gray-600 text-sm md:text-lg mb-6 md:mb-8">Find gear for your favorite league</p>
 
             {/* Category Tabs */}
-            <div className="inline-flex bg-white rounded-full p-1 md:p-1.5 shadow-soft">
+            <div className="inline-flex bg-white rounded-xl p-1 md:p-1.5 shadow-soft">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`px-3 py-2 md:px-6 md:py-3 rounded-full font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2 ${
+                  className={`px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2 ${
                     activeCategory === cat.id
                       ? 'bg-primary-600 text-white shadow-md'
                       : 'text-gray-600 hover:text-gray-900'
@@ -305,7 +334,7 @@ const Home = () => {
             <div className="order-1">
               <div className="aspect-[4/5] bg-gray-100 rounded-2xl md:rounded-3xl overflow-hidden">
                 <img
-                  src="https://placehold.co/800x1000/0A2463/FFFFFF?text=2025+Collection"
+                  src={collectionImage}
                   alt="Latest Collection"
                   className="w-full h-full object-cover"
                 />
@@ -650,11 +679,11 @@ const Home = () => {
             <input
               type="email"
               placeholder="Enter your email"
-              className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-full text-gray-900 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-white"
+              className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-xl text-gray-900 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-white"
             />
             <button
               type="submit"
-              className="bg-white text-primary-700 px-6 py-3 md:px-8 md:py-3.5 rounded-full font-semibold text-sm md:text-base hover:bg-gray-100 transition-colors whitespace-nowrap"
+              className="hover-fill hover-fill-navy bg-white text-primary-700 px-6 py-3 md:px-8 md:py-3.5 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98] whitespace-nowrap"
             >
               Subscribe
             </button>

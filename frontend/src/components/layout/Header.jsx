@@ -149,7 +149,7 @@ const Header = () => {
               <Link
                 key={link.label}
                 to={link.href}
-                className="nav-link text-sm"
+                className="nav-link text-sm font-bold"
               >
                 {link.label}
               </Link>
@@ -332,7 +332,7 @@ const Header = () => {
                   onChange={handleSearchInput}
                   onKeyDown={handleSearchKeyDown}
                   autoFocus
-                  className="w-full px-5 py-3 pl-12 bg-gray-50 border-0 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-600"
+                  className="w-full px-5 py-3 pl-12 bg-gray-50 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-600"
                 />
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <button
