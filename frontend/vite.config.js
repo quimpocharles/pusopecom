@@ -11,5 +11,17 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-recharts': ['recharts'],
+          'vendor-forms': ['react-hook-form'],
+          'vendor-ui': ['@heroicons/react'],
+        }
+      }
+    }
   }
 });
