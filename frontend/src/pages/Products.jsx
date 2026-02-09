@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
 import ProductCard from '../components/products/ProductCard';
-import CartDrawer from '../components/cart/CartDrawer';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import useCartStore from '../store/cartStore';
 import productService from '../services/productService';
 import SEO from '../components/common/SEO';
 
@@ -40,8 +40,7 @@ const Products = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({});
-  const [cartOpen, setCartOpen] = useState(false);
-  const [pendingProduct, setPendingProduct] = useState(null);
+  const openCart = useCartStore((state) => state.openCart);
   const [openFilterGroup, setOpenFilterGroup] = useState(null);
 
   const gender = searchParams.get('gender') || '';
@@ -111,8 +110,7 @@ const Products = () => {
   };
 
   const handleBuyNow = (product) => {
-    setPendingProduct(product);
-    setCartOpen(true);
+    openCart(product);
   };
 
   return (
@@ -254,15 +252,6 @@ const Products = () => {
         )}
       </div>
 
-      {/* Cart Drawer */}
-      <CartDrawer
-        isOpen={cartOpen}
-        onClose={() => {
-          setCartOpen(false);
-          setPendingProduct(null);
-        }}
-        pendingProduct={pendingProduct}
-      />
     </Layout>
   );
 };

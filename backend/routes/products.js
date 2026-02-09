@@ -181,6 +181,92 @@ router.get('/admin/:id',
   }
 );
 
+// Cart-based product recommendations
+const COMPLEMENTARY_CATEGORIES = {
+  jersey: ['shorts', 'cap', 'accessories'],
+  tshirt: ['shorts', 'cap', 'accessories'],
+  shorts: ['jersey', 'tshirt', 'cap'],
+  cap: ['jersey', 'tshirt', 'accessories'],
+  accessories: ['jersey', 'tshirt', 'shorts']
+};
+
+router.get('/recommendations/cart', async (req, res) => {
+  try {
+    const { cartProductIds, limit = 4 } = req.query;
+
+    if (!cartProductIds) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const ids = cartProductIds.split(',').filter(Boolean);
+    if (ids.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Load cart products to get their categories/sports
+    const cartProducts = await Product.find({ _id: { $in: ids } })
+      .select('category sport')
+      .lean();
+
+    if (cartProducts.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Build complementary category set based on what's in cart
+    const complementaryCategories = new Set();
+    const sports = new Set();
+    for (const p of cartProducts) {
+      const complements = COMPLEMENTARY_CATEGORIES[p.category] || [];
+      complements.forEach(c => complementaryCategories.add(c));
+      sports.add(p.sport);
+    }
+
+    // Remove categories already in cart
+    const cartCategories = new Set(cartProducts.map(p => p.category));
+    for (const cat of cartCategories) {
+      complementaryCategories.delete(cat);
+    }
+
+    let recommendations = [];
+
+    // Try complementary categories in the same sport(s)
+    if (complementaryCategories.size > 0) {
+      recommendations = await Product.find({
+        active: true,
+        _id: { $nin: ids },
+        category: { $in: [...complementaryCategories] },
+        sport: { $in: [...sports] },
+        totalStock: { $gt: 0 }
+      })
+        .select('name slug images price salePrice category sport sizes colors totalStock')
+        .limit(Number(limit))
+        .lean();
+    }
+
+    // Fall back to popular products in the same sport if not enough
+    if (recommendations.length < Number(limit)) {
+      const existing = new Set([...ids, ...recommendations.map(r => r._id.toString())]);
+      const fallback = await Product.find({
+        active: true,
+        _id: { $nin: [...existing] },
+        sport: { $in: [...sports] },
+        totalStock: { $gt: 0 }
+      })
+        .select('name slug images price salePrice category sport sizes colors totalStock')
+        .sort('-featured -reviewCount')
+        .limit(Number(limit) - recommendations.length)
+        .lean();
+
+      recommendations = [...recommendations, ...fallback];
+    }
+
+    res.json({ success: true, data: recommendations });
+  } catch (error) {
+    console.error('Cart recommendations error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get recommendations' });
+  }
+});
+
 // Search suggestions (autocomplete)
 router.get('/search/suggestions', async (req, res) => {
   try {

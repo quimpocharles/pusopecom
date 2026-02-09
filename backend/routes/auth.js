@@ -162,12 +162,32 @@ router.post('/login',
         });
       }
 
+      if (user.accountLocked) {
+        return res.status(403).json({
+          success: false,
+          accountLocked: true,
+          message: 'Your account has been locked due to too many failed login attempts. Please reset your password.'
+        });
+      }
+
       const isPasswordValid = await user.comparePassword(password);
       if (!isPasswordValid) {
+        user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+        if (user.failedLoginAttempts >= 5) {
+          user.accountLocked = true;
+        }
+        await user.save();
+
         return res.status(401).json({
           success: false,
-          message: 'Invalid email or password'
+          message: 'Invalid email or password',
+          ...(user.accountLocked && { accountLocked: true })
         });
+      }
+
+      if (user.failedLoginAttempts > 0) {
+        user.failedLoginAttempts = 0;
+        await user.save();
       }
 
       if (!user.emailVerified) {
@@ -322,6 +342,8 @@ router.post('/reset-password',
       user.password = password;
       user.resetPasswordToken = undefined;
       user.resetPasswordExpires = undefined;
+      user.failedLoginAttempts = 0;
+      user.accountLocked = false;
       await user.save();
 
       res.json({

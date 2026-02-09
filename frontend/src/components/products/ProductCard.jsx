@@ -50,6 +50,8 @@ const ProductCard = ({ product, onBuyNow }) => {
             imgHovered ? 'opacity-0' : 'opacity-100'
           }`}
           loading="lazy"
+          width={600}
+          height={600}
         />
         {/* Hover Image */}
         <img
@@ -59,6 +61,8 @@ const ProductCard = ({ product, onBuyNow }) => {
             imgHovered ? 'opacity-100' : 'opacity-0'
           }`}
           loading="lazy"
+          width={600}
+          height={600}
         />
 
         {/* Badges */}

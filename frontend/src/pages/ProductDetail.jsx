@@ -15,6 +15,7 @@ import VirtualTryOn from '../components/products/VirtualTryOn';
 import productService from '../services/productService';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
+import activityService from '../services/activityService';
 import SEO from '../components/common/SEO';
 
 // Star rating display component
@@ -87,6 +88,7 @@ const ProductDetail = () => {
       try {
         const response = await productService.getProductBySlug(slug);
         setProduct(response.data);
+        activityService.trackView(response.data._id);
         const p = response.data;
         if (p.colors?.length > 0) {
           const firstInStock = p.colors.find(c => c.sizes.some(s => s.stock > 0));

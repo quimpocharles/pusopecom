@@ -11,8 +11,8 @@ import {
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
 import ProductCard from '../components/products/ProductCard';
-import CartDrawer from '../components/cart/CartDrawer';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import useCartStore from '../store/cartStore';
 import productService from '../services/productService';
 import settingsService from '../services/settingsService';
 import SEO from '../components/common/SEO';
@@ -23,8 +23,7 @@ const Home = () => {
   const [activeFeatured, setActiveFeatured] = useState(0);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState('basketball');
-  const [cartOpen, setCartOpen] = useState(false);
-  const [pendingProduct, setPendingProduct] = useState(null);
+  const openCart = useCartStore((state) => state.openCart);
   const [openFaq, setOpenFaq] = useState(null);
   const [tryOnSettings, setTryOnSettings] = useState({
     title: 'Try on the Gilas Pilipinas shirt!',
@@ -89,8 +88,7 @@ const Home = () => {
   }, [activeCategory]);
 
   const handleBuyNow = (product) => {
-    setPendingProduct(product);
-    setCartOpen(true);
+    openCart(product);
   };
 
   // Scroll carousel
@@ -142,6 +140,8 @@ const Home = () => {
           src={heroImage}
           alt="Puso Pilipinas hero banner"
           className="absolute inset-0 w-full h-full object-cover"
+          width={1920}
+          height={1080}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-primary-900/85 via-primary-800/70 to-primary-900/40" />
         <div className="container-custom py-12 md:py-32 relative z-10">
@@ -238,6 +238,9 @@ const Home = () => {
                       src={tryOnSettings.image || tryOnPreviewFallback}
                       alt="Virtual try-on demo"
                       className="w-full h-full object-cover"
+                      width={400}
+                      height={533}
+                      loading="lazy"
                     />
                   </div>
                 </div>
@@ -260,6 +263,7 @@ const Home = () => {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
+                  aria-pressed={activeCategory === cat.id}
                   className={`px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2 ${
                     activeCategory === cat.id
                       ? 'bg-primary-600 text-white shadow-md'
@@ -279,6 +283,7 @@ const Home = () => {
             <button
               onClick={() => scrollCarousel('right')}
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-card flex items-center justify-center hover:shadow-card-hover transition-shadow hidden md:flex"
+              aria-label="Scroll products"
             >
               <ChevronRightIcon className="w-6 h-6 text-gray-600" />
             </button>
@@ -337,6 +342,9 @@ const Home = () => {
                   src={collectionImage}
                   alt="Latest Collection"
                   className="w-full h-full object-cover"
+                  width={800}
+                  height={1000}
+                  loading="lazy"
                 />
               </div>
             </div>
@@ -417,6 +425,9 @@ const Home = () => {
                       className={`w-full h-full object-cover transition-opacity duration-500 absolute inset-0 ${
                         activeFeatured === index ? 'opacity-100' : 'opacity-0'
                       }`}
+                      width={800}
+                      height={1000}
+                      loading="lazy"
                     />
                   ))}
                 </div>
@@ -511,6 +522,7 @@ const Home = () => {
                 <button
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                   className="w-full flex items-center justify-between py-5 md:py-6 text-left group"
+                  aria-expanded={openFaq === index}
                 >
                   <span className="font-medium text-sm md:text-base text-gray-900 pr-4 group-hover:text-primary-600 transition-colors">
                     {faq.q}
@@ -566,7 +578,7 @@ const Home = () => {
               <div className="flex justify-center gap-2 px-3">
                 {topRow.map((img, i) => (
                   <div key={i} className="w-[22%] flex-shrink-0 aspect-square rounded-full overflow-hidden">
-                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" />
+                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -598,7 +610,7 @@ const Home = () => {
               <div className="flex justify-center gap-2 px-3">
                 {bottomRow.map((img, i) => (
                   <div key={i} className="w-[22%] flex-shrink-0 aspect-square rounded-full overflow-hidden">
-                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" />
+                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -613,30 +625,30 @@ const Home = () => {
             }}>
               {/* Row 1 images */}
               <div className="rounded-full overflow-hidden -ml-[20%]" style={{ gridColumn: 1, gridRow: 1 }}>
-                <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" />
+                <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-[2rem] overflow-hidden" style={{ gridColumn: 2, gridRow: 1 }}>
-                <img src={topRow[1].src} alt={topRow[1].alt} className="w-full h-full object-cover" />
+                <img src={topRow[1].src} alt={topRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-full overflow-hidden" style={{ gridColumn: 4, gridRow: 1 }}>
-                <img src={topRow[2].src} alt={topRow[2].alt} className="w-full h-full object-cover" />
+                <img src={topRow[2].src} alt={topRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-[2rem] overflow-hidden -mr-[20%]" style={{ gridColumn: 5, gridRow: 1 }}>
-                <img src={topRow[3].src} alt={topRow[3].alt} className="w-full h-full object-cover" />
+                <img src={topRow[3].src} alt={topRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
 
               {/* Row 2 images */}
               <div className="rounded-[2rem] overflow-hidden -ml-[20%]" style={{ gridColumn: 1, gridRow: 2 }}>
-                <img src={bottomRow[0].src} alt={bottomRow[0].alt} className="w-full h-full object-cover" />
+                <img src={bottomRow[0].src} alt={bottomRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-full overflow-hidden" style={{ gridColumn: 2, gridRow: 2 }}>
-                <img src={bottomRow[1].src} alt={bottomRow[1].alt} className="w-full h-full object-cover" />
+                <img src={bottomRow[1].src} alt={bottomRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-[2rem] overflow-hidden" style={{ gridColumn: 4, gridRow: 2 }}>
-                <img src={bottomRow[2].src} alt={bottomRow[2].alt} className="w-full h-full object-cover" />
+                <img src={bottomRow[2].src} alt={bottomRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
               <div className="rounded-full overflow-hidden -mr-[20%]" style={{ gridColumn: 5, gridRow: 2 }}>
-                <img src={bottomRow[3].src} alt={bottomRow[3].alt} className="w-full h-full object-cover" />
+                <img src={bottomRow[3].src} alt={bottomRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
               </div>
 
               {/* Center text */}
@@ -676,7 +688,9 @@ const Home = () => {
             Get exclusive deals, early access to new releases, and 10% off your first order.
           </p>
           <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <label htmlFor="newsletter-email" className="sr-only">Email address</label>
             <input
+              id="newsletter-email"
               type="email"
               placeholder="Enter your email"
               className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-xl text-gray-900 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-white"
@@ -693,15 +707,6 @@ const Home = () => {
           </p>
         </div>
       </section>
-      {/* Cart Drawer */}
-      <CartDrawer
-        isOpen={cartOpen}
-        onClose={() => {
-          setCartOpen(false);
-          setPendingProduct(null);
-        }}
-        pendingProduct={pendingProduct}
-      />
     </Layout>
   );
 };

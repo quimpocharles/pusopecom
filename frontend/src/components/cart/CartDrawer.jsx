@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { XMarkIcon, MinusIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
+import CartUpsell from './CartUpsell';
 
-const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
-  const { items, addItem, removeItem, updateQuantity, getCartTotal } = useCartStore();
+const CartDrawer = () => {
+  const navigate = useNavigate();
+  const {
+    items, addItem, removeItem, updateQuantity, getCartTotal, getCartCount,
+    isCartOpen, pendingProduct, closeCart
+  } = useCartStore();
+
   const [selectedSize, setSelectedSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [sizeError, setSizeError] = useState(false);
@@ -18,10 +24,19 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
     }
   }, [pendingProduct]);
 
+  // Lock body scroll when open
+  useEffect(() => {
+    if (isCartOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isCartOpen]);
+
   const hasSizes = pendingProduct?.sizes?.length > 0;
   const isSingleSize = pendingProduct?.sizes?.length === 1 && pendingProduct.sizes[0].size === 'One Size';
 
-  // Max stock for the selected size
   const maxStock = selectedSize
     ? pendingProduct?.sizes?.find(s => s.size === selectedSize)?.stock || 99
     : 99;
@@ -45,30 +60,47 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
     setSizeError(false);
   };
 
+  const handleCheckout = () => {
+    closeCart();
+    navigate('/checkout');
+  };
+
   const effectivePrice = (product) => product.salePrice || product.price;
+  const cartTotal = getCartTotal();
+  const cartCount = getCartCount();
+  const cartProductIds = [...new Set(items.map((item) => item.product._id))];
 
   return (
     <>
       {/* Backdrop */}
-      {isOpen && (
+      {isCartOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 transition-opacity"
-          onClick={onClose}
+          onClick={closeCart}
         />
       )}
 
       {/* Drawer */}
       <div
         className={`fixed inset-y-0 right-0 w-full max-w-md bg-white z-50 shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
+          isCartOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shopping cart"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Your Cart</h2>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg font-bold text-gray-900">Cart</h2>
+            {cartCount > 0 && (
+              <span className="text-sm text-gray-500">({cartCount} item{cartCount !== 1 ? 's' : ''})</span>
+            )}
+          </div>
           <button
-            onClick={onClose}
+            onClick={closeCart}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Close cart"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
@@ -82,6 +114,8 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
                 src={pendingProduct.images?.[0] || '/placeholder.jpg'}
                 alt={pendingProduct.name}
                 className="w-20 h-20 object-cover rounded-xl bg-gray-100"
+                width={80}
+                height={80}
               />
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">
@@ -134,6 +168,7 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
                   <button
                     onClick={() => setQuantity(q => Math.max(1, q - 1))}
                     className="p-2.5 hover:bg-gray-50 transition-colors"
+                    aria-label="Decrease quantity"
                   >
                     <MinusIcon className="w-4 h-4 text-gray-500" />
                   </button>
@@ -141,6 +176,7 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
                   <button
                     onClick={() => setQuantity(q => Math.min(maxStock, q + 1))}
                     className="p-2.5 hover:bg-gray-50 transition-colors"
+                    aria-label="Increase quantity"
                   >
                     <PlusIcon className="w-4 h-4 text-gray-500" />
                   </button>
@@ -166,18 +202,32 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
             </div>
           ) : (
             <div className="space-y-4">
-              {items.map((item, index) => (
-                <div key={`${item.product._id}-${item.size}`} className="flex gap-4">
-                  <img
-                    src={item.product.images?.[0] || '/placeholder.jpg'}
-                    alt={item.product.name}
-                    className="w-20 h-20 object-cover rounded-xl bg-gray-100 flex-shrink-0"
-                  />
+              {items.map((item) => (
+                <div key={`${item.product._id}-${item.size}-${item.color || ''}`} className="flex gap-4">
+                  <Link
+                    to={`/products/${item.product.slug}`}
+                    onClick={closeCart}
+                    className="flex-shrink-0"
+                  >
+                    <img
+                      src={item.product.images?.[0] || '/placeholder.jpg'}
+                      alt={item.product.name}
+                      className="w-20 h-20 object-cover rounded-xl bg-gray-100"
+                      width={80}
+                      height={80}
+                    />
+                  </Link>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-gray-900 text-sm truncate">
+                    <Link
+                      to={`/products/${item.product.slug}`}
+                      onClick={closeCart}
+                      className="font-semibold text-gray-900 text-sm truncate block hover:text-primary-600"
+                    >
                       {item.product.name}
-                    </h4>
-                    <p className="text-xs text-gray-500 mt-0.5">Size: {item.size}</p>
+                    </Link>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {item.color ? `${item.size} / ${item.color}` : `Size: ${item.size}`}
+                    </p>
                     <p className="text-sm font-bold text-gray-900 mt-1">
                       ₱{item.price?.toLocaleString()}
                     </p>
@@ -186,24 +236,26 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
                     <div className="flex items-center gap-3 mt-2">
                       <div className="flex items-center border border-gray-200 rounded-lg">
                         <button
-                          onClick={() => updateQuantity(item.product._id, item.size, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity - 1)}
                           className="p-1.5 hover:bg-gray-50 transition-colors"
+                          aria-label="Decrease quantity"
                         >
                           <MinusIcon className="w-3.5 h-3.5 text-gray-500" />
                         </button>
                         <span className="px-3 text-sm font-medium">{item.quantity}</span>
                         <button
-                          onClick={() => updateQuantity(item.product._id, item.size, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity + 1)}
                           className="p-1.5 hover:bg-gray-50 transition-colors"
+                          aria-label="Increase quantity"
                         >
                           <PlusIcon className="w-3.5 h-3.5 text-gray-500" />
                         </button>
                       </div>
                       <button
-                        onClick={() => removeItem(item.product._id, item.size)}
-                        className="p-1.5 text-gray-400 hover:text-accent-500 transition-colors"
+                        onClick={() => removeItem(item.product._id, item.size, item.color)}
+                        className="text-sm text-gray-400 hover:text-accent-500 transition-colors"
                       >
-                        <TrashIcon className="w-4 h-4" />
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -211,31 +263,23 @@ const CartDrawer = ({ isOpen, onClose, pendingProduct }) => {
               ))}
             </div>
           )}
+
+          {/* Upsell Section */}
+          {items.length > 0 && (
+            <CartUpsell cartProductIds={cartProductIds} />
+          )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — Checkout */}
         {items.length > 0 && (
-          <div className="border-t border-gray-100 px-6 py-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600 font-medium">Subtotal</span>
-              <span className="text-xl font-bold text-gray-900">
-                ₱{getCartTotal().toLocaleString()}
-              </span>
-            </div>
-            <p className="text-xs text-gray-400">Shipping calculated at checkout</p>
-            <Link
-              to="/cart"
-              onClick={onClose}
+          <div className="border-t border-gray-100 px-6 py-4 space-y-3">
+            <button
+              onClick={handleCheckout}
               className="btn-primary w-full text-center"
             >
-              View Cart & Checkout
-            </Link>
-            <button
-              onClick={onClose}
-              className="w-full text-center text-sm text-gray-500 hover:text-gray-700 font-medium py-2"
-            >
-              Continue Shopping
+              Checkout &middot; ₱{cartTotal.toLocaleString()}
             </button>
+            <p className="text-xs text-gray-400 text-center">Shipping & taxes calculated at checkout</p>
           </div>
         )}
       </div>

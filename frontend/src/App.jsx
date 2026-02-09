@@ -4,11 +4,13 @@ import LoadingSpinner from './components/common/LoadingSpinner';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
-import Cart from './pages/Cart';
-
+const Cart = lazy(() => import('./pages/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const CompleteProfile = lazy(() => import('./pages/CompleteProfile'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation'));
@@ -49,6 +51,9 @@ function App() {
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:orderNumber" element={<OrderConfirmation />} />

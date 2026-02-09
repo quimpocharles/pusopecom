@@ -11,6 +11,18 @@ const useCartStore = create(
     (set, get) => ({
       items: [],
 
+      // Drawer state (not persisted)
+      isCartOpen: false,
+      pendingProduct: null,
+
+      openCart: (pendingProduct = null) => {
+        set({ isCartOpen: true, pendingProduct });
+      },
+
+      closeCart: () => {
+        set({ isCartOpen: false, pendingProduct: null });
+      },
+
       addItem: (product, size, quantity = 1, color = null) => {
         set((state) => {
           const existingItemIndex = state.items.findIndex(
@@ -81,7 +93,8 @@ const useCartStore = create(
     }),
     {
       name: 'puso-cart-storage',
-      getStorage: () => localStorage
+      getStorage: () => localStorage,
+      partialize: (state) => ({ items: state.items })
     }
   )
 );

@@ -31,6 +31,13 @@ export const productService = {
     return response.data;
   },
 
+  getCartRecommendations: async (productIds, limit = 4) => {
+    const response = await api.get('/products/recommendations/cart', {
+      params: { cartProductIds: productIds.join(','), limit }
+    });
+    return response.data;
+  },
+
   // Admin functions
   createProduct: async (productData) => {
     const response = await api.post('/products', productData);

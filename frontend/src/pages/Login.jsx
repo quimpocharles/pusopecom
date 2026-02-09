@@ -39,7 +39,11 @@ const Login = () => {
         navigate(getRedirectPath(), { replace: true });
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      if (err.response?.data?.accountLocked) {
+        setError('locked');
+      } else {
+        setError(err.response?.data?.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -68,7 +72,17 @@ const Login = () => {
 
             {error && (
               <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-                {error}
+                {error === 'locked' ? (
+                  <>
+                    Your account has been locked due to too many failed login attempts.{' '}
+                    <Link to="/forgot-password" className="font-semibold underline">
+                      Reset your password
+                    </Link>{' '}
+                    to regain access.
+                  </>
+                ) : (
+                  error
+                )}
               </div>
             )}
 

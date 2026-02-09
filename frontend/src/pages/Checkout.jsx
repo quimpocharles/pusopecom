@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
   regions,
@@ -15,10 +15,13 @@ import SEO from '../components/common/SEO';
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { items, getCartTotal, clearCart } = useCartStore();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const paymentCancelled = searchParams.get('payment') === 'cancelled';
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
 
@@ -38,7 +41,7 @@ const Checkout = () => {
     }
   });
 
-  if (items.length === 0) {
+  if (items.length === 0 && !paymentCancelled) {
     navigate('/cart');
     return null;
   }
@@ -46,6 +49,10 @@ const Checkout = () => {
   const subtotal = getCartTotal();
   const shippingFee = 150;
   const total = subtotal + shippingFee;
+
+  const dismissCancelledAlert = () => {
+    setSearchParams({}, { replace: true });
+  };
 
   const onSubmit = async (data) => {
     setLoading(true);
@@ -111,6 +118,27 @@ const Checkout = () => {
       <SEO title="Checkout" noIndex />
       <div className="container-custom py-8">
         <h1 className="text-3xl font-bold mb-8">Checkout</h1>
+
+        {/* Cancelled payment alert */}
+        {paymentCancelled && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg mb-6 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <p>Your payment was cancelled. You can try again when ready.</p>
+            </div>
+            <button
+              onClick={dismissCancelledAlert}
+              className="text-amber-600 hover:text-amber-800 flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Checkout Form */}
@@ -198,24 +226,45 @@ const Checkout = () => {
                 </div>
               </div>
 
+              {/* Payment Method */}
+              <div className="card p-6">
+                <h2 className="text-xl font-bold mb-4">Payment Method</h2>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="font-medium text-sm text-gray-900">Maya & GCash accepted</p>
+                  <p className="text-xs text-gray-500 mt-1">You'll be redirected to complete payment securely</p>
+                </div>
+              </div>
+
               {error && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg">
                   {error}
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full text-lg"
-              >
-                {loading ? 'Processing...' : 'Proceed to Payment'}
-              </button>
+              <div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary w-full text-lg flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    'Processing...'
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                      </svg>
+                      Proceed to Payment
+                    </>
+                  )}
+                </button>
+                <p className="text-center text-xs text-gray-400 mt-2">Secure checkout powered by Maya</p>
+              </div>
             </form>
           </div>
 
           {/* Order Summary */}
-          <div>
+          <div className="order-first lg:order-last">
             <div className="card p-6 sticky top-24">
               <h2 className="text-xl font-bold mb-4">Order Summary</h2>
 

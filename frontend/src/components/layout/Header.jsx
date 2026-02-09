@@ -10,6 +10,7 @@ import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import useCartStore from '../../store/cartStore';
 import useAuthStore from '../../store/authStore';
 import productService from '../../services/productService';
+import activityService from '../../services/activityService';
 import { useState, useRef, useEffect } from 'react';
 
 // Get user initials from name
@@ -56,6 +57,7 @@ const Header = () => {
     if (selectedIndex >= 0 && suggestions[selectedIndex]) {
       navigate(`/products/${suggestions[selectedIndex].slug}`);
     } else if (searchTerm.trim()) {
+      activityService.trackSearch(searchTerm.trim());
       navigate(`/products?search=${encodeURIComponent(searchTerm)}`);
     }
     setShowSearch(false);
@@ -132,6 +134,7 @@ const Header = () => {
           <button
             onClick={() => setShowMobileMenu(true)}
             className="md:hidden p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+            aria-label="Open menu"
           >
             <Bars3Icon className="w-6 h-6" />
           </button>
@@ -191,6 +194,7 @@ const Header = () => {
             <button
               onClick={() => setShowSearch(!showSearch)}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Search"
             >
               <MagnifyingGlassIcon className="w-5 h-5 text-gray-700" />
             </button>
@@ -200,6 +204,7 @@ const Header = () => {
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className={`${isAuthenticated ? 'p-0.5' : 'p-2'} hover:bg-gray-100 rounded-full transition-colors`}
+                aria-label="Account menu"
               >
                 {isAuthenticated ? (
                   user?.avatar && !avatarError ? (
@@ -304,9 +309,10 @@ const Header = () => {
             </div>
 
             {/* Cart */}
-            <Link
-              to="/cart"
+            <button
+              onClick={() => useCartStore.getState().openCart()}
               className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} item${cartCount !== 1 ? 's' : ''}` : ''}`}
             >
               <ShoppingBagIcon className="w-5 h-5 text-gray-700" />
               {cartCount > 0 && (
@@ -314,7 +320,7 @@ const Header = () => {
                   {cartCount > 9 ? '9+' : cartCount}
                 </span>
               )}
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -332,6 +338,7 @@ const Header = () => {
                   onChange={handleSearchInput}
                   onKeyDown={handleSearchKeyDown}
                   autoFocus
+                  aria-label="Search products"
                   className="w-full px-5 py-3 pl-12 bg-gray-50 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-600"
                 />
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -339,6 +346,7 @@ const Header = () => {
                   type="button"
                   onClick={() => { setShowSearch(false); setSuggestions([]); setShowSuggestions(false); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full"
+                  aria-label="Close search"
                 >
                   <XMarkIcon className="w-5 h-5 text-gray-400" />
                 </button>
@@ -397,12 +405,13 @@ const Header = () => {
             className="fixed inset-0 bg-black/50 z-40"
             onClick={() => setShowMobileMenu(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-white z-50 animate-slide-down">
+          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] bg-white z-50 animate-slide-down" role="dialog" aria-modal="true" aria-label="Navigation menu">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <span className="text-xl font-bold text-primary-600">Menu</span>
               <button
                 onClick={() => setShowMobileMenu(false)}
                 className="p-2 hover:bg-gray-100 rounded-full"
+                aria-label="Close menu"
               >
                 <XMarkIcon className="w-6 h-6" />
               </button>

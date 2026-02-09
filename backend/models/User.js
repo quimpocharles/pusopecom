@@ -110,6 +110,14 @@ const userSchema = new mongoose.Schema({
     type: Date
   },
   addresses: [addressSchema],
+  failedLoginAttempts: {
+    type: Number,
+    default: 0
+  },
+  accountLocked: {
+    type: Boolean,
+    default: false
+  },
   role: {
     type: String,
     enum: ['customer', 'admin'],
@@ -149,6 +157,8 @@ userSchema.methods.toJSON = function() {
   delete obj.verificationToken;
   delete obj.resetPasswordToken;
   delete obj.resetPasswordExpires;
+  delete obj.failedLoginAttempts;
+  delete obj.accountLocked;
   return obj;
 };
 
