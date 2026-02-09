@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cron from 'node-cron';
+import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -15,6 +17,7 @@ import leagueRoutes from './routes/leagues.js';
 import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/upload.js';
 import settingsRoutes from './routes/settings.js';
+import activityRoutes from './routes/activity.js';
 
 // Create Express app
 const app = express();
@@ -106,6 +109,7 @@ app.use('/api/leagues', leagueRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {
@@ -167,6 +171,15 @@ app.use((err, req, res, next) => {
     message: err.message || 'Internal server error'
   });
 });
+
+// Schedule daily sales report at 11:59 PM Philippine time (UTC+8)
+cron.schedule('59 23 * * *', async () => {
+  try {
+    await generateAndSendDailySalesReport();
+  } catch (error) {
+    console.error('Daily sales report failed:', error);
+  }
+}, { timezone: 'Asia/Manila' });
 
 // Start server
 const PORT = process.env.PORT || 5000;

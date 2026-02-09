@@ -11,6 +11,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Nodemailer (Gmail)
 - Maya Checkout API
 - Cloudinary (Image hosting)
+- node-cron (Scheduled tasks)
 
 ### Frontend
 - React 18 + Vite
@@ -41,7 +42,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Account dashboard with profile, addresses, and password management
 - PSGC-based Philippine address forms with region/province/city resolution
 - Multiple saved addresses with default selection
-- Email notifications (verification, order confirmation)
+- Email notifications (verification, order confirmation, daily sales report)
 
 ### SEO
 - Per-page meta tags and Open Graph tags via react-helmet-async
@@ -53,6 +54,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Product management (CRUD with color variant support)
 - Order management with status updates and tracking
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
+- Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
 
 ### Homepage Sections
@@ -138,6 +140,9 @@ CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
 CLOUDINARY_API_KEY=your-cloudinary-api-key
 CLOUDINARY_API_SECRET=your-cloudinary-api-secret
 
+# Admin
+ADMIN_EMAIL=admin@example.com
+
 # Server
 PORT=5000
 NODE_ENV=development
@@ -207,7 +212,7 @@ puso-shop/
 ├── backend/
 │   ├── models/          # MongoDB models (User, Product, Order, League)
 │   ├── routes/          # API routes (auth, products, orders, reviews, reports, leagues)
-│   ├── services/        # Business logic (email, Maya payment)
+│   ├── services/        # Business logic (email, Maya payment, daily sales)
 │   ├── middleware/      # Authentication middleware
 │   ├── config/          # Configuration files
 │   ├── seed-100.js      # Product seeder (100 items)
@@ -343,6 +348,7 @@ The application sends HTML-formatted, mobile-responsive emails for:
 - Email verification
 - Order confirmation
 - Password reset
+- Daily sales summary (sent to `ADMIN_EMAIL` at 11:59 PM PHT)
 
 ## Deployment
 

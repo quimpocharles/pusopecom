@@ -1,10 +1,12 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.EMAIL_HOST,
+  port: Number(process.env.EMAIL_PORT) || 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
+    pass: process.env.EMAIL_PASSWORD
   }
 });
 
@@ -206,8 +208,113 @@ export const sendOrderConfirmationEmail = async (email, order) => {
   await transporter.sendMail(mailOptions);
 };
 
+export const sendDailySalesEmail = async (adminEmail, report) => {
+  const dateStr = report.date.toLocaleDateString('en-PH', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const topProductsRows = report.topProducts.length > 0
+    ? report.topProducts.map((p, i) => `
+      <tr>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">${i + 1}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">${p.name}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #eee; text-align: center;">${p.quantity}</td>
+        <td style="padding: 8px 10px; border-bottom: 1px solid #eee; text-align: right;">₱${p.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('')
+    : '<tr><td colspan="4" style="padding: 8px 10px; text-align: center; color: #999;">No products sold today</td></tr>';
+
+  const orderStatusRows = Object.entries(report.ordersByStatus).map(([status, count]) => `
+    <tr>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-transform: capitalize;">${status}</td>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right;">${count}</td>
+    </tr>
+  `).join('');
+
+  const paymentStatusRows = Object.entries(report.paymentsByStatus).map(([status, count]) => `
+    <tr>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-transform: capitalize;">${status}</td>
+      <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right;">${count}</td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <h2>Daily Sales Summary</h2>
+    <p style="color: #666; margin-bottom: 20px;">${dateStr}</p>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+      <tr>
+        <td style="padding: 12px; background: #f8f8f8; border-radius: 6px; text-align: center; width: 50%;">
+          <div style="font-size: 24px; font-weight: bold; color: #DC2626;">₱${report.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+          <div style="color: #666; font-size: 13px; margin-top: 4px;">Total Revenue</div>
+        </td>
+        <td style="width: 10px;"></td>
+        <td style="padding: 12px; background: #f8f8f8; border-radius: 6px; text-align: center; width: 50%;">
+          <div style="font-size: 24px; font-weight: bold; color: #333;">${report.totalOrders}</div>
+          <div style="color: #666; font-size: 13px; margin-top: 4px;">Paid Orders</div>
+        </td>
+      </tr>
+      <tr><td colspan="3" style="height: 10px;"></td></tr>
+      <tr>
+        <td style="padding: 12px; background: #f8f8f8; border-radius: 6px; text-align: center;">
+          <div style="font-size: 24px; font-weight: bold; color: #333;">${report.totalItemsSold}</div>
+          <div style="color: #666; font-size: 13px; margin-top: 4px;">Items Sold</div>
+        </td>
+        <td style="width: 10px;"></td>
+        <td style="padding: 12px; background: #f8f8f8; border-radius: 6px; text-align: center;">
+          <div style="font-size: 24px; font-weight: bold; color: #333;">₱${report.avgOrderValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+          <div style="color: #666; font-size: 13px; margin-top: 4px;">Avg Order Value</div>
+        </td>
+      </tr>
+    </table>
+
+    <h3 style="border-bottom: 2px solid #DC2626; padding-bottom: 8px;">Top Selling Products</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+      <thead>
+        <tr style="background: #f8f8f8;">
+          <th style="padding: 8px 10px; text-align: left; font-size: 13px;">#</th>
+          <th style="padding: 8px 10px; text-align: left; font-size: 13px;">Product</th>
+          <th style="padding: 8px 10px; text-align: center; font-size: 13px;">Qty</th>
+          <th style="padding: 8px 10px; text-align: right; font-size: 13px;">Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${topProductsRows}
+      </tbody>
+    </table>
+
+    <div style="display: flex; gap: 20px;">
+      <div style="flex: 1;">
+        <h3 style="border-bottom: 2px solid #DC2626; padding-bottom: 8px;">Orders by Status</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+          ${orderStatusRows}
+        </table>
+      </div>
+    </div>
+
+    <h3 style="border-bottom: 2px solid #DC2626; padding-bottom: 8px;">Payment Status</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+      ${paymentStatusRows}
+    </table>
+
+    <div style="padding: 12px; background: #f0fdf4; border-radius: 6px; margin-bottom: 15px;">
+      <strong>New Customers Today:</strong> ${report.newCustomers}
+    </div>
+  `;
+
+  const mailOptions = {
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: adminEmail,
+    subject: `Daily Sales Report - ${dateStr}`,
+    html: getEmailTemplate(content)
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
 export default {
   sendVerificationEmail,
   sendPasswordResetEmail,
-  sendOrderConfirmationEmail
+  sendOrderConfirmationEmail,
+  sendDailySalesEmail
 };
