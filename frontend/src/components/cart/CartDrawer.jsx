@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { XMarkIcon, MinusIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MinusIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
 import CartUpsell from './CartUpsell';
 
@@ -41,11 +41,19 @@ const CartDrawer = () => {
     ? pendingProduct?.sizes?.find(s => s.size === selectedSize)?.stock || 99
     : 99;
 
+  const clearPending = () => {
+    useCartStore.setState({ pendingProduct: null });
+    setSelectedSize('');
+    setQuantity(1);
+    setSizeError(false);
+  };
+
   const handleAddToCart = () => {
     if (!pendingProduct) return;
 
     if (isSingleSize) {
       addItem(pendingProduct, 'One Size', quantity);
+      clearPending();
       return;
     }
 
@@ -55,9 +63,7 @@ const CartDrawer = () => {
     }
 
     addItem(pendingProduct, selectedSize, quantity);
-    setSelectedSize('');
-    setQuantity(1);
-    setSizeError(false);
+    clearPending();
   };
 
   const handleCheckout = () => {

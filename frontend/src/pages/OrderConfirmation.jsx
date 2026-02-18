@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom';
 import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import orderService from '../services/orderService';
+import useCartStore from '../store/cartStore';
 
 const OrderConfirmation = () => {
   const { orderNumber } = useParams();
@@ -23,6 +24,11 @@ const OrderConfirmation = () => {
 
         const response = await orderService.getOrderByNumber(orderNumber);
         setOrder(response.data);
+
+        // Clear cart after successful payment
+        if (paymentStatus === 'success' || response.data.paymentStatus === 'paid') {
+          useCartStore.getState().clearCart();
+        }
       } catch (err) {
         setError('Order not found');
       } finally {

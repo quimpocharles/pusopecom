@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
@@ -16,9 +16,11 @@ import SEO from '../components/common/SEO';
 const Checkout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { items, getCartTotal, clearCart } = useCartStore();
+  const { items, getCartTotal } = useCartStore();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const redirectingRef = useRef(false);
   const [error, setError] = useState('');
 
   const paymentCancelled = searchParams.get('payment') === 'cancelled';
@@ -41,9 +43,19 @@ const Checkout = () => {
     }
   });
 
-  if (items.length === 0 && !paymentCancelled) {
-    navigate('/cart');
+  if (items.length === 0 && !paymentCancelled && !redirectingRef.current) {
+    navigate('/products', { replace: true });
     return null;
+  }
+
+  if (redirecting) {
+    return (
+      <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-lg font-semibold text-gray-900">Redirecting to payment...</p>
+        <p className="text-sm text-gray-500 mt-1">Please wait, do not close this page</p>
+      </div>
+    );
   }
 
   const subtotal = getCartTotal();
@@ -101,13 +113,19 @@ const Checkout = () => {
       const response = await orderService.createOrder(orderData);
 
       if (response.success && response.data.checkoutUrl) {
-        clearCart();
+        redirectingRef.current = true;
+        setRedirecting(true);
         window.location.href = response.data.checkoutUrl;
       } else {
         setError('Failed to create checkout session. Please try again.');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to process checkout. Please try again.');
+      const errData = err.response?.data;
+      if (errData?.errors?.length) {
+        setError(errData.errors.map(e => e.msg || e.message).join(', '));
+      } else {
+        setError(errData?.message || 'Failed to process checkout. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

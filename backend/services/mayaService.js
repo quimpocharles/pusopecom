@@ -48,16 +48,10 @@ export const createCheckout = async (order) => {
         code: item.product.toString(),
         description: `${item.name} - Size: ${item.size}`,
         amount: {
-          value: item.price,
-          details: {
-            subtotal: item.price * item.quantity
-          }
+          value: item.price
         },
         totalAmount: {
-          value: item.price * item.quantity,
-          details: {
-            subtotal: item.price * item.quantity
-          }
+          value: item.price * item.quantity
         }
       })),
       redirectUrl: {

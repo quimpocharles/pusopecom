@@ -18,7 +18,7 @@ const CartUpsell = ({ cartProductIds }) => {
     const fetchRecs = async () => {
       setLoading(true);
       try {
-        const res = await productService.getCartRecommendations(cartProductIds, 4);
+        const res = await productService.getCartRecommendations(cartProductIds, 3);
         if (!cancelled) setRecommendations(res.data || []);
       } catch {
         if (!cancelled) setRecommendations([]);
