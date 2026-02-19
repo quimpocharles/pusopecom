@@ -4,6 +4,7 @@ import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import orderService from '../services/orderService';
 import useCartStore from '../store/cartStore';
+import { toTitleCase } from '../utils/text';
 
 const OrderConfirmation = () => {
   const { orderNumber } = useParams();
@@ -135,7 +136,7 @@ const OrderConfirmation = () => {
                     className="w-16 h-16 object-cover rounded"
                   />
                   <div className="flex-1">
-                    <p className="font-semibold">{item.name}</p>
+                    <p className="font-semibold">{toTitleCase(item.name)}</p>
                     <p className="text-sm text-gray-600">
                       Size: {item.size} | Qty: {item.quantity}
                     </p>

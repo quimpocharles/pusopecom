@@ -16,6 +16,7 @@ import productService from '../services/productService';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import activityService from '../services/activityService';
+import { toTitleCase } from '../utils/text';
 import SEO from '../components/common/SEO';
 
 // Star rating display component
@@ -230,7 +231,7 @@ const ProductDetail = () => {
   return (
     <Layout>
       <SEO
-        title={product.name}
+        title={toTitleCase(product.name)}
         description={product.description?.slice(0, 160)}
         ogImage={product.images?.[0]}
         ogType="product"
@@ -251,7 +252,7 @@ const ProductDetail = () => {
             </>
           )}
           <ChevronRightIcon className="w-3 h-3" />
-          <span className="text-gray-600 truncate">{product.name}</span>
+          <span className="text-gray-600 truncate">{toTitleCase(product.name)}</span>
         </nav>
       </div>
 
@@ -306,7 +307,7 @@ const ProductDetail = () => {
 
             {/* Product Name */}
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-3">
-              {product.name}
+              {toTitleCase(product.name)}
             </h1>
 
             {/* Rating summary */}

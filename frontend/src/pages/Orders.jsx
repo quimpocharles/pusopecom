@@ -8,6 +8,7 @@ import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
 import productService from '../services/productService';
 import SEO from '../components/common/SEO';
+import { toTitleCase } from '../utils/text';
 
 const StarSelect = ({ value, onChange }) => (
   <div className="flex gap-1">
@@ -64,7 +65,7 @@ const ReviewModal = ({ item, onClose, onSubmitted }) => {
             />
             <div className="min-w-0">
               <h3 className="font-bold text-gray-900">Write a Review</h3>
-              <p className="text-sm text-gray-500 truncate">{item.name}</p>
+              <p className="text-sm text-gray-500 truncate">{toTitleCase(item.name)}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
@@ -232,7 +233,7 @@ const Orders = () => {
                             className="w-10 h-10 object-cover rounded"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{toTitleCase(item.name)}</p>
                             <p className="text-xs text-gray-500">
                               Size: {item.size}{item.color ? ` | ${item.color}` : ''}
                             </p>

@@ -11,6 +11,7 @@ import useCartStore from '../../store/cartStore';
 import useAuthStore from '../../store/authStore';
 import productService from '../../services/productService';
 import activityService from '../../services/activityService';
+import { toTitleCase } from '../../utils/text';
 import { useState, useRef, useEffect } from 'react';
 
 // Get user initials from name
@@ -377,7 +378,7 @@ const Header = () => {
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{toTitleCase(item.name)}</p>
                         <p className="text-sm text-gray-500">
                           {item.salePrice ? (
                             <>

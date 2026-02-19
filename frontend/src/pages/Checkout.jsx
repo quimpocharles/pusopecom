@@ -11,6 +11,7 @@ import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import { toTitleCase } from '../utils/text';
 import SEO from '../components/common/SEO';
 
 const Checkout = () => {
@@ -295,7 +296,7 @@ const Checkout = () => {
                       className="w-16 h-16 object-cover rounded"
                     />
                     <div className="flex-1">
-                      <p className="font-semibold text-sm">{item.product.name}</p>
+                      <p className="font-semibold text-sm">{toTitleCase(item.product.name)}</p>
                       <p className="text-xs text-gray-600">
                         {item.color ? `${item.size} / ${item.color}` : `Size: ${item.size}`}
                       </p>

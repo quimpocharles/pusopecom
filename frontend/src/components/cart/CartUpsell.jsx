@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import productService from '../../services/productService';
 import useCartStore from '../../store/cartStore';
+import { toTitleCase } from '../../utils/text';
 
 const CartUpsell = ({ cartProductIds }) => {
   const [recommendations, setRecommendations] = useState([]);
@@ -66,7 +67,7 @@ const CartUpsell = ({ cartProductIds }) => {
                   to={`/products/${product.slug}`}
                   className="text-sm font-semibold text-gray-900 hover:text-primary-600 block truncate"
                 >
-                  {product.name}
+                  {toTitleCase(product.name)}
                 </Link>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {product.salePrice ? (

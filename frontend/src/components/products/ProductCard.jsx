@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
+import { toTitleCase } from '../../utils/text';
 
 const ProductCard = ({ product, onBuyNow }) => {
   const [imgHovered, setImgHovered] = useState(false);
@@ -122,7 +123,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         {/* Row 1: Name + Stars */}
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-semibold text-gray-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-primary-600 transition-colors">
-            {product.name}
+            {toTitleCase(product.name)}
           </h3>
           {product.reviewCount > 0 && (
             <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">

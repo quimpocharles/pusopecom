@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { XMarkIcon, MinusIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
 import CartUpsell from './CartUpsell';
+import { toTitleCase } from '../../utils/text';
 
 const CartDrawer = () => {
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ const CartDrawer = () => {
                   {pendingProduct.team || pendingProduct.sport}
                 </p>
                 <h3 className="font-semibold text-gray-900 text-sm truncate">
-                  {pendingProduct.name}
+                  {toTitleCase(pendingProduct.name)}
                 </h3>
                 <p className="text-sm font-bold text-gray-900 mt-1">
                   ₱{effectivePrice(pendingProduct)?.toLocaleString()}
@@ -229,7 +230,7 @@ const CartDrawer = () => {
                       onClick={closeCart}
                       className="font-semibold text-gray-900 text-sm truncate block hover:text-primary-600"
                     >
-                      {item.product.name}
+                      {toTitleCase(item.product.name)}
                     </Link>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {item.color ? `${item.size} / ${item.color}` : `Size: ${item.size}`}
