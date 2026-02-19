@@ -19,14 +19,17 @@ router.post('/view', optionalAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    await UserActivity.create({
-      user: req.user?._id || null,
-      sessionId: req.user ? null : (sessionId || null),
-      type: 'view',
-      product: productId,
-      category: product.category,
-      sport: product.sport
-    });
+    await Promise.all([
+      UserActivity.create({
+        user: req.user?._id || null,
+        sessionId: req.user ? null : (sessionId || null),
+        type: 'view',
+        product: productId,
+        category: product.category,
+        sport: product.sport
+      }),
+      Product.updateOne({ _id: productId }, { $inc: { totalViews: 1 } })
+    ]);
 
     res.json({ success: true });
   } catch (error) {

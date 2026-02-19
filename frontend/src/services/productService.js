@@ -54,6 +54,11 @@ export const productService = {
     return response.data;
   },
 
+  hardDeleteProduct: async (id) => {
+    const response = await api.delete(`/products/${id}/permanent`);
+    return response.data;
+  },
+
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
     return response.data;

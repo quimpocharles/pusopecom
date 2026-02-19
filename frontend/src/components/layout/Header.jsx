@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import Logo from '../../assets/images/Logo.png';
 import {
   ShoppingBagIcon,
   UserIcon,
@@ -128,23 +129,21 @@ const Header = () => {
   ];
 
   return (
-    <header className="bg-white sticky top-0 z-50 border-b border-gray-100">
+    <header className="bg-[#26282f] sticky top-0 z-50 border-b border-white/10">
       <div className="container-custom">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Mobile menu button */}
           <button
             onClick={() => setShowMobileMenu(true)}
-            className="md:hidden p-2 -ml-2 hover:bg-gray-100 rounded-lg"
+            className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-lg"
             aria-label="Open menu"
           >
-            <Bars3Icon className="w-6 h-6" />
+            <Bars3Icon className="w-6 h-6 text-white" />
           </button>
 
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
-            <span className="text-xl md:text-2xl font-bold text-primary-600">
-              Puso Pilipinas
-            </span>
+            <img src={Logo} alt="Puso Pilipinas" className="h-8 md:h-10 w-auto" />
           </Link>
 
           {/* Desktop Navigation */}
@@ -153,7 +152,7 @@ const Header = () => {
               <Link
                 key={link.label}
                 to={link.href}
-                className="nav-link text-sm font-bold"
+                className="nav-link text-sm font-bold !text-white/80 hover:!text-white"
               >
                 {link.label}
               </Link>
@@ -184,7 +183,7 @@ const Header = () => {
               )}
             </div> */}
 
-            <Link to="/products?sale=true" className="nav-link text-sm text-accent-500 font-semibold">
+            <Link to="/products?sale=true" className="nav-link text-sm !text-accent-500 hover:!text-accent-400 font-semibold">
               Sale
             </Link>
           </nav>
@@ -194,17 +193,17 @@ const Header = () => {
             {/* Search toggle */}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
               aria-label="Search"
             >
-              <MagnifyingGlassIcon className="w-5 h-5 text-gray-700" />
+              <MagnifyingGlassIcon className="w-5 h-5 text-white/80" />
             </button>
 
             {/* User menu */}
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`${isAuthenticated ? 'p-0.5' : 'p-2'} hover:bg-gray-100 rounded-full transition-colors`}
+                className={`${isAuthenticated ? 'p-0.5' : 'p-2'} hover:bg-white/10 rounded-full transition-colors`}
                 aria-label="Account menu"
               >
                 {isAuthenticated ? (
@@ -222,7 +221,7 @@ const Header = () => {
                     </div>
                   )
                 ) : (
-                  <UserIcon className="w-5 h-5 text-gray-700" />
+                  <UserIcon className="w-5 h-5 text-white/80" />
                 )}
               </button>
 
@@ -312,10 +311,10 @@ const Header = () => {
             {/* Cart */}
             <button
               onClick={() => useCartStore.getState().openCart()}
-              className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
               aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} item${cartCount !== 1 ? 's' : ''}` : ''}`}
             >
-              <ShoppingBagIcon className="w-5 h-5 text-gray-700" />
+              <ShoppingBagIcon className="w-5 h-5 text-white/80" />
               {cartCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 bg-primary-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
                   {cartCount > 9 ? '9+' : cartCount}
@@ -328,7 +327,7 @@ const Header = () => {
 
       {/* Search Bar (expandable) */}
       {showSearch && (
-        <div className="border-t border-gray-100 bg-white animate-slide-down">
+        <div className="border-t border-white/10 bg-[#26282f] animate-slide-down">
           <div className="container-custom py-4">
             <div className="relative max-w-2xl mx-auto" ref={searchContainerRef}>
               <form onSubmit={handleSearch} className="relative">
@@ -340,16 +339,16 @@ const Header = () => {
                   onKeyDown={handleSearchKeyDown}
                   autoFocus
                   aria-label="Search products"
-                  className="w-full px-5 py-3 pl-12 bg-gray-50 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-600"
+                  className="w-full px-5 py-3 pl-12 bg-white/10 text-white placeholder-white/40 border-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <button
                   type="button"
                   onClick={() => { setShowSearch(false); setSuggestions([]); setShowSuggestions(false); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/20 rounded-full"
                   aria-label="Close search"
                 >
-                  <XMarkIcon className="w-5 h-5 text-gray-400" />
+                  <XMarkIcon className="w-5 h-5 text-white/50" />
                 </button>
               </form>
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { XMarkIcon, CameraIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CameraIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import api from '../../services/api';
+import useCartStore from '../../store/cartStore';
 
 const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [userImage, setUserImage] = useState(null);
@@ -178,14 +179,15 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             alt="Virtual try-on result"
             className="w-full h-full object-cover"
           />
-          <div className="absolute top-2 right-2 flex gap-2">
-            <button
-              onClick={handleReset}
-              className="bg-white/90 p-2 rounded-full hover:bg-white transition-colors shadow-lg"
-              title="Try another photo"
+          <div className="absolute top-2 right-2">
+            <a
+              href={generatedImage}
+              download={`tryon-${product.name.replace(/\s+/g, '-').toLowerCase()}.png`}
+              className="flex items-center gap-1.5 bg-white/90 hover:bg-white px-3 py-2 rounded-full shadow-lg text-xs font-semibold text-gray-800 transition-colors"
             >
-              <ArrowPathIcon className="w-5 h-5" />
-            </button>
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              Save
+            </a>
           </div>
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
             <p className="text-white text-sm font-medium">Try-on complete!</p>
@@ -274,18 +276,25 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
 
           {/* Action Button */}
           {!loading && (
-            <button
-              onClick={userImagePreview && !generatedImage ? handleGenerate : () => fileInputRef.current?.click()}
-              disabled={loading}
-              className="btn-primary w-full mt-4"
-            >
-              {generatedImage
-                ? 'Try Another Photo'
-                : userImagePreview
-                  ? 'Generate Try-On'
-                  : 'Upload Photo'
-              }
-            </button>
+            generatedImage ? (
+              <button
+                onClick={() => {
+                  onClose();
+                  useCartStore.getState().openCart(product);
+                }}
+                className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
+              >
+                <ShoppingCartIcon className="w-5 h-5" />
+                Add to Cart
+              </button>
+            ) : (
+              <button
+                onClick={userImagePreview ? handleGenerate : () => fileInputRef.current?.click()}
+                className="btn-primary w-full mt-4"
+              >
+                {userImagePreview ? 'Generate Try-On' : 'Upload Photo'}
+              </button>
+            )
           )}
 
           {/* Tips - only show before upload */}

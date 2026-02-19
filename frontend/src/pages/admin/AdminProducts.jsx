@@ -2,15 +2,20 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import productService from '../../services/productService';
+import useAuthStore from '../../store/authStore';
+
+const SUPERADMIN_EMAIL = 'quimpo.charles@gmail.com';
 
 const AdminProducts = () => {
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.email === SUPERADMIN_EMAIL;
   const [products, setProducts] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sport, setSport] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, hard }
 
   const fetchProducts = useCallback(async (page = 1) => {
     setLoading(true);
@@ -34,9 +39,13 @@ const AdminProducts = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async ({ id, hard }) => {
     try {
-      await productService.deleteProduct(id);
+      if (hard) {
+        await productService.hardDeleteProduct(id);
+      } else {
+        await productService.deleteProduct(id);
+      }
       setDeleteConfirm(null);
       fetchProducts(pagination.page);
     } catch (error) {
@@ -179,8 +188,9 @@ const AdminProducts = () => {
                           <PencilIcon className="w-4 h-4" />
                         </Link>
                         <button
-                          onClick={() => setDeleteConfirm(product._id)}
+                          onClick={() => setDeleteConfirm({ id: product._id, hard: isSuperAdmin })}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title={isSuperAdmin ? 'Permanently delete' : 'Deactivate'}
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
@@ -223,9 +233,13 @@ const AdminProducts = () => {
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Product</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {deleteConfirm.hard ? 'Permanently Delete Product' : 'Delete Product'}
+            </h3>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure? This will deactivate the product. This action can be undone by toggling the status back to active.
+              {deleteConfirm.hard
+                ? 'This will permanently remove the product from the database. This cannot be undone.'
+                : 'This will deactivate the product. It can be restored by toggling the status back to active.'}
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -238,7 +252,7 @@ const AdminProducts = () => {
                 onClick={() => handleDelete(deleteConfirm)}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
               >
-                Delete
+                {deleteConfirm.hard ? 'Delete Permanently' : 'Delete'}
               </button>
             </div>
           </div>

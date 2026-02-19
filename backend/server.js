@@ -46,11 +46,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files from public folder
 app.use('/images', express.static('public/images'));
 
-// Rate limiting
+// Rate limiting (disabled in development)
+const isDev = process.env.NODE_ENV === 'development';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: 100,
+  message: 'Too many requests from this IP, please try again later.',
+  skip: () => isDev
 });
 
 app.use('/api/', limiter);
@@ -59,10 +62,29 @@ app.use('/api/', limiter);
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: 'Too many authentication attempts, please try again later.'
+  message: 'Too many authentication attempts, please try again later.',
+  skip: () => isDev
 });
 
 app.use('/api/auth/', authLimiter);
+
+// Try-on rate limits (Replicate API is expensive)
+const tryonUserLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // per user (IP)
+  message: "You've reached the try-on limit. Please try again in an hour.",
+  skip: () => isDev
+});
+
+const tryonGlobalLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 500, // across all users
+  keyGenerator: () => 'global_tryon',
+  message: 'Virtual try-on is temporarily unavailable due to high demand. Please try again later.',
+  skip: () => isDev
+});
+
+app.use('/api/tryon', tryonGlobalLimiter, tryonUserLimiter);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)

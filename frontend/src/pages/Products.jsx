@@ -45,10 +45,12 @@ const Products = () => {
 
   const gender = searchParams.get('gender') || '';
   const sport = searchParams.get('sport') || '';
+  const league = searchParams.get('league') || '';
   const category = searchParams.get('category') || '';
   const sale = searchParams.get('sale') || '';
   const search = searchParams.get('search') || '';
   const page = searchParams.get('page') || '1';
+  const sort = searchParams.get('sort') || 'newest';
 
   // Helper to get array of selected values from a comma-separated param
   const getSelectedValues = (param) => param ? param.split(',') : [];
@@ -62,9 +64,11 @@ const Products = () => {
         const params = {
           ...(gender && { gender }),
           ...(sport && { sport }),
+          ...(league && { league }),
           ...(category && { category }),
           ...(sale && { sale }),
           ...(search && { search }),
+          sort,
           page,
           limit: 12,
         };
@@ -79,7 +83,7 @@ const Products = () => {
     };
 
     fetchProducts();
-  }, [gender, sport, category, sale, search, page]);
+  }, [gender, sport, league, category, sale, search, sort, page]);
 
   const toggleFilter = (key, value) => {
     const newParams = new URLSearchParams(searchParams);
@@ -174,6 +178,25 @@ const Products = () => {
                 </button>
               </>
             )}
+
+            {/* Sort dropdown */}
+            <div className="ml-auto">
+              <select
+                value={sort}
+                onChange={(e) => {
+                  const newParams = new URLSearchParams(searchParams);
+                  newParams.set('sort', e.target.value);
+                  newParams.set('page', '1');
+                  setSearchParams(newParams);
+                }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
+              >
+                <option value="newest">Newest</option>
+                <option value="alphabetical">Alphabetical</option>
+                <option value="most-bought">Most Bought</option>
+                <option value="trending">Trending</option>
+              </select>
+            </div>
           </div>
 
           {/* Expanded options row */}

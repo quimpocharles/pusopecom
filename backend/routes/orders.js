@@ -90,8 +90,9 @@ router.post('/',
           image: itemImage
         });
 
-        // Reduce stock
+        // Reduce stock and increment sold count
         sizeStock.stock -= item.quantity;
+        product.totalSold = (product.totalSold || 0) + item.quantity;
         await product.save();
       }
 

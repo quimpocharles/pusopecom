@@ -101,7 +101,7 @@ const AdminProductForm = () => {
   }, []);
 
   const filteredLeagues = useMemo(
-    () => leagues.filter((l) => l.sport === form.sport),
+    () => form.sport === 'general' ? leagues : leagues.filter((l) => l.sport === form.sport),
     [leagues, form.sport]
   );
 

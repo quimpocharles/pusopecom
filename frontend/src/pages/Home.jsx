@@ -439,21 +439,19 @@ const Home = () => {
 
       {/* Shop by League — horizontal scroll, 3.5 visible */}
       <section className="py-12 md:py-24 bg-white overflow-hidden">
-        <div className="container-custom mb-6 md:mb-10">
-          <h2 className="text-xl md:text-display-sm font-semibold">Shop by League</h2>
-        </div>
+        <h2 className="text-xl md:text-display-sm font-semibold pl-4 sm:pl-6 md:pl-10 mb-6 md:mb-10">Shop by League</h2>
 
         <div
-          className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 lg:pl-[max(2rem,calc((100vw-80rem)/2+2rem))] pt-4 -mt-4 gap-5 md:gap-10"
+          className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 md:pl-10 pt-4 -mt-4 gap-5 md:gap-10"
         >
           {[
             { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#0A2463', text: '#FFFFFF', link: '/products?team=Gilas+Pilipinas' },
-            { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', link: '/products?sport=basketball' },
-            { name: 'UAAP', abbr: 'UAAP', bg: '#16A34A', text: '#FFFFFF', link: '/products?sport=basketball' },
-            { name: 'PVL', abbr: 'PVL', bg: '#EC4899', text: '#FFFFFF', link: '/products?sport=volleyball' },
-            { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?sport=basketball' },
-            { name: 'Philippine Azkals', abbr: 'PFF', bg: '#0D9488', text: '#FFFFFF', link: '/products?sport=football' },
-            { name: 'Alas Pilipinas', abbr: 'ALAS', bg: '#7C3AED', text: '#FFFFFF', link: '/products?sport=volleyball' },
+            { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', link: '/products?league=PBA' },
+            { name: 'UAAP', abbr: 'UAAP', bg: '#16A34A', text: '#FFFFFF', link: '/products?league=UAAP' },
+            { name: 'PVL', abbr: 'PVL', bg: '#EC4899', text: '#FFFFFF', link: '/products?league=PVL' },
+            { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?league=NCAA' },
+            { name: 'Philippine Azkals', abbr: 'PFF', bg: '#0D9488', text: '#FFFFFF', link: '/products?team=Philippine+Azkals' },
+            { name: 'Alas Pilipinas', abbr: 'ALAS', bg: '#7C3AED', text: '#FFFFFF', link: '/products?team=Alas+Pilipinas' },
           ].map((league) => (
             <Link
               key={league.abbr}

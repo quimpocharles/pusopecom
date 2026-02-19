@@ -106,7 +106,8 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       success: false
     }).catch(err => console.error('TryOnLog write error:', err));
 
-    res.status(500).json({
+    const isRateLimit = error.message?.toLowerCase().includes('rate limit');
+    res.status(isRateLimit ? 429 : 500).json({
       success: false,
       message: error.message || 'Failed to process virtual try-on'
     });

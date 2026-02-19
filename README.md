@@ -25,17 +25,18 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 ## Features
 
 ### Storefront
-- Product catalog with filtering (sport, team, category, size, price, gender)
+- Product catalog with filtering (sport, league, team, category, size, price, gender) and sort (Newest, Alphabetical, Most Bought, Trending)
 - Product color variants with per-color sizes, stock, and images
 - Search autocomplete with debounced suggestions and keyboard navigation
-- Shopping cart with persistent storage (color-aware)
-- Checkout flow with Maya payment integration
+- Shopping cart with persistent storage (color-aware) as a global slide-out drawer
+- Checkout flow with Maya payment integration (GCash + Maya)
 - Guest checkout option
 - Order management and tracking
 - Product reviews and ratings
-- Virtual try-on for jerseys with analytics tracking
+- Virtual try-on powered by Replicate (Seedream 4.5) with download and add-to-cart on result
 - Mobile-first responsive design
 - MoreLabs-inspired homepage design
+- `sport: general` products appear across all sport filters
 
 ### User Account
 - Authentication (register, login, email verification, password reset, Google OAuth)
@@ -52,6 +53,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 
 ### Admin
 - Product management (CRUD with color variant support)
+- Soft delete for all admins; hard (permanent) delete restricted to `quimpo.charles@gmail.com`
 - Order management with status updates and tracking
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
@@ -78,18 +80,16 @@ The homepage follows a MoreLabs.com-inspired layout with the following sections:
 - **Button hover fill-up effect** - Color fills from bottom to top using CSS `::before` pseudo-elements with `translateY` transitions
 - **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button
 - **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors
-- **Shop by League circles** - Shows 3.5 circles on screen with horizontal scroll, hover scale effect
+- **Shop by League circles** - Left-aligned heading + circles, shows 3.5 circles on wide viewports with horizontal scroll, each links to exact league or team filter
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
+- **Navbar & footer** - Off-black `#26282f` background with white text; Logo.png replaces text branding
+- **Virtual try-on result** - Download button (saves base64 image) + "Add to Cart" button; no retry button to discourage spam
+- **Products sort** - Dropdown in filter bar: Newest, Alphabetical, Most Bought, Trending (persisted in URL)
 
 ### Seeded Data
 
-Run `node backend/seed-100.js` to populate the database with 100 placeholder products:
-- 50 Basketball products (PBA teams, UAAP teams, Gilas Pilipinas)
-- 30 Volleyball products (PVL teams, Alas Pilipinas)
-- 20 Football products (PFL teams, Philippine Azkals)
-- Categories: jerseys, t-shirts, caps, shorts, accessories
-- 16 featured items, ~26 on sale
+The database currently contains 9 real classic t-shirt products (UAAP teams + Gilas Pilipinas). Mock seed data has been removed.
 
 ## Prerequisites
 
@@ -261,15 +261,17 @@ puso-shop/
 - `DELETE /addresses/:addressId` - Delete shipping address
 
 ### Products (`/api/products`)
-- `GET /` - Get all products (with filters: sport, team, category, gender, sale, price range, search)
+- `GET /` - Get all products (filters: sport, league, team, category, gender, sale, price range, search; sort: newest, alphabetical, most-bought, trending)
 - `GET /search/suggestions?q=term` - Search autocomplete suggestions
+- `GET /recommendations/cart?cartProductIds=...` - Cart upsell recommendations
 - `GET /:slug` - Get single product by slug
 - `GET /admin/all` - Get all products including inactive (Admin)
 - `GET /admin/:id` - Get product by ID (Admin)
 - `GET /admin/stats` - Product statistics (Admin)
 - `POST /` - Create product (Admin)
 - `PUT /:id` - Update product (Admin)
-- `DELETE /:id` - Soft-delete product (Admin)
+- `DELETE /:id` - Soft-delete product (sets active: false) (Admin)
+- `DELETE /:id/permanent` - Hard-delete product from DB (superadmin only)
 
 ### Orders (`/api/orders`)
 - `POST /` - Create order and initiate Maya checkout
@@ -291,8 +293,12 @@ puso-shop/
 - `GET /customers` - Customer insights (Admin)
 - `GET /tryon` - Virtual try-on analytics (Admin)
 
+### Activity (`/api/activity`)
+- `POST /view` - Log product view (increments `totalViews` on product)
+- `POST /search` - Log search query
+
 ### Virtual Try-On (`/api/tryon`)
-- `POST /` - Generate virtual try-on image (logs attempt for analytics)
+- `POST /` - Generate virtual try-on image via Replicate Seedream 4.5 (rate limited: 10/user/hr, 500/hr global; disabled in dev)
 
 ### Other
 - `GET /api/sitemap.xml` - Dynamic sitemap for SEO
@@ -314,6 +320,8 @@ puso-shop/
 - Sizes with stock levels (simple mode)
 - Color variants with per-color sizes, stock, hex code, and image (variant mode)
 - Review stats (avg rating, review count)
+- `totalSold` — incremented on every order, used for "Most Bought" sort
+- `totalViews` — incremented on every product page view, used for "Trending" sort
 - Featured flag, active flag
 
 ### Order

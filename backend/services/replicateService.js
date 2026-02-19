@@ -22,18 +22,29 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
       : `data:image/png;base64,${productImageBase64}`;
 
     // Craft a detailed prompt for virtual try-on
-    const prompt = `Virtual try-on: Take the person from the second image and dress them in the exact garment from the first image.
+    const prompt = `Virtual try-on: Take the person from the second image and dress them in the wearable exterior of the garment from the first image.
 
 CRITICAL REQUIREMENTS:
-- The garment is a ${productName || 'sports jersey'}
-- PRESERVE EXACTLY all logos, text, numbers, patterns, and designs on the garment - do not alter, blur, or change any detail
-- Keep the person's face, body shape, skin tone, and pose exactly as shown
-- Make the garment fit naturally on the person's body with realistic folds and draping
-- Maintain the person's original background
-- The result should look like a professional product photo of the person wearing this exact garment
+- The garment is a ${productName || 'shirt or jersey'}
+- Use ONLY the exterior wearable fabric of the garment
+- IGNORE, REMOVE, or HIDE any internal elements such as:
+  - neck tags
+  - size tags
+  - wash/care labels
+  - brand tags located inside the collar or seams
+- Internal tags MUST NOT appear on the outside of the garment
 
-First image: The garment/jersey to put on the person (preserve ALL design details exactly)
-Second image: The person who should wear the garment`;
+- PRESERVE EXACTLY all exterior logos, text, numbers, patterns, prints, embroidery, and designs
+- Do NOT alter, blur, stretch, mirror, or recreate any exterior design detail
+- Keep the person's face, body shape, skin tone, hairstyle, and pose exactly as shown
+- Make the garment fit naturally with realistic folds, drape, and fabric tension
+- Ensure the collar, sleeves, and hem align naturally with the body
+- Maintain the person’s original background
+- The final output must look like a professional product photo of a real person wearing this exact garment
+
+IMAGE DEFINITIONS:
+- First image: Garment reference (design reference only; internal tags are NOT part of the design)
+- Second image: Person to wear the garment`;
 
     // Create prediction using Seedream 4.5
     const createResponse = await axios.post(

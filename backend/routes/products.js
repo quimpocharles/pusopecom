@@ -11,6 +11,7 @@ router.get('/', async (req, res) => {
     const {
       sport,
       team,
+      league,
       category,
       gender,
       sale,
@@ -23,13 +24,27 @@ router.get('/', async (req, res) => {
       sort = '-createdAt'
     } = req.query;
 
+    const sortMap = {
+      'alphabetical': 'name',
+      'newest': '-createdAt',
+      'most-bought': '-totalSold',
+      'trending': '-totalViews',
+    };
+    const resolvedSort = sortMap[sort] || sort;
+
     const filter = { active: true };
 
     if (sport) {
       const values = sport.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
-      filter.sport = values.length === 1 ? { $regex: values[0] } : { $in: values };
+      const sportOrConditions = [
+        ...values.map(v => ({ sport: { $regex: v } })),
+        { sport: 'general' }
+      ];
+      if (!filter.$and) filter.$and = [];
+      filter.$and.push({ $or: sportOrConditions });
     }
     if (team) filter.team = { $regex: team, $options: 'i' };
+    if (league) filter.league = { $regex: `^${league}$`, $options: 'i' };
     if (category) {
       const values = category.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
       filter.category = values.length === 1 ? { $regex: values[0] } : { $in: values };
@@ -71,7 +86,7 @@ router.get('/', async (req, res) => {
 
     const [products, total] = await Promise.all([
       Product.find(filter)
-        .sort(sort)
+        .sort(resolvedSort)
         .skip(skip)
         .limit(Number(limit))
         .select('-__v'),
@@ -409,7 +424,42 @@ router.put('/:id',
   }
 );
 
-// Delete product (Admin only)
+// Hard delete product (superadmin only)
+router.delete('/:id/permanent',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    if (req.user.email !== 'quimpo.charles@gmail.com') {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+    try {
+      const product = await Product.findByIdAndDelete(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Product permanently deleted'
+      });
+    } catch (error) {
+      console.error('Hard delete product error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete product'
+      });
+    }
+  }
+);
+
+// Delete product (Admin only — soft delete)
 router.delete('/:id',
   authenticate,
   isAdmin,
