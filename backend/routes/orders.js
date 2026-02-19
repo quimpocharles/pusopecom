@@ -294,7 +294,7 @@ router.get('/admin/export',
       const headers = [
         'Order #', 'Date', 'Customer', 'Email',
         'Items', 'Subtotal', 'Shipping Fee', 'Total',
-        'Payment Status', 'Order Status', 'Tracking #'
+        'Payment Status', 'Order Status', 'Courier', 'Tracking #'
       ];
 
       const rows = orders.map((o) => {
@@ -316,6 +316,7 @@ router.get('/admin/export',
           escape(o.total?.toFixed(2)),
           escape(o.paymentStatus),
           escape(o.orderStatus),
+          escape(o.courier || ''),
           escape(o.trackingNumber || '')
         ].join(',');
       });
@@ -506,11 +507,15 @@ router.patch('/:id/status',
   isAdmin,
   async (req, res) => {
     try {
-      const { orderStatus, trackingNumber } = req.body;
+      const { orderStatus, trackingNumber, courier } = req.body;
 
       const order = await Order.findByIdAndUpdate(
         req.params.id,
-        { orderStatus, ...(trackingNumber && { trackingNumber }) },
+        {
+          orderStatus,
+          ...(trackingNumber !== undefined && { trackingNumber }),
+          ...(courier !== undefined && { courier })
+        },
         { new: true, runValidators: true }
       );
 
