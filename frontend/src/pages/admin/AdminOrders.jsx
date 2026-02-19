@@ -243,7 +243,7 @@ const AdminOrders = () => {
                             <select
                               value={edit.courier ?? order.courier ?? ''}
                               onChange={(e) => setField(order._id, 'courier', e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              className="w-36 px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                             >
                               <option value="">Select courier</option>
                               {COURIERS.map((c) => (
@@ -263,7 +263,7 @@ const AdminOrders = () => {
 
                       {/* Update column — status select + button */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-1.5">
                           <select
                             value={edit.orderStatus || order.orderStatus}
                             onChange={(e) => setField(order._id, 'orderStatus', e.target.value)}

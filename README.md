@@ -54,7 +54,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 ### Admin
 - Product management (CRUD with color variant support)
 - Soft delete for all admins; hard (permanent) delete restricted to `quimpo.charles@gmail.com`
-- Order management with status updates and tracking
+- Order management with status updates, courier selection (LBC, J&T Express, Ninja Van, etc.), and tracking number — saved as read-only text with an edit button to revise
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
