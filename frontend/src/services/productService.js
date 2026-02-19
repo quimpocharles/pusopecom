@@ -74,6 +74,20 @@ export const productService = {
     return response.data;
   },
 
+  exportProductsCSV: async () => {
+    const response = await api.get('/products/admin/export', { responseType: 'blob' });
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    const yy = String(d.getFullYear()).slice(2);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    a.download = `${yy}${mm}${dd} - Inventory Report.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   // Image uploads
   uploadImage: async (file) => {
     const formData = new FormData();

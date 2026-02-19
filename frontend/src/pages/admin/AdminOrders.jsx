@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
 
 const statusColors = {
@@ -24,6 +25,8 @@ const AdminOrders = () => {
   const [paymentFilter, setPaymentFilter] = useState('');
   const [updating, setUpdating] = useState(null);
   const [editStatus, setEditStatus] = useState({});
+  const [exportPeriod, setExportPeriod] = useState('daily');
+  const [exporting, setExporting] = useState(false);
 
   const fetchOrders = useCallback(async (page = 1) => {
     setLoading(true);
@@ -69,9 +72,43 @@ const AdminOrders = () => {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await orderService.exportOrdersCSV(exportPeriod);
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Orders</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+        <div className="flex items-center gap-2">
+          <select
+            value={exportPeriod}
+            onChange={(e) => setExportPeriod(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Annual</option>
+            <option value="all">All Time</option>
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+        </div>
+      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">

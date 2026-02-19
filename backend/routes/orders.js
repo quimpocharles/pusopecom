@@ -238,6 +238,100 @@ router.get('/admin/stats',
   }
 );
 
+// Export orders as CSV (Admin only)
+router.get('/admin/export',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const { period = 'all' } = req.query;
+
+      const now = new Date();
+      let startDate = null;
+
+      if (period === 'daily') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      } else if (period === 'weekly') {
+        const day = now.getDay(); // 0=Sun
+        const diffToMon = (day === 0 ? -6 : 1 - day);
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon);
+      } else if (period === 'monthly') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (period === 'yearly') {
+        startDate = new Date(now.getFullYear(), 0, 1);
+      }
+
+      const filter = startDate ? { createdAt: { $gte: startDate } } : {};
+
+      const orders = await Order.find(filter)
+        .sort('-createdAt')
+        .populate('user', 'firstName lastName email')
+        .lean();
+
+      const fmt = (d) => {
+        const dt = new Date(d);
+        return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      };
+
+      const escape = (val) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const reportStart = startDate ? fmt(startDate) : fmt(orders.length ? orders[orders.length - 1].createdAt : now);
+      const reportEnd = fmt(now);
+
+      const meta = [
+        `Report Start Date,${reportStart}`,
+        `Report End Date,${reportEnd}`,
+        ''
+      ];
+
+      const headers = [
+        'Order #', 'Date', 'Customer', 'Email',
+        'Items', 'Subtotal', 'Shipping Fee', 'Total',
+        'Payment Status', 'Order Status', 'Tracking #'
+      ];
+
+      const rows = orders.map((o) => {
+        const customer = o.user
+          ? `${o.user.firstName} ${o.user.lastName}`
+          : o.shippingAddress?.fullName || '';
+        const email = o.user ? o.user.email : o.email;
+        const items = (o.items || [])
+          .map(i => `${i.name}${i.color ? ` (${i.color})` : ''} ${i.size} x${i.quantity}`)
+          .join('; ');
+        return [
+          escape(o.orderNumber),
+          escape(fmt(o.createdAt)),
+          escape(customer),
+          escape(email),
+          escape(items),
+          escape(o.subtotal?.toFixed(2)),
+          escape(o.shippingFee?.toFixed(2)),
+          escape(o.total?.toFixed(2)),
+          escape(o.paymentStatus),
+          escape(o.orderStatus),
+          escape(o.trackingNumber || '')
+        ].join(',');
+      });
+
+      const csv = [...meta, headers.join(','), ...rows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="transaction-report.csv"');
+      res.send(csv);
+    } catch (error) {
+      console.error('Export orders error:', error);
+      res.status(500).json({ success: false, message: 'Failed to export orders' });
+    }
+  }
+);
+
 // Get order by order number
 // Verify payment status with Maya (called when user returns from checkout)
 router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {

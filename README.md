@@ -58,6 +58,8 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
+- **Inventory CSV export** — downloads all products with size breakdown, remaining stock per size, total QTY, and unit price; filename: `YYMMDD - Inventory Report.csv`
+- **Transaction CSV export** — downloads orders filtered by period (Daily, Weekly, Monthly, Annual, All Time) with report date range header; filename: `YYMMDD - [Period] Transaction Report.csv`
 
 ### Homepage Sections
 
@@ -268,6 +270,7 @@ puso-shop/
 - `GET /admin/all` - Get all products including inactive (Admin)
 - `GET /admin/:id` - Get product by ID (Admin)
 - `GET /admin/stats` - Product statistics (Admin)
+- `GET /admin/export` - Download inventory CSV (Admin)
 - `POST /` - Create product (Admin)
 - `PUT /:id` - Update product (Admin)
 - `DELETE /:id` - Soft-delete product (sets active: false) (Admin)
@@ -279,6 +282,7 @@ puso-shop/
 - `GET /user/:userId` - Get user's orders
 - `GET /admin/all` - Get all orders (Admin)
 - `GET /admin/stats` - Dashboard statistics (Admin)
+- `GET /admin/export?period=daily|weekly|monthly|yearly|all` - Download transaction CSV (Admin)
 - `PATCH /:id/status` - Update order status (Admin)
 - `POST /webhooks/maya` - Maya payment webhook handler
 

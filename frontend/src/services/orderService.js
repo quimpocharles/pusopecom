@@ -35,6 +35,35 @@ export const orderService = {
   verifyPayment: async (orderNumber) => {
     const response = await api.post(`/orders/${orderNumber}/verify-payment`);
     return response.data;
+  },
+
+  exportOrdersCSV: async (period = 'all') => {
+    const response = await api.get('/orders/admin/export', {
+      params: { period },
+      responseType: 'blob'
+    });
+
+    const d = new Date();
+    const yy = String(d.getFullYear()).slice(2);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const datePrefix = `${yy}${mm}${dd}`;
+
+    const labelMap = {
+      daily: 'Daily Transaction Report',
+      weekly: 'Weekly Transaction Report',
+      monthly: 'Monthly Transaction Report',
+      yearly: 'Annual Transaction Report',
+      all: 'Transaction Report'
+    };
+    const label = labelMap[period] || 'Transaction Report';
+
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${datePrefix} - ${label}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 };
 

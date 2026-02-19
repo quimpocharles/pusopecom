@@ -51,7 +51,12 @@ router.get('/', async (req, res) => {
     }
     if (gender) {
       const values = gender.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
-      filter.gender = values.length === 1 ? { $regex: values[0] } : { $in: values };
+      const genderOrConditions = [
+        ...values.map(v => ({ gender: { $regex: v } })),
+        { gender: { $regex: /^unisex$/i } }
+      ];
+      if (!filter.$and) filter.$and = [];
+      filter.$and.push({ $or: genderOrConditions });
     }
     if (sale === 'true') filter.salePrice = { $exists: true, $gt: 0 };
     if (featured) filter.featured = featured === 'true';
@@ -111,6 +116,63 @@ router.get('/', async (req, res) => {
     });
   }
 });
+
+// Export all products as CSV (Admin only)
+router.get('/admin/export',
+  authenticate,
+  isAdmin,
+  async (req, res) => {
+    try {
+      const products = await Product.find({})
+        .sort('name')
+        .select('name price salePrice sizes colors totalStock')
+        .lean();
+
+      const SIZE_COLS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+
+      const escape = (val) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const headers = ['Item(s)', ...SIZE_COLS, 'QTY', 'Unit Price'];
+
+      const rows = products.map((p) => {
+        // Aggregate stock per size (handles both simple sizes and color variants)
+        const sizeMap = {};
+        if (p.colors && p.colors.length > 0) {
+          for (const color of p.colors) {
+            for (const s of color.sizes || []) {
+              sizeMap[s.size] = (sizeMap[s.size] || 0) + s.stock;
+            }
+          }
+        } else {
+          for (const s of p.sizes || []) {
+            sizeMap[s.size] = (sizeMap[s.size] || 0) + s.stock;
+          }
+        }
+
+        const unitPrice = (p.salePrice || p.price).toFixed(2);
+        const sizeCells = SIZE_COLS.map(sz => escape(sizeMap[sz] > 0 ? sizeMap[sz] : ''));
+
+        return [escape(p.name), ...sizeCells, escape(p.totalStock), escape(unitPrice)].join(',');
+      });
+
+      const csv = [headers.join(','), ...rows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="inventory-report.csv"');
+      res.send(csv);
+    } catch (error) {
+      console.error('Export products error:', error);
+      res.status(500).json({ success: false, message: 'Failed to export products' });
+    }
+  }
+);
 
 // Get all products including inactive (Admin only)
 router.get('/admin/all',

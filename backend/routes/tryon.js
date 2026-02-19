@@ -59,7 +59,7 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       });
     }
 
-    // Generate try-on image using Gemini
+    // Generate try-on image using Replicate (Seedream 4.5)
     const result = await generateTryOn(
       userImageBase64,
       productImageBase64,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import productService from '../../services/productService';
 import useAuthStore from '../../store/authStore';
 
@@ -16,6 +16,7 @@ const AdminProducts = () => {
   const [category, setCategory] = useState('');
   const [sport, setSport] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, hard }
+  const [exporting, setExporting] = useState(false);
 
   const fetchProducts = useCallback(async (page = 1) => {
     setLoading(true);
@@ -53,6 +54,17 @@ const AdminProducts = () => {
     }
   };
 
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      await productService.exportProductsCSV();
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleToggleActive = async (product) => {
     try {
       await productService.updateProduct(product._id, { active: !product.active });
@@ -66,13 +78,23 @@ const AdminProducts = () => {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-        <Link
-          to="/admin/products/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Add Product
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+          <Link
+            to="/admin/products/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Add Product
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
