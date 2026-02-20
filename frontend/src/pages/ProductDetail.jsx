@@ -7,6 +7,7 @@ import {
   TruckIcon,
   ArrowPathIcon,
   ShieldCheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
@@ -59,6 +60,112 @@ const StarSelect = ({ value, onChange }) => (
   </div>
 );
 
+const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+
+// Returns the full size list to display, merging standard sizes with DB sizes.
+// Sizes not in DB or with 0 stock are marked as unavailable.
+const getDisplaySizes = (availableSizes) => {
+  if (!availableSizes?.length) return [];
+  const dbMap = new Map(availableSizes.map(s => [s.size, s.stock]));
+  const extraSizes = availableSizes
+    .map(s => s.size)
+    .filter(s => !STANDARD_SIZES.includes(s));
+  return [...STANDARD_SIZES, ...extraSizes].map(size => ({
+    size,
+    stock: dbMap.get(size) ?? 0,
+  }));
+};
+
+const SIZE_CHARTS = {
+  tops: {
+    label: 'Tops (Jersey / T-Shirt)',
+    headers: ['Size', 'Shoulder (in)', 'Chest (in)', 'Body Length (in)'],
+    rows: [
+      ['XS',  '16.5', '18.5', '26'],
+      ['S',   '18',   '20.5', '27'],
+      ['M',   '18.5', '21',   '27.5'],
+      ['L',   '19.5', '22',   '28'],
+      ['XL',  '20',   '23.5', '30'],
+      ['2XL', '21',   '24',   '31.5'],
+      ['3XL', '22.5', '25.5', '32'],
+    ],
+  },
+  shorts: {
+    label: 'Shorts',
+    headers: ['Size', 'Waist (in)', 'Hips (in)', 'Length (in)'],
+    rows: [
+      ['XS',   '24–26', '32–34', '17'],
+      ['S',    '27–29', '35–37', '18'],
+      ['M',    '30–32', '38–40', '19'],
+      ['L',    '33–35', '41–43', '20'],
+      ['XL',   '36–38', '44–46', '21'],
+      ['XXL',  '39–41', '47–49', '22'],
+    ],
+  },
+  caps: {
+    label: 'Caps',
+    headers: ['Size', 'Head Circumference (cm)'],
+    rows: [
+      ['S/M',      '54–57'],
+      ['L/XL',     '58–61'],
+      ['One Size', 'Adjustable'],
+    ],
+  },
+};
+
+const getSizeChart = (category) => {
+  if (category === 'shorts') return SIZE_CHARTS.shorts;
+  if (category === 'cap') return SIZE_CHARTS.caps;
+  return SIZE_CHARTS.tops;
+};
+
+const SizeChartModal = ({ category, onClose }) => {
+  const chart = getSizeChart(category);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Size Guide</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-gray-500 mb-4">{chart.label} — all measurements are approximate.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  {chart.headers.map((h) => (
+                    <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 first:rounded-l-lg last:rounded-r-lg">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {chart.rows.map((row, i) => (
+                  <tr key={i} className="border-b border-gray-50 last:border-0">
+                    {row.map((cell, j) => (
+                      <td key={j} className={`px-3 py-2.5 text-sm ${j === 0 ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-4">
+            Tip: For jerseys, we recommend sizing up for a looser fit.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProductDetail = () => {
   const { slug } = useParams();
   const addItem = useCartStore((state) => state.addItem);
@@ -72,6 +179,7 @@ const ProductDetail = () => {
   const [error, setError] = useState('');
   const [addedToCart, setAddedToCart] = useState(false);
   const [showTryOn, setShowTryOn] = useState(false);
+  const [showSizeChart, setShowSizeChart] = useState(false);
   const [selectedColor, setSelectedColor] = useState(null);
 
   // Reviews state
@@ -392,33 +500,55 @@ const ProductDetail = () => {
               </div>
             )}
 
-            {/* Size Selection */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-900">Size</h3>
-                {selectedSize && (
-                  <span className="text-xs text-gray-400">{selectedSizeStock} in stock</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {availableSizes.map((sizeObj) => (
-                  <button
-                    key={sizeObj.size}
-                    onClick={() => { setSelectedSize(sizeObj.size); setError(''); setQuantity(1); }}
-                    disabled={sizeObj.stock === 0}
-                    className={`min-w-[3rem] px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 ${
-                      selectedSize === sizeObj.size
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : sizeObj.stock === 0
-                        ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed line-through'
-                        : 'border-gray-200 text-gray-700 hover:border-gray-400'
-                    }`}
-                  >
-                    {sizeObj.size}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Size Selection — hidden for sizeless products (caps, stickers, etc.) */}
+            {availableSizes.length > 0 && (() => {
+              const displaySizes = getDisplaySizes(availableSizes);
+              return (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Size</h3>
+                      <button
+                        onClick={() => setShowSizeChart(true)}
+                        className="text-xs text-primary-600 hover:text-primary-700 underline underline-offset-2 transition-colors"
+                      >
+                        Size Guide
+                      </button>
+                    </div>
+                    {selectedSize && (
+                      <span className="text-xs text-gray-400">{selectedSizeStock} in stock</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {displaySizes.map((sizeObj) => {
+                      const unavailable = sizeObj.stock === 0;
+                      const isSelected = selectedSize === sizeObj.size;
+                      return (
+                        <button
+                          key={sizeObj.size}
+                          onClick={() => { if (!unavailable) { setSelectedSize(sizeObj.size); setError(''); setQuantity(1); } }}
+                          disabled={unavailable}
+                          className={`relative min-w-[3rem] px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 overflow-hidden ${
+                            isSelected
+                              ? 'bg-primary-600 text-white border-primary-600'
+                              : unavailable
+                              ? 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'
+                              : 'border-gray-200 text-gray-700 hover:border-gray-400'
+                          }`}
+                        >
+                          {sizeObj.size}
+                          {unavailable && (
+                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="absolute w-[130%] h-px bg-gray-300 rotate-[-35deg]" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Quantity */}
             <div className="mb-8">
@@ -637,6 +767,14 @@ const ProductDetail = () => {
           </div>
         </div>
       </section>
+
+      {/* Size Chart Modal */}
+      {showSizeChart && (
+        <SizeChartModal
+          category={product.category}
+          onClose={() => setShowSizeChart(false)}
+        />
+      )}
 
       {/* Virtual Try-On Modal */}
       {product && (
