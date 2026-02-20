@@ -81,7 +81,7 @@ The homepage follows a MoreLabs.com-inspired layout with the following sections:
 
 - **Button hover fill-up effect** - Color fills from bottom to top using CSS `::before` pseudo-elements with `translateY` transitions
 - **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button
-- **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors
+- **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors; "Buy it with" upsell section shows complementary products with inline color swatch + size chip selectors — Add button disabled until a size is chosen
 - **Shop by League circles** - Left-aligned heading + circles, shows 3.5 circles on wide viewports with horizontal scroll, each links to exact league or team filter
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
