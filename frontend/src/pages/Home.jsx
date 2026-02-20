@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import heroImage from '../assets/images/banner-home.jpg';
 import gilasImage from '../assets/images/gilas.jpg';
+import pbaImage from '../assets/images/pba.png';
 import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
 import { Link } from 'react-router-dom';
@@ -447,7 +448,7 @@ const Home = () => {
         >
           {[
             { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#0A2463', text: '#FFFFFF', image: gilasImage, link: '/products?team=Gilas+Pilipinas' },
-            { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', link: '/products?league=PBA' },
+            { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', image: pbaImage, link: '/products?league=PBA' },
             { name: 'UAAP', abbr: 'UAAP', bg: '#16A34A', text: '#FFFFFF', link: '/products?league=UAAP' },
             { name: 'PVL', abbr: 'PVL', bg: '#EC4899', text: '#FFFFFF', link: '/products?league=PVL' },
             { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?league=NCAA' },
@@ -459,20 +460,29 @@ const Home = () => {
               to={league.link}
               className="flex flex-col items-center group flex-shrink-0 w-[calc((100vw-80px)/3.5)] md:w-[calc((100vw-160px)/3.5)]"
             >
-              <div
-                className="w-[70%] mx-auto aspect-square rounded-full flex items-center justify-center group-hover:scale-[1.03] transition-transform duration-300 overflow-hidden"
-                style={league.image
-                  ? { backgroundImage: `url(${league.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                  : { backgroundColor: league.bg }
-                }
-              >
-                {!league.image && (
-                  <span
-                    className="text-sm md:text-lg lg:text-xl font-bold tracking-wide select-none"
-                    style={{ color: league.text }}
-                  >
-                    {league.abbr}
-                  </span>
+              {/* Outer wrapper — fixed size, no scaling */}
+              <div className="relative w-[70%] mx-auto aspect-square">
+                {/* Circle bg — this is what scales on hover */}
+                <div
+                  className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110"
+                  style={{ backgroundColor: league.bg }}
+                />
+                {/* Image or text — stays fixed size */}
+                {league.image ? (
+                  <img
+                    src={league.image}
+                    alt={league.name}
+                    className="absolute inset-0 w-full h-full object-contain z-10 p-3"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <span
+                      className="text-sm md:text-lg lg:text-xl font-bold tracking-wide select-none"
+                      style={{ color: league.text }}
+                    >
+                      {league.abbr}
+                    </span>
+                  </div>
                 )}
               </div>
               <span className="mt-3 md:mt-5 font-semibold text-gray-900 group-hover:text-primary-600 transition-colors text-center text-xs md:text-base lg:text-lg">
