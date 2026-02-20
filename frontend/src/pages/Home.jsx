@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import heroImage from '../assets/images/banner-home.jpg';
+import heroImage from '../assets/images/banner-home.jpeg';
 import gilasImage from '../assets/images/gilas.png';
 import pbaImage from '../assets/images/pba.png';
 import uaapImage from '../assets/images/uaap.webp';
