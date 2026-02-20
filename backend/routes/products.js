@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
       if (!filter.$and) filter.$and = [];
       filter.$and.push({ $or: sportOrConditions });
     }
-    if (team) filter.team = { $regex: team, $options: 'i' };
+    if (team) filter.team = { $regex: `^${team}$`, $options: 'i' };
     if (league) filter.league = { $regex: `^${league}$`, $options: 'i' };
     if (category) {
       const values = category.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
