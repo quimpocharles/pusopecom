@@ -141,7 +141,7 @@ app.get('/api/sitemap.xml', async (req, res) => {
   try {
     const Product = mongoose.model('Product');
     const products = await Product.find({ active: true }).select('slug updatedAt').lean();
-    const baseUrl = process.env.FRONTEND_URL || 'https://pusopilipinas.com';
+    const baseUrl = process.env.FRONTEND_URL || 'https://pusostore.com';
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
