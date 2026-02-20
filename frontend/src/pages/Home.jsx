@@ -36,6 +36,20 @@ const Home = () => {
     productUrl: '/products/gilas-pilipinas-t-shirt',
   });
   const carouselRef = useRef(null);
+  const heroImgRef = useRef(null);
+  const heroRef = useRef(null);
+
+  useEffect(() => {
+    const handleParallax = () => {
+      if (!heroImgRef.current || !heroRef.current) return;
+      const rect = heroRef.current.getBoundingClientRect();
+      if (rect.bottom < 0) return;
+      const scrolled = Math.max(0, -rect.top);
+      heroImgRef.current.style.transform = `translateY(${scrolled * 0.35}px)`;
+    };
+    window.addEventListener('scroll', handleParallax, { passive: true });
+    return () => window.removeEventListener('scroll', handleParallax);
+  }, []);
 
   const categories = [
     { id: 'basketball', label: 'Basketball', icon: '🏀' },
@@ -113,62 +127,48 @@ const Home = () => {
         title="Puso Pilipinas — Philippine Sports Merchandise"
         description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, and football. Free shipping on select items."
       />
-      {/* Marquee Announcement Bar */}
-      <div className="bg-primary-600 text-white py-2 md:py-2.5 overflow-x-hidden text-xs md:text-sm">
-        <div className="animate-marquee whitespace-nowrap flex">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex items-center gap-6 md:gap-12 px-4 md:px-6">
-              <span className="flex items-center gap-2">
-                <SparklesIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-secondary-400" />
-                <span>Try jerseys virtually before you buy!</span>
-              </span>
-              <span className="text-white/40">✦</span>
-              <span className="flex items-center gap-2">
-                <TruckIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span><strong>FREE SHIPPING</strong> on orders over ₱2,000</span>
-              </span>
-              <span className="text-white/40">✦</span>
-              <span>Authentic licensed merchandise</span>
-              <span className="text-white/40">✦</span>
-              <span className="flex items-center gap-2">
-                <span>Support Philippine Sports 🇵🇭</span>
-              </span>
-              <span className="text-white/40">✦</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Hero Section */}
-      <section className="relative text-white overflow-hidden">
+      <section ref={heroRef} className="relative text-white overflow-hidden min-h-[70svh] md:min-h-[88vh]">
         <img
+          ref={heroImgRef}
           src={heroImage}
           alt="Puso Pilipinas hero banner"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute top-0 left-0 w-full object-cover object-center"
+          style={{ height: '120%', willChange: 'transform' }}
           width={1920}
           height={1080}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-900/85 via-primary-800/70 to-primary-900/40" />
-        <div className="container-custom py-12 md:py-32 relative z-10">
-          <div className="max-w-3xl">
-            <p className="text-secondary-400 font-semibold mb-3 md:mb-4 tracking-wide uppercase text-xs md:text-sm">
-              Official Licensed Merchandise
-            </p>
-            <h1 className="text-3xl md:text-display lg:text-display-lg mb-4 md:mb-6 font-bold text-balance">
-              Show Your PUSO ❤️
-            </h1>
-            <p className="text-base md:text-2xl text-white/80 mb-6 md:mb-8 max-w-xl">
-              Authentic jerseys and gear from PBA, UAAP, PVL, and more.
-              Support Philippine sports with every purchase.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link to="/products" className="btn-primary-light text-sm md:text-base">
-                Shop All Products
-              </Link>
-              <Link to="/products?category=jersey" className="btn-secondary-light text-sm md:text-base">
-                Browse Jerseys
-              </Link>
-            </div>
+        {/* Subtle gradient — dark at top and bottom, transparent in middle */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/75" />
+
+        {/* Mobile: headline centered in hero section */}
+        <div className="absolute top-[38%] -translate-y-1/2 left-0 right-0 md:hidden z-10 px-3">
+          <h1 className="font-black uppercase leading-none tracking-tight text-white text-center w-full">
+            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>SHOW</span>
+            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>YOUR</span>
+            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>PUSO</span>
+          </h1>
+        </div>
+
+        {/* Desktop: headline pinned to top */}
+        <div className="absolute top-0 left-0 right-0 z-10 px-6 pt-8 hidden md:block">
+          <h1 className="font-black uppercase leading-none tracking-tight text-white whitespace-nowrap text-center" style={{ fontSize: 'clamp(2.5rem, 8.8vw, 11rem)' }}>
+            SHOW YOUR PUSO
+          </h1>
+        </div>
+
+        {/* Bottom-left supporting text + CTAs */}
+        <div className="absolute bottom-0 left-0 z-10 px-5 md:px-12 pb-10 md:pb-14 max-w-lg">
+          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-white/60 mb-3">
+            Official Licensed Merchandise
+          </p>
+          <p className="text-base md:text-xl text-white/90 mb-6 leading-snug">
+            Authentic jerseys and gear from Gilas Pilipinas, Alas Pilipinas, PBA, PVL, UAAP, NCAA, and more.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link to="/products" className="btn-secondary-light text-sm md:text-base">
+              Shop All Products
+            </Link>
           </div>
         </div>
       </section>
@@ -200,57 +200,48 @@ const Home = () => {
       </div>
 
       {/* Virtual Try-On Feature Highlight */}
-      <section className="py-10 md:py-16 lg:py-24 bg-white">
-        <div className="container-custom">
-          <div className="bg-gradient-to-r from-primary-600 to-accent-500 rounded-2xl md:rounded-3xl overflow-hidden">
-            <div className="grid md:grid-cols-2 gap-6 md:gap-8 items-center">
-              <div className="p-6 md:p-12 text-white">
-                <div className="inline-flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5 md:px-4 md:py-2 mb-4 md:mb-6">
-                  <SparklesIcon className="w-4 h-4 md:w-5 md:h-5" />
-                  <span className="font-semibold text-xs md:text-sm">AI-Powered Feature</span>
-                </div>
-                <h2 className="text-2xl md:text-4xl font-bold mb-3 md:mb-4">
-                  {tryOnSettings.title}
-                </h2>
-                <p className="text-sm md:text-lg text-white/90 mb-4 md:mb-6">
-                  Virtual Try-on allow you to see how any shirt or jersey looks on you before buying! Upload your photo
-                  and our AI will show you wearing your favorite team's gear.
-                </p>
-                <ul className="space-y-2 md:space-y-3 mb-6 md:mb-8 text-sm md:text-base">
-                  {['Upload any photo of yourself', 'AI generates realistic preview', 'Buy with confidence'].map((item, i) => (
-                    <li key={i} className="flex items-center gap-2 md:gap-3">
-                      <div className="w-5 h-5 md:w-6 md:h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                        <svg className="w-3 h-3 md:w-4 md:h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to={tryOnSettings.productUrl}
-                  className="hover-fill hover-fill-navy inline-flex items-center gap-2 bg-white text-primary-700 px-5 py-2.5 md:px-6 md:py-3 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98]"
-                >
-                  Try It Now
-                  <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
-                </Link>
-              </div>
-              <div className="hidden md:block p-8">
-                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 max-w-sm mx-auto">
-                  <div className="aspect-[3/4] rounded-xl overflow-hidden mb-4">
-                    <img
-                      src={tryOnSettings.image || tryOnPreviewFallback}
-                      alt="Virtual try-on demo"
-                      className="w-full h-full object-cover"
-                      width={400}
-                      height={533}
-                      loading="lazy"
-                    />
-                  </div>
-                </div>
-              </div>
+      <section className="bg-gradient-to-r from-primary-600 to-accent-500 overflow-hidden">
+        <div className="grid grid-cols-2 items-center">
+          <div className="px-5 py-10 md:px-16 md:py-20 text-white">
+            <div className="inline-flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5 md:px-4 md:py-2 mb-3 md:mb-6">
+              <SparklesIcon className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="font-semibold text-xs md:text-sm">AI-Powered Feature</span>
             </div>
+            <h2 className="text-base md:text-4xl font-bold mb-2 md:mb-4 leading-snug">
+              {tryOnSettings.title}
+            </h2>
+            <p className="hidden md:block text-base md:text-lg text-white/90 mb-6">
+              See how any shirt or jersey looks on you before buying. Upload your photo and our AI will show you wearing your favorite team's gear.
+            </p>
+            <ul className="hidden md:block space-y-3 mb-8 text-base">
+              {['Upload any photo of yourself', 'AI generates realistic preview', 'Buy with confidence'].map((item, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              to={tryOnSettings.productUrl}
+              className="hover-fill hover-fill-navy inline-flex items-center gap-1.5 md:gap-2 bg-white text-primary-700 px-4 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-base transition-all duration-200 active:scale-[0.98]"
+            >
+              Try It Now
+              <ChevronRightIcon className="w-3 h-3 md:w-5 md:h-5" />
+            </Link>
+          </div>
+          <div className="self-stretch">
+            <img
+              src={tryOnSettings.image || tryOnPreviewFallback}
+              alt="Virtual try-on demo"
+              className="w-full h-full object-cover object-top"
+              width={400}
+              height={533}
+              loading="lazy"
+            />
           </div>
         </div>
       </section>

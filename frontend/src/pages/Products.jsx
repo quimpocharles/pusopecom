@@ -70,7 +70,7 @@ const Products = () => {
           ...(search && { search }),
           sort,
           page,
-          limit: 12,
+          limit: 24,
         };
         const response = await productService.getProducts(params);
         setProducts(response.data);
@@ -234,7 +234,7 @@ const Products = () => {
               <p className="text-sm text-gray-500 mb-4">{pagination.total || 0} products</p>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 lg:gap-10">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 md:gap-8 lg:gap-10">
               {products.map((product) => (
                 <ProductCard key={product._id} product={product} onBuyNow={handleBuyNow} />
               ))}
@@ -242,24 +242,67 @@ const Products = () => {
 
             {/* Pagination */}
             {pagination.pages > 1 && (
-              <div className="flex justify-center gap-2 mt-10">
-                {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => {
-                      const newParams = new URLSearchParams(searchParams);
-                      newParams.set('page', p.toString());
-                      setSearchParams(newParams);
-                    }}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      Number(page) === p
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
+              <div className="flex justify-center items-center gap-1.5 mt-10 flex-wrap">
+                {(() => {
+                  const currentPage = Number(page);
+                  const totalPages = pagination.pages;
+
+                  const goTo = (p) => {
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.set('page', p.toString());
+                    setSearchParams(newParams);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  };
+
+                  // Build page number list with ellipsis
+                  const pageNums = [];
+                  for (let p = 1; p <= totalPages; p++) {
+                    if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
+                      pageNums.push(p);
+                    } else if (pageNums[pageNums.length - 1] !== '...') {
+                      pageNums.push('...');
+                    }
+                  }
+
+                  const btnBase = 'w-9 h-9 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center';
+                  const btnActive = 'bg-primary-600 text-white';
+                  const btnInactive = 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400';
+                  const btnDisabled = 'bg-white text-gray-300 border border-gray-100 cursor-not-allowed';
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => currentPage > 1 && goTo(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive} px-3`}
+                      >
+                        ‹
+                      </button>
+
+                      {pageNums.map((p, i) =>
+                        p === '...' ? (
+                          <span key={`ellipsis-${i}`} className="w-9 h-9 flex items-center justify-center text-gray-400 text-sm">…</span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => goTo(p)}
+                            className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+
+                      <button
+                        onClick={() => currentPage < totalPages && goTo(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive} px-3`}
+                      >
+                        ›
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </>
