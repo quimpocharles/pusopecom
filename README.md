@@ -74,7 +74,7 @@ The homepage follows a MoreLabs.com-inspired layout with the following sections:
 7. **Featured Products** - Interactive section where clicking product names swaps the image and description
 8. **Shop by League** - Horizontal scroll with circular league logos (Gilas, PBA, UAAP, PVL, NCAA, Azkals, Alas Pilipinas)
 9. **Trust Section** - Authenticity, shipping, returns, and try-on badges
-10. **Instafeed / Social Section** - 8 circular images arranged around centered text (desktop: CSS grid, mobile: stacked rows)
+10. **Instafeed / Social Section** - 8 circular images arranged around centered text (desktop: CSS grid, mobile: stacked rows) — currently hidden
 11. **Newsletter** - Email signup with gradient background
 
 ### UI/UX Details
@@ -85,7 +85,7 @@ The homepage follows a MoreLabs.com-inspired layout with the following sections:
 - **Shop by League circles** - Left-aligned heading + circles, shows 3.5 circles on wide viewports with horizontal scroll, each links to exact league or team filter
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
-- **Navbar & footer** - Off-black `#26282f` background with white text; Logo.png replaces text branding
+- **Navbar & footer** - Off-black `#26282f` background with white text; Logo.png replaces text branding; footer social links point to Facebook and Instagram (no X/Twitter)
 - **Virtual try-on result** - Download button (saves base64 image) + "Add to Cart" button; no retry button to discourage spam
 - **Products sort** - Dropdown in filter bar: Newest, Alphabetical, Most Bought, Trending (persisted in URL)
 

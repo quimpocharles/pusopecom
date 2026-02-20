@@ -574,9 +574,9 @@ const Home = () => {
       </section>
 
       {/* Instafeed / Social Section */}
-      {(() => {
+      {false && (() => {
         const feedImages = [
-          { src: bahayImage, alt: 'Game day fans', bg: '#0A2463' },
+          { src: bahayImage, alt: 'Game day Ateneo fans', bg: '#0A2463', pos: 'center 70%' },
           { src: 'https://placehold.co/400x400/1E3A8A/F59E0B?text=PBA+Action', alt: 'PBA action', bg: '#1E3A8A' },
           { src: 'https://placehold.co/400x500/EC4899/FFFFFF?text=PVL+Match', alt: 'PVL volleyball', bg: '#EC4899' },
           { src: 'https://placehold.co/400x400/16A34A/FFFFFF?text=UAAP+Fans', alt: 'UAAP fans', bg: '#16A34A' },
@@ -597,7 +597,7 @@ const Home = () => {
                   <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
                     <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
                     <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" style={img.pos ? { objectPosition: img.pos } : undefined} width={400} height={400} loading="lazy" />
                     </div>
                   </div>
                 ))}
@@ -632,7 +632,7 @@ const Home = () => {
                   <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
                     <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
                     <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" style={img.pos ? { objectPosition: img.pos } : undefined} width={400} height={400} loading="lazy" />
                     </div>
                   </div>
                 ))}
@@ -650,7 +650,7 @@ const Home = () => {
               <div className="group relative -ml-[20%]" style={{ gridColumn: 1, gridRow: 1 }}>
                 <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[0].bg }} />
                 <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                  <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                  <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" style={topRow[0].pos ? { objectPosition: topRow[0].pos } : undefined} width={400} height={400} loading="lazy" />
                 </div>
               </div>
               <div className="group relative" style={{ gridColumn: 2, gridRow: 1 }}>
