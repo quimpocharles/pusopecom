@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import heroImage from '../assets/images/banner-home.jpg';
-import gilasImage from '../assets/images/gilas.jpg';
+import gilasImage from '../assets/images/gilas.png';
 import pbaImage from '../assets/images/pba.png';
+import uaapImage from '../assets/images/uaap.webp';
+import pvlImage from '../assets/images/pvl.png';
+import bahayImage from '../assets/images/bahay.webp';
 import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
 import { Link } from 'react-router-dom';
@@ -447,13 +450,13 @@ const Home = () => {
           className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 md:pl-10 pt-4 -mt-4 gap-5 md:gap-10"
         >
           {[
-            { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#0A2463', text: '#FFFFFF', image: gilasImage, link: '/products?team=Gilas+Pilipinas' },
-            { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', image: pbaImage, link: '/products?league=PBA' },
-            { name: 'UAAP', abbr: 'UAAP', bg: '#16A34A', text: '#FFFFFF', link: '/products?league=UAAP' },
-            { name: 'PVL', abbr: 'PVL', bg: '#EC4899', text: '#FFFFFF', link: '/products?league=PVL' },
-            { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?league=NCAA' },
-            { name: 'Philippine Azkals', abbr: 'PFF', bg: '#0D9488', text: '#FFFFFF', link: '/products?team=Philippine+Azkals' },
-            { name: 'Alas Pilipinas', abbr: 'ALAS', bg: '#7C3AED', text: '#FFFFFF', link: '/products?team=Alas+Pilipinas' },
+            { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#f6f6f6', text: '#FFFFFF', image: gilasImage, link: '/products?team=Gilas+Pilipinas' },
+            // { name: 'Alas Pilipinas', abbr: 'ALAS', bg: '#7C3AED', text: '#FFFFFF', link: '/products?team=Alas+Pilipinas' }, 
+            // { name: 'Philippine Azkals', abbr: 'PFF', bg: '#0D9488', text: '#FFFFFF', link: '/products?team=Philippine+Azkals' },
+            { name: 'PBA', abbr: 'PBA', bg: '#444444', text: '#F59E0B', image: pbaImage, link: '/products?league=PBA' },
+            { name: 'PVL', abbr: 'PVL', bg: '#0D9488', text: '#FFFFFF',image: pvlImage, link: '/products?league=PVL' },
+            { name: 'UAAP', abbr: 'UAAP', bg: '#305CDE', text: '#FFFFFF', image: uaapImage, link: '/products?league=UAAP' },
+            // { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?league=NCAA' },
           ].map((league) => (
             <Link
               key={league.abbr}
@@ -573,14 +576,14 @@ const Home = () => {
       {/* Instafeed / Social Section */}
       {(() => {
         const feedImages = [
-          { src: 'https://placehold.co/400x500/0A2463/FFFFFF?text=Game+Day', alt: 'Game day fans' },
-          { src: 'https://placehold.co/400x400/1E3A8A/F59E0B?text=PBA+Action', alt: 'PBA action' },
-          { src: 'https://placehold.co/400x500/EC4899/FFFFFF?text=PVL+Match', alt: 'PVL volleyball' },
-          { src: 'https://placehold.co/400x400/16A34A/FFFFFF?text=UAAP+Fans', alt: 'UAAP fans' },
-          { src: 'https://placehold.co/400x400/DC2626/FFFFFF?text=Jersey+Drop', alt: 'New jersey' },
-          { src: 'https://placehold.co/400x500/0D9488/FFFFFF?text=Azkals+⚽', alt: 'Azkals football' },
-          { src: 'https://placehold.co/400x400/7C3AED/FFFFFF?text=Fan+Zone', alt: 'Fan zone' },
-          { src: 'https://placehold.co/400x500/F59E0B/1E3A8A?text=Merch+🏆', alt: 'Merchandise' },
+          { src: bahayImage, alt: 'Game day fans', bg: '#0A2463' },
+          { src: 'https://placehold.co/400x400/1E3A8A/F59E0B?text=PBA+Action', alt: 'PBA action', bg: '#1E3A8A' },
+          { src: 'https://placehold.co/400x500/EC4899/FFFFFF?text=PVL+Match', alt: 'PVL volleyball', bg: '#EC4899' },
+          { src: 'https://placehold.co/400x400/16A34A/FFFFFF?text=UAAP+Fans', alt: 'UAAP fans', bg: '#16A34A' },
+          { src: 'https://placehold.co/400x400/DC2626/FFFFFF?text=Jersey+Drop', alt: 'New jersey', bg: '#DC2626' },
+          { src: 'https://placehold.co/400x500/0D9488/FFFFFF?text=Azkals+⚽', alt: 'Azkals football', bg: '#0D9488' },
+          { src: 'https://placehold.co/400x400/7C3AED/FFFFFF?text=Fan+Zone', alt: 'Fan zone', bg: '#7C3AED' },
+          { src: 'https://placehold.co/400x500/F59E0B/1E3A8A?text=Merch+🏆', alt: 'Merchandise', bg: '#F59E0B' },
         ];
         const topRow = feedImages.slice(0, 4);
         const bottomRow = feedImages.slice(4, 8);
@@ -591,8 +594,11 @@ const Home = () => {
               {/* Top row circles */}
               <div className="flex justify-center gap-2 px-3">
                 {topRow.map((img, i) => (
-                  <div key={i} className="w-[22%] flex-shrink-0 aspect-square rounded-full overflow-hidden">
-                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                  <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
+                    <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
+                    <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -623,8 +629,11 @@ const Home = () => {
               {/* Bottom row circles */}
               <div className="flex justify-center gap-2 px-3">
                 {bottomRow.map((img, i) => (
-                  <div key={i} className="w-[22%] flex-shrink-0 aspect-square rounded-full overflow-hidden">
-                    <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                  <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
+                    <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
+                    <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -638,31 +647,55 @@ const Home = () => {
               minHeight: '520px',
             }}>
               {/* Row 1 images */}
-              <div className="rounded-full overflow-hidden -ml-[20%]" style={{ gridColumn: 1, gridRow: 1 }}>
-                <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative -ml-[20%]" style={{ gridColumn: 1, gridRow: 1 }}>
+                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[0].bg }} />
+                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                  <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-[2rem] overflow-hidden" style={{ gridColumn: 2, gridRow: 1 }}>
-                <img src={topRow[1].src} alt={topRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative" style={{ gridColumn: 2, gridRow: 1 }}>
+                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[1].bg }} />
+                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
+                  <img src={topRow[1].src} alt={topRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-full overflow-hidden" style={{ gridColumn: 4, gridRow: 1 }}>
-                <img src={topRow[2].src} alt={topRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative" style={{ gridColumn: 4, gridRow: 1 }}>
+                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[2].bg }} />
+                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                  <img src={topRow[2].src} alt={topRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-[2rem] overflow-hidden -mr-[20%]" style={{ gridColumn: 5, gridRow: 1 }}>
-                <img src={topRow[3].src} alt={topRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative -mr-[20%]" style={{ gridColumn: 5, gridRow: 1 }}>
+                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[3].bg }} />
+                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
+                  <img src={topRow[3].src} alt={topRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
 
               {/* Row 2 images */}
-              <div className="rounded-[2rem] overflow-hidden -ml-[20%]" style={{ gridColumn: 1, gridRow: 2 }}>
-                <img src={bottomRow[0].src} alt={bottomRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative -ml-[20%]" style={{ gridColumn: 1, gridRow: 2 }}>
+                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[0].bg }} />
+                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
+                  <img src={bottomRow[0].src} alt={bottomRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-full overflow-hidden" style={{ gridColumn: 2, gridRow: 2 }}>
-                <img src={bottomRow[1].src} alt={bottomRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative" style={{ gridColumn: 2, gridRow: 2 }}>
+                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[1].bg }} />
+                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                  <img src={bottomRow[1].src} alt={bottomRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-[2rem] overflow-hidden" style={{ gridColumn: 4, gridRow: 2 }}>
-                <img src={bottomRow[2].src} alt={bottomRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative" style={{ gridColumn: 4, gridRow: 2 }}>
+                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[2].bg }} />
+                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
+                  <img src={bottomRow[2].src} alt={bottomRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
-              <div className="rounded-full overflow-hidden -mr-[20%]" style={{ gridColumn: 5, gridRow: 2 }}>
-                <img src={bottomRow[3].src} alt={bottomRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+              <div className="group relative -mr-[20%]" style={{ gridColumn: 5, gridRow: 2 }}>
+                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[3].bg }} />
+                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
+                  <img src={bottomRow[3].src} alt={bottomRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
+                </div>
               </div>
 
               {/* Center text */}
