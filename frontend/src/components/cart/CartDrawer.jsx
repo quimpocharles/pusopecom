@@ -15,6 +15,7 @@ const CartDrawer = () => {
   const [selectedSize, setSelectedSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [sizeError, setSizeError] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState(null); // { productId, size, color, name }
 
   // Reset size and quantity when a new product opens the drawer
   useEffect(() => {
@@ -245,9 +246,7 @@ const CartDrawer = () => {
                         <button
                           onClick={() => {
                             if (item.quantity === 1) {
-                              if (window.confirm(`Remove ${item.product.name} from your cart?`)) {
-                                updateQuantity(item.product._id, item.size, item.color, 0);
-                              }
+                              setRemoveConfirm({ productId: item.product._id, size: item.size, color: item.color, name: item.product.name });
                             } else {
                               updateQuantity(item.product._id, item.size, item.color, item.quantity - 1);
                             }
@@ -267,11 +266,7 @@ const CartDrawer = () => {
                         </button>
                       </div>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Remove ${item.product.name} from your cart?`)) {
-                            removeItem(item.product._id, item.size, item.color);
-                          }
-                        }}
+                        onClick={() => setRemoveConfirm({ productId: item.product._id, size: item.size, color: item.color, name: item.product.name })}
                         className="text-sm text-gray-400 hover:text-accent-500 transition-colors"
                       >
                         Remove
@@ -302,6 +297,34 @@ const CartDrawer = () => {
           </div>
         )}
       </div>
+      {/* Remove Item Confirmation Modal */}
+      {removeConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Item</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Remove <span className="font-medium">{toTitleCase(removeConfirm.name)}</span> from your cart?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  removeItem(removeConfirm.productId, removeConfirm.size, removeConfirm.color);
+                  setRemoveConfirm(null);
+                }}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

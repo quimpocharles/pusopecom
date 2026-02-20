@@ -42,6 +42,7 @@ const AdminProductForm = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadingColorIdx, setUploadingColorIdx] = useState(null);
   const [error, setError] = useState('');
+  const [removeColorConfirm, setRemoveColorConfirm] = useState(null); // index of color variant to remove
   const fileInputRef = useRef(null);
   const colorFileInputRefs = useRef({});
 
@@ -692,7 +693,7 @@ const AdminProductForm = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => { if (window.confirm('Remove this color variant? All sizes and stock for this color will be lost.')) removeColorVariant(ci); }}
+                      onClick={() => setRemoveColorConfirm(ci)}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                     >
                       <TrashIcon className="w-4 h-4" />
@@ -853,6 +854,34 @@ const AdminProductForm = () => {
           </button>
         </div>
       </form>
+
+      {/* Remove Color Variant Confirmation Modal */}
+      {removeColorConfirm !== null && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Remove Color Variant</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              This will remove the color variant and all its sizes and stock. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setRemoveColorConfirm(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { removeColorVariant(removeColorConfirm); setRemoveColorConfirm(null); }}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
