@@ -33,7 +33,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Guest checkout option
 - Order management and tracking
 - Product reviews and ratings
-- Virtual try-on powered by Replicate (Seedream 4.5) with download and add-to-cart on result
+- Virtual try-on powered by Replicate (Seedream 4.5) with download and add-to-cart on result; Replicate predictions are cancelled automatically on timeout or error to avoid wasted credits
 - Mobile-first responsive design
 - MoreLabs-inspired homepage design
 - `sport: general` products appear across all sport filters
@@ -87,6 +87,7 @@ The homepage follows a MoreLabs.com-inspired layout with the following sections:
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
 - **Navbar & footer** - Off-black `#26282f` background with white text; Logo.png replaces text branding; footer social links point to Facebook and Instagram (no X/Twitter)
 - **Virtual try-on result** - Download button (saves base64 image) + "Add to Cart" button; no retry button to discourage spam
+- **Virtual try-on loading** - Lower half shows a Playtime.ph video ad (autoplay, audio on) with an overlaid CTA button; disclaimer hidden during loading to maximise ad space
 - **Products sort** - Dropdown in filter bar: Newest, Alphabetical, Most Bought, Trending (persisted in URL)
 
 ### Seeded Data

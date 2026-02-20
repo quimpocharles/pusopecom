@@ -4,14 +4,28 @@ const REPLICATE_API_URL = 'https://api.replicate.com/v1';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
+const cancelPrediction = async (apiToken, predictionId) => {
   try {
-    const apiToken = process.env.REPLICATE_API_TOKEN;
+    await axios.post(
+      REPLICATE_API_URL + '/predictions/' + predictionId + '/cancel',
+      {},
+      { headers: { Authorization: 'Bearer ' + apiToken } }
+    );
+  } catch (_) {
+    // Ignore cancel errors (prediction may already be in a terminal state)
+  }
+};
 
-    if (!apiToken) {
-      throw new Error('REPLICATE_API_TOKEN is not configured');
-    }
+export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
+  const apiToken = process.env.REPLICATE_API_TOKEN;
 
+  if (!apiToken) {
+    throw new Error('REPLICATE_API_TOKEN is not configured');
+  }
+
+  let predictionId = null;
+
+  try {
     // Ensure base64 images have proper data URL prefix
     const personImage = userImageBase64.startsWith('data:')
       ? userImageBase64
@@ -39,7 +53,7 @@ CRITICAL REQUIREMENTS:
 - Keep the person's face, body shape, skin tone, hairstyle, and pose exactly as shown
 - Make the garment fit naturally with realistic folds, drape, and fabric tension
 - Ensure the collar, sleeves, and hem align naturally with the body
-- Maintain the person’s original background
+- Maintain the person's original background
 - The final output must look like a professional product photo of a real person wearing this exact garment
 
 IMAGE DEFINITIONS:
@@ -66,7 +80,7 @@ IMAGE DEFINITIONS:
       }
     );
 
-    const predictionId = createResponse.data.id;
+    predictionId = createResponse.data.id;
 
     if (!predictionId) {
       throw new Error('Failed to start try-on generation');
@@ -80,9 +94,7 @@ IMAGE DEFINITIONS:
       const statusResponse = await axios.get(
         `${REPLICATE_API_URL}/predictions/${predictionId}`,
         {
-          headers: {
-            'Authorization': `Bearer ${apiToken}`
-          }
+          headers: { 'Authorization': `Bearer ${apiToken}` }
         }
       );
 
@@ -90,20 +102,11 @@ IMAGE DEFINITIONS:
 
       if (status === 'succeeded') {
         if (output) {
-          // Output could be a single URL or array
           const imageUrl = Array.isArray(output) ? output[0] : output;
-
-          // Fetch and convert to base64 for frontend
-          const imageResponse = await axios.get(imageUrl, {
-            responseType: 'arraybuffer'
-          });
+          const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
           const base64 = Buffer.from(imageResponse.data).toString('base64');
           const mimeType = imageResponse.headers['content-type'] || 'image/png';
-
-          return {
-            success: true,
-            image: `data:${mimeType};base64,${base64}`
-          };
+          return { success: true, image: `data:${mimeType};base64,${base64}` };
         }
         throw new Error('No output image generated');
       }
@@ -121,9 +124,16 @@ IMAGE DEFINITIONS:
       await sleep(3000);
     }
 
+    // Timed out — cancel the prediction on Replicate before throwing
+    await cancelPrediction(apiToken, predictionId);
     throw new Error('Try-on generation timed out. Please try again.');
 
   } catch (error) {
+    // Cancel any in-flight prediction when we bail out due to an error
+    if (predictionId) {
+      await cancelPrediction(apiToken, predictionId);
+    }
+
     console.error('Replicate try-on error:', error.response?.data || error.message);
 
     if (error.response?.status === 401) {

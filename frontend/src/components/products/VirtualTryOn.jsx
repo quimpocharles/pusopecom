@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { XMarkIcon, CameraIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 import useCartStore from '../../store/cartStore';
+import playtimeVideo from '../../assets/media/playtime.mp4';
 
 const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [userImage, setUserImage] = useState(null);
@@ -94,12 +95,6 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const promoContent = [
-    { title: "Free Shipping", description: "On orders over ₱2,000", icon: "🚚" },
-    { title: "Authentic Jerseys", description: "100% official licensed", icon: "✓" },
-    { title: "Easy Returns", description: "30-day hassle-free", icon: "↩️" }
-  ];
-
   // Determine what to show in the main container
   const renderMainContent = () => {
     // Loading state
@@ -107,17 +102,10 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       return (
         <div className="w-full aspect-[3/4] flex flex-col rounded-xl overflow-hidden">
           {/* Upper Half: Progress */}
-          <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-4">
-            <div className="relative w-24 h-24 sm:w-32 sm:h-32 mb-3">
+          <div className="flex-none flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-4 h-36">
+            <div className="relative w-20 h-20 mb-2">
               <svg className="w-full h-full transform -rotate-90">
-                <circle
-                  cx="50%"
-                  cy="50%"
-                  r="45%"
-                  stroke="#e5e7eb"
-                  strokeWidth="8"
-                  fill="none"
-                />
+                <circle cx="50%" cy="50%" r="45%" stroke="#e5e7eb" strokeWidth="8" fill="none" />
                 <circle
                   cx="50%"
                   cy="50%"
@@ -138,32 +126,31 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
                 </defs>
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-xl sm:text-2xl font-bold text-gray-800">
-                  {Math.round(loadingProgress)}%
-                </span>
+                <span className="text-lg font-bold text-gray-800">{Math.round(loadingProgress)}%</span>
               </div>
             </div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Creating your look...</p>
+            <p className="text-gray-700 font-medium text-sm">Creating your look...</p>
           </div>
 
-          {/* Lower Half: Promo */}
-          <div className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 p-3 sm:p-4 flex flex-col justify-center">
-            <p className="text-white/80 text-xs uppercase tracking-wider mb-2 text-center">
-              While you wait...
-            </p>
-            <div className="space-y-2">
-              {promoContent.map((promo, index) => (
-                <div
-                  key={index}
-                  className="bg-white/20 backdrop-blur-sm rounded-lg p-2 sm:p-3 flex items-center gap-2 sm:gap-3"
-                >
-                  <span className="text-xl sm:text-2xl">{promo.icon}</span>
-                  <div>
-                    <p className="text-white font-semibold text-xs sm:text-sm">{promo.title}</p>
-                    <p className="text-white/80 text-xs">{promo.description}</p>
-                  </div>
-                </div>
-              ))}
+          {/* Lower Half: Playtime video with overlaid CTA */}
+          <div className="flex-1 relative overflow-hidden">
+            <video
+              autoPlay
+              loop
+              playsInline
+              className="w-full h-full object-cover"
+            >
+              <source src={playtimeVideo} type="video/mp4" />
+            </video>
+            <div className="absolute inset-x-0 bottom-4 flex justify-center">
+              <a
+                href="https://www.playtime.ph/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-white/90 hover:bg-white text-primary-700 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-lg backdrop-blur-sm"
+              >
+                Visit Playtime.ph
+              </a>
             </div>
           </div>
         </div>
@@ -306,12 +293,12 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Disclaimer */}
-          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          {/* Disclaimer — hidden during loading to give more space to the ad */}
+          {!loading && <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <p className="text-xs text-amber-700 leading-relaxed">
               <span className="font-semibold">Disclaimer:</span> This is an AI-generated preview for visualization purposes only. Results may not accurately represent the actual product appearance, fit, or color. Sizing cannot be determined from this try-on. Please refer to our size chart for accurate measurements.
             </p>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
