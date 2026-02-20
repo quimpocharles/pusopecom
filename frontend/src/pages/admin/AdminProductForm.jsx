@@ -692,7 +692,7 @@ const AdminProductForm = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => removeColorVariant(ci)}
+                      onClick={() => { if (window.confirm('Remove this color variant? All sizes and stock for this color will be lost.')) removeColorVariant(ci); }}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                     >
                       <TrashIcon className="w-4 h-4" />

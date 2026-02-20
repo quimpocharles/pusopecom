@@ -125,10 +125,25 @@ const Products = () => {
       />
       <div className="container-custom py-6 md:py-10">
         {/* Page Header */}
-        <div className="mb-6 md:mb-8">
+        <div className="flex items-center justify-between gap-3 mb-6 md:mb-8">
           <h1 className="text-2xl md:text-display-sm font-bold">
             {search ? `Results for "${search}"` : sale ? 'Sale' : 'All Products'}
           </h1>
+          <select
+            value={sort}
+            onChange={(e) => {
+              const newParams = new URLSearchParams(searchParams);
+              newParams.set('sort', e.target.value);
+              newParams.set('page', '1');
+              setSearchParams(newParams);
+            }}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer flex-shrink-0"
+          >
+            <option value="newest">Newest</option>
+            <option value="alphabetical">Alphabetical</option>
+            <option value="most-bought">Most Bought</option>
+            <option value="trending">Trending</option>
+          </select>
         </div>
 
         {/* Filter Bar */}
@@ -179,24 +194,6 @@ const Products = () => {
               </>
             )}
 
-            {/* Sort dropdown */}
-            <div className="ml-auto">
-              <select
-                value={sort}
-                onChange={(e) => {
-                  const newParams = new URLSearchParams(searchParams);
-                  newParams.set('sort', e.target.value);
-                  newParams.set('page', '1');
-                  setSearchParams(newParams);
-                }}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-              >
-                <option value="newest">Newest</option>
-                <option value="alphabetical">Alphabetical</option>
-                <option value="most-bought">Most Bought</option>
-                <option value="trending">Trending</option>
-              </select>
-            </div>
           </div>
 
           {/* Expanded options row */}

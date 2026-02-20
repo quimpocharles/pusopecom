@@ -243,7 +243,15 @@ const CartDrawer = () => {
                     <div className="flex items-center gap-3 mt-2">
                       <div className="flex items-center border border-gray-200 rounded-lg">
                         <button
-                          onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity - 1)}
+                          onClick={() => {
+                            if (item.quantity === 1) {
+                              if (window.confirm(`Remove ${item.product.name} from your cart?`)) {
+                                updateQuantity(item.product._id, item.size, item.color, 0);
+                              }
+                            } else {
+                              updateQuantity(item.product._id, item.size, item.color, item.quantity - 1);
+                            }
+                          }}
                           className="p-1.5 hover:bg-gray-50 transition-colors"
                           aria-label="Decrease quantity"
                         >
@@ -259,7 +267,11 @@ const CartDrawer = () => {
                         </button>
                       </div>
                       <button
-                        onClick={() => removeItem(item.product._id, item.size, item.color)}
+                        onClick={() => {
+                          if (window.confirm(`Remove ${item.product.name} from your cart?`)) {
+                            removeItem(item.product._id, item.size, item.color);
+                          }
+                        }}
                         className="text-sm text-gray-400 hover:text-accent-500 transition-colors"
                       >
                         Remove
