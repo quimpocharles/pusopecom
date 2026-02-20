@@ -22,6 +22,9 @@ import activityRoutes from './routes/activity.js';
 // Create Express app
 const app = express();
 
+// Trust Railway/Vercel reverse proxy (required for express-rate-limit)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
