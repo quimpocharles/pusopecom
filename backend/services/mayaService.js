@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-const MAYA_API_URL = process.env.NODE_ENV === 'production'
-  ? 'https://pg.maya.ph'
-  : 'https://pg-sandbox.paymaya.com';
+const MAYA_API_URL = process.env.MAYA_SANDBOX === 'true'
+  ? 'https://pg-sandbox.paymaya.com'
+  : 'https://pg.maya.ph';
 
 const getAuthHeader = () => {
   const publicKey = process.env.MAYA_PUBLIC_KEY;
