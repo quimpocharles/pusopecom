@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import heroImage from '../assets/images/banner-home.jpg';
+import gilasImage from '../assets/images/gilas.jpg';
 import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
 import { Link } from 'react-router-dom';
@@ -445,7 +446,7 @@ const Home = () => {
           className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 md:pl-10 pt-4 -mt-4 gap-5 md:gap-10"
         >
           {[
-            { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#0A2463', text: '#FFFFFF', link: '/products?team=Gilas+Pilipinas' },
+            { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#0A2463', text: '#FFFFFF', image: gilasImage, link: '/products?team=Gilas+Pilipinas' },
             { name: 'PBA', abbr: 'PBA', bg: '#1E3A8A', text: '#F59E0B', link: '/products?league=PBA' },
             { name: 'UAAP', abbr: 'UAAP', bg: '#16A34A', text: '#FFFFFF', link: '/products?league=UAAP' },
             { name: 'PVL', abbr: 'PVL', bg: '#EC4899', text: '#FFFFFF', link: '/products?league=PVL' },
@@ -459,15 +460,20 @@ const Home = () => {
               className="flex flex-col items-center group flex-shrink-0 w-[calc((100vw-80px)/3.5)] md:w-[calc((100vw-160px)/3.5)]"
             >
               <div
-                className="w-[70%] mx-auto aspect-square rounded-full flex items-center justify-center group-hover:scale-[1.03] transition-transform duration-300"
-                style={{ backgroundColor: league.bg }}
+                className="w-[70%] mx-auto aspect-square rounded-full flex items-center justify-center group-hover:scale-[1.03] transition-transform duration-300 overflow-hidden"
+                style={league.image
+                  ? { backgroundImage: `url(${league.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                  : { backgroundColor: league.bg }
+                }
               >
-                <span
-                  className="text-sm md:text-lg lg:text-xl font-bold tracking-wide select-none"
-                  style={{ color: league.text }}
-                >
-                  {league.abbr}
-                </span>
+                {!league.image && (
+                  <span
+                    className="text-sm md:text-lg lg:text-xl font-bold tracking-wide select-none"
+                    style={{ color: league.text }}
+                  >
+                    {league.abbr}
+                  </span>
+                )}
               </div>
               <span className="mt-3 md:mt-5 font-semibold text-gray-900 group-hover:text-primary-600 transition-colors text-center text-xs md:text-base lg:text-lg">
                 {league.name}
