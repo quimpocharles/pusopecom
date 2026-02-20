@@ -5,15 +5,20 @@ const REPLICATE_API_URL = 'https://api.replicate.com/v1';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const cancelPrediction = async (apiToken, predictionId) => {
-  try {
-    await axios.post(
-      REPLICATE_API_URL + '/predictions/' + predictionId + '/cancel',
-      {},
-      { headers: { Authorization: 'Bearer ' + apiToken } }
-    );
-  } catch (_) {
-    // Ignore cancel errors (prediction may already be in a terminal state)
+  // Retry cancel up to 5 times with 3s delay — Replicate may be temporarily overloaded
+  for (let i = 0; i < 5; i++) {
+    try {
+      await axios.post(
+        REPLICATE_API_URL + '/predictions/' + predictionId + '/cancel',
+        {},
+        { headers: { Authorization: 'Bearer ' + apiToken }, timeout: 5000 }
+      );
+      return; // cancelled successfully
+    } catch (_) {
+      if (i < 4) await sleep(3000);
+    }
   }
+  console.warn('Failed to cancel Replicate prediction after retries:', predictionId);
 };
 
 export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
@@ -23,21 +28,6 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
     throw new Error('REPLICATE_API_TOKEN is not configured');
   }
 
-  // Quick health check — avoid creating a prediction if Replicate is down
-  try {
-    const health = await axios.get(
-      REPLICATE_API_URL + '/models/bytedance/seedream-4.5',
-      { headers: { Authorization: 'Bearer ' + apiToken }, timeout: 5000 }
-    );
-    if (health.status >= 500) {
-      throw new Error('Replicate is currently unavailable. Please try again later.');
-    }
-  } catch (healthErr) {
-    if (healthErr.response?.status >= 500 || healthErr.code === 'ECONNABORTED') {
-      throw new Error('Replicate is currently unavailable. Please try again later.');
-    }
-    // Non-5xx errors (401, 404, etc.) — let the main request proceed and fail naturally
-  }
 
   let predictionId = null;
 
