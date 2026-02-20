@@ -249,8 +249,8 @@ const Checkout = () => {
               <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Payment Method</h2>
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="font-medium text-sm text-gray-900">Maya & GCash accepted</p>
-                  <p className="text-xs text-gray-500 mt-1">You'll be redirected to complete payment securely</p>
+                  <p className="font-medium text-sm text-gray-900">Maya, GCash & major credit/debit cards accepted</p>
+                  <p className="text-xs text-gray-500 mt-1">Visa, Mastercard, JCB, Amex · You'll be redirected to complete payment securely</p>
                 </div>
               </div>
 

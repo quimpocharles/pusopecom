@@ -99,7 +99,7 @@ const Footer = () => {
           </p>
           <div className="flex items-center gap-6">
             <img src="/maya-logo.svg" alt="Maya" className="h-6 opacity-60" width={80} height={24} onError={(e) => e.target.style.display = 'none'} />
-            <span className="text-white/40 text-sm">Secure payments via Maya</span>
+            <span className="text-white/40 text-sm">Maya · GCash · Visa · Mastercard · JCB · Amex</span>
           </div>
         </div>
       </div>

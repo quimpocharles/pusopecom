@@ -507,7 +507,7 @@ const Home = () => {
               },
               {
                 q: 'How long does shipping take?',
-                a: 'Metro Manila orders are delivered within 2-3 business days. Provincial orders typically arrive within 5-7 business days. We offer free shipping on all orders over ₱2,000.',
+                a: 'Metro Manila orders are delivered within 2-3 business days. Provincial orders typically arrive within 5-7 business days. International orders vary by destination but generally take 7-21 business days. We offer free shipping on Philippine orders over ₱2,000.',
               },
               {
                 q: 'What is your return policy?',
@@ -523,7 +523,7 @@ const Home = () => {
               },
               {
                 q: 'Do you ship internationally?',
-                a: 'Currently we ship within the Philippines. We\'re working on expanding to international shipping for our kababayans abroad. Sign up for our newsletter to be notified when international shipping becomes available.',
+                a: 'Yes! We ship worldwide so our kababayans abroad can rep Philippine sports no matter where they are. International shipping rates and delivery times vary by destination and will be calculated at checkout.',
               },
             ].map((faq, index) => (
               <div key={index}>
