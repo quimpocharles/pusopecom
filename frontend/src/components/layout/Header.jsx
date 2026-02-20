@@ -31,7 +31,7 @@ const Header = () => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   // const [showSportsDropdown, setShowSportsDropdown] = useState(false);
-  // const [showMobileSports, setShowMobileSports] = useState(false);
+  const [showMobileSports, setShowMobileSports] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
