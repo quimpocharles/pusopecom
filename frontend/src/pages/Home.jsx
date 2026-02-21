@@ -278,90 +278,169 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Virtual Try-On Feature Highlight */}
-      <section
-        className="overflow-hidden"
-        style={{
-          background: '#0a0a0a',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <div className="grid grid-cols-2 items-stretch min-h-[420px] md:min-h-[520px]">
-          {/* Content column */}
-          <div className="px-5 py-10 md:px-16 md:py-20 flex flex-col justify-center">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 mb-5 md:mb-8 w-fit"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.10)',
-                borderRadius: '100px',
-                padding: '5px 14px',
-              }}
-            >
-              <SparklesIcon className="w-3.5 h-3.5 text-white/50" />
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-white/50">AI-Powered Feature</span>
-            </div>
+      {/* ── Virtual Try-On Floating Showcase ─────────────────────── */}
+      <section style={{ background: '#0a0a0a', position: 'relative', overflow: 'hidden' }}>
 
-            <h2
-              className="font-bold leading-tight text-white mb-3 md:mb-5"
-              style={{ fontSize: 'clamp(1.1rem, 3.5vw, 2.5rem)', letterSpacing: '-0.02em' }}
-            >
-              {tryOnSettings.title}
-            </h2>
-
-            <p className="hidden md:block text-white/40 mb-8 leading-relaxed" style={{ fontSize: '1rem', maxWidth: '380px' }}>
-              See how any shirt or jersey looks on you before buying. Upload your photo and our AI will show you wearing your favorite team's gear.
-            </p>
-
-            <ul className="hidden md:flex flex-col gap-3 mb-10">
-              {['Upload any photo of yourself', 'AI generates a realistic preview', 'Buy with total confidence'].map((item) => (
-                <li key={item} className="flex items-center gap-3">
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.12)' }}
-                  >
-                    <svg className="w-3 h-3 text-white/70" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <span className="text-sm text-white/60">{item}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              to={tryOnSettings.productUrl}
-              className="inline-flex items-center gap-2 font-bold active:scale-[0.97] transition-all"
-              style={{
-                background: '#fff',
-                color: '#0a0a0a',
-                borderRadius: '100px',
-                padding: '10px 22px',
-                fontSize: '0.8125rem',
-                width: 'fit-content',
-              }}
-            >
-              Try It Now
-              <ChevronRightIcon className="w-3.5 h-3.5" />
-            </Link>
+        {/* ── Text content (dark zone) ── */}
+        <div
+          className="relative text-center px-6"
+          style={{ paddingTop: 'clamp(72px, 9vw, 128px)', paddingBottom: '52px', zIndex: 10 }}
+        >
+          {/* Badge */}
+          <div
+            className="inline-flex items-center gap-2 mb-6"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.10)',
+              borderRadius: '100px',
+              padding: '5px 16px',
+            }}
+          >
+            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.38)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)' }}>
+              AI-Powered Feature
+            </span>
           </div>
 
-          {/* Image column */}
-          <div className="self-stretch relative" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-            <img
-              src={tryOnSettings.image || tryOnPreviewFallback}
-              alt="Virtual try-on demo"
-              className="w-full h-full object-cover object-top"
-              width={400}
-              height={533}
-              loading="lazy"
-            />
-            {/* subtle dark overlay on left edge to blend with content col */}
+          <h2
+            className="text-white font-bold"
+            style={{ fontSize: 'clamp(1.75rem, 4.5vw, 3.5rem)', letterSpacing: '-0.035em', lineHeight: 1.08, marginBottom: '18px' }}
+          >
+            See it on you,<br />before you buy.
+          </h2>
+
+          <p style={{ color: 'rgba(255,255,255,0.36)', fontSize: 'clamp(0.875rem, 1.5vw, 1rem)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.72 }}>
+            Upload any photo and our AI shows you wearing your favourite team's jersey — instantly.
+          </p>
+        </div>
+
+        {/* ── Stage: dome + floating mockup ── */}
+        <div className="relative" style={{ paddingBottom: 'clamp(72px, 10vw, 140px)' }}>
+
+          {/* Dome SVG — gray-50 fill matches the next section exactly */}
+          <svg
+            viewBox="0 0 1440 380"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              width: '100%',
+              height: '80%',
+              zIndex: 1,
+              display: 'block',
+            }}
+          >
+            {/* Convex arc — rises in the center, dips at the edges */}
+            <path d="M0,380 C360,-30 1080,-30 1440,380 L1440,380 L0,380 Z" fill="#f9fafb" />
+          </svg>
+
+          {/* Floating mockup */}
+          <div
+            className="relative flex justify-center"
+            style={{ padding: '0 clamp(12px, 4vw, 48px)', zIndex: 2 }}
+          >
             <div
-              className="absolute inset-y-0 left-0 w-16 pointer-events-none"
-              style={{ background: 'linear-gradient(to right, #0a0a0a, transparent)' }}
-            />
+              style={{
+                width: '100%',
+                maxWidth: '940px',
+                borderRadius: '18px',
+                overflow: 'hidden',
+                /* Multi-layer shadow: tight contact shadow + broad floating shadow */
+                boxShadow: [
+                  '0 0 0 1px rgba(255,255,255,0.07)',
+                  '0 4px 8px rgba(0,0,0,0.18)',
+                  '0 24px 48px rgba(0,0,0,0.32)',
+                  '0 64px 120px rgba(0,0,0,0.40)',
+                ].join(', '),
+              }}
+            >
+              {/* Browser chrome bar */}
+              <div
+                style={{
+                  background: '#1a1a1c',
+                  padding: '11px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                {/* Traffic lights */}
+                {[0.18, 0.18, 0.18].map((op, i) => (
+                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: `rgba(255,255,255,${op})`, flexShrink: 0 }} />
+                ))}
+                {/* URL bar */}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px 20px', fontSize: '11px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.01em', userSelect: 'none' }}>
+                    pusostore.com — Virtual Try-On
+                  </div>
+                </div>
+              </div>
+
+              {/* Screen content */}
+              <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0d0d0d' }}>
+                <img
+                  src={tryOnSettings.image || tryOnPreviewFallback}
+                  alt="Virtual try-on demo"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
+                  loading="lazy"
+                />
+
+                {/* Centered glass overlay with title + CTA */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.42)',
+                    backdropFilter: 'blur(4px)',
+                    WebkitBackdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '24px',
+                    textAlign: 'center',
+                    gap: '20px',
+                  }}
+                >
+                  <p style={{
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 'clamp(0.95rem, 2.4vw, 1.625rem)',
+                    letterSpacing: '-0.02em',
+                    textShadow: '0 2px 16px rgba(0,0,0,0.7)',
+                    maxWidth: '560px',
+                  }}>
+                    ✦ {tryOnSettings.title}
+                  </p>
+
+                  <Link
+                    to={tryOnSettings.productUrl}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      background: '#fff',
+                      color: '#0a0a0a',
+                      fontWeight: 700,
+                      fontSize: 'clamp(12px, 1.4vw, 15px)',
+                      padding: 'clamp(10px, 1.2vw, 14px) clamp(20px, 2.5vw, 32px)',
+                      borderRadius: '100px',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
+                      transition: 'opacity 0.18s, transform 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    Try It Now
+                    <ChevronRightIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
