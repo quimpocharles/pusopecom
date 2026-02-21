@@ -337,7 +337,7 @@ const Home = () => {
               left: '-2%',
               width: '104%',
               height: 'clamp(160px, 28vw, 270px)',
-              background: '#f9fafb',
+              background: '#111',
               borderRadius: '50% 50% 0 0 / 50px 50px 0 0',
               zIndex: 1,
               pointerEvents: 'none',
