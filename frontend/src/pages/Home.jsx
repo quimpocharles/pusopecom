@@ -200,40 +200,76 @@ const Home = () => {
       </div>
 
       {/* Virtual Try-On Feature Highlight */}
-      <section className="bg-gradient-to-r from-primary-600 to-accent-500 overflow-hidden">
-        <div className="grid grid-cols-2 items-center">
-          <div className="px-5 py-10 md:px-16 md:py-20 text-white">
-            <div className="inline-flex items-center gap-2 bg-white/20 rounded-xl px-3 py-1.5 md:px-4 md:py-2 mb-3 md:mb-6">
-              <SparklesIcon className="w-4 h-4 md:w-5 md:h-5" />
-              <span className="font-semibold text-xs md:text-sm">AI-Powered Feature</span>
+      <section
+        className="overflow-hidden"
+        style={{
+          background: '#0a0a0a',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <div className="grid grid-cols-2 items-stretch min-h-[420px] md:min-h-[520px]">
+          {/* Content column */}
+          <div className="px-5 py-10 md:px-16 md:py-20 flex flex-col justify-center">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 mb-5 md:mb-8 w-fit"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                borderRadius: '100px',
+                padding: '5px 14px',
+              }}
+            >
+              <SparklesIcon className="w-3.5 h-3.5 text-white/50" />
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-white/50">AI-Powered Feature</span>
             </div>
-            <h2 className="text-base md:text-4xl font-bold mb-2 md:mb-4 leading-snug">
+
+            <h2
+              className="font-bold leading-tight text-white mb-3 md:mb-5"
+              style={{ fontSize: 'clamp(1.1rem, 3.5vw, 2.5rem)', letterSpacing: '-0.02em' }}
+            >
               {tryOnSettings.title}
             </h2>
-            <p className="hidden md:block text-base md:text-lg text-white/90 mb-6">
+
+            <p className="hidden md:block text-white/40 mb-8 leading-relaxed" style={{ fontSize: '1rem', maxWidth: '380px' }}>
               See how any shirt or jersey looks on you before buying. Upload your photo and our AI will show you wearing your favorite team's gear.
             </p>
-            <ul className="hidden md:block space-y-3 mb-8 text-base">
-              {['Upload any photo of yourself', 'AI generates realistic preview', 'Buy with confidence'].map((item, i) => (
-                <li key={i} className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+
+            <ul className="hidden md:flex flex-col gap-3 mb-10">
+              {['Upload any photo of yourself', 'AI generates a realistic preview', 'Buy with total confidence'].map((item) => (
+                <li key={item} className="flex items-center gap-3">
+                  <div
+                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.12)' }}
+                  >
+                    <svg className="w-3 h-3 text-white/70" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                   </div>
-                  <span>{item}</span>
+                  <span className="text-sm text-white/60">{item}</span>
                 </li>
               ))}
             </ul>
+
             <Link
               to={tryOnSettings.productUrl}
-              className="hover-fill hover-fill-navy inline-flex items-center gap-1.5 md:gap-2 bg-white text-primary-700 px-4 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-base transition-all duration-200 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 font-bold active:scale-[0.97] transition-all"
+              style={{
+                background: '#fff',
+                color: '#0a0a0a',
+                borderRadius: '100px',
+                padding: '10px 22px',
+                fontSize: '0.8125rem',
+                width: 'fit-content',
+              }}
             >
               Try It Now
-              <ChevronRightIcon className="w-3 h-3 md:w-5 md:h-5" />
+              <ChevronRightIcon className="w-3.5 h-3.5" />
             </Link>
           </div>
-          <div className="self-stretch">
+
+          {/* Image column */}
+          <div className="self-stretch relative" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
             <img
               src={tryOnSettings.image || tryOnPreviewFallback}
               alt="Virtual try-on demo"
@@ -241,6 +277,11 @@ const Home = () => {
               width={400}
               height={533}
               loading="lazy"
+            />
+            {/* subtle dark overlay on left edge to blend with content col */}
+            <div
+              className="absolute inset-y-0 left-0 w-16 pointer-events-none"
+              style={{ background: 'linear-gradient(to right, #0a0a0a, transparent)' }}
             />
           </div>
         </div>
