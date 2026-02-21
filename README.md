@@ -68,19 +68,18 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 
 ### Homepage Sections
 
-The homepage follows a MoreLabs.com-inspired layout with the following sections:
+The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#111` alternating sections):
 
-1. **Marquee Announcement Bar** - Scrolling ticker with shipping info and promos
-2. **Hero Section** - Full-width gradient banner with CTAs
-3. **Social Proof Bar** - Star ratings, sales count, authenticity badge
-4. **Virtual Try-On Highlight** - AI-powered jersey try-on feature showcase
-5. **Shop by Sport** - Tabbed carousel (Basketball, Volleyball, Football) with product cards
-6. **Latest Collection** - Image left, text right layout for newest collection
-7. **Featured Products** - Interactive section where clicking product names swaps the image and description
-8. **Shop by League** - Horizontal scroll with circular league logos (Gilas, PBA, UAAP, PVL, NCAA, Azkals, Alas Pilipinas)
-9. **Trust Section** - Authenticity, shipping, returns, and try-on badges
-10. **Instafeed / Social Section** - 8 circular images arranged around centered text (desktop: CSS grid, mobile: stacked rows) — currently hidden
-11. **Newsletter** - Email signup with gradient background
+1. **Hero** (`#0a0a0a`) — Full-viewport dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso.", pill CTAs, bouncing scroll hint
+2. **Marquee Bar** (`#111`) — Scrolling ticker with shipping info and promos
+3. **Virtual Try-On Showcase** (`#0a0a0a`) — Centered text + floating browser-frame mockup on a CSS dome arc
+4. **Shop by Sport** (`#111`) — Tabbed carousel (Basketball, Volleyball, Football) with dark-themed tab pills
+5. **Latest Collection** (`#0a0a0a`) — Image left, text right; outlined pill CTA
+6. **Featured Products** (`#111`) — Clickable product name list; active name white with underline, inactive muted; white pill CTA
+7. **Shop by League** (`#0a0a0a`) — Horizontal scroll with circular league logos (Gilas, PBA, PVL, UAAP)
+8. **FAQ** (`#111`) — Accordion with `rgba(255,255,255,0.08)` dividers; no blue accents
+9. **Newsletter** (`#0a0a0a`) — Dark input + white pill submit button; top border separator
+10. **Instafeed / Social** — Currently hidden (`{false && ...}`)
 
 ### UI/UX Details
 
@@ -370,10 +369,10 @@ puso-shop/
 - Unique constraint: one review per email per product
 
 ### League
-- Name, sport (basketball / volleyball / football / general)
+- Name, sports (array — basketball / volleyball / football / general; a league can belong to multiple sports e.g. UAAP covers basketball and volleyball)
 - Teams array
 - Active flag
-- Unique constraint: name + sport combination
+- Unique constraint: name
 
 ### SiteSettings
 - Singleton document (fetched via static `get()` method)
@@ -441,10 +440,142 @@ The application sends HTML-formatted, mobile-responsive emails for:
 - `trust proxy` enabled for Railway/Vercel reverse proxy compatibility
 - Superadmin-only hard-delete restricted by email check
 
+## Design System
+
+Puso Store uses a **dark B&W editorial** aesthetic throughout the storefront.
+
+### Color Tokens
+
+| Token | Value | Usage |
+|---|---|---|
+| `dark-primary` | `#0a0a0a` | Main section backgrounds, hero |
+| `dark-secondary` | `#111` | Alternating sections (marquee, FAQ, featured) |
+| `dark-elevated` | `#1a1a1c` | Browser chrome bar, card surfaces |
+| `dark-surface` | `rgba(255,255,255,0.06)` | Subtle input backgrounds, tab containers |
+| `white` | `#ffffff` | Primary headings, primary CTA background |
+| `text-muted` | `rgba(255,255,255,0.38)` | Body text, subtext on dark |
+| `text-dimmer` | `rgba(255,255,255,0.22)` | Hero "Puso." display text |
+| `border-subtle` | `rgba(255,255,255,0.08)` | Dividers, section borders |
+| `border-default` | `rgba(255,255,255,0.14)` | Outlined CTA border |
+| `light-surface` | `#f9fafb` | Dome arc base (structural only) |
+
+### Section Alternation
+
+Sections alternate between `#0a0a0a` and `#111` to create rhythm without harsh contrast:
+
+```
+Hero            #0a0a0a
+Marquee         #111
+Try-On          #0a0a0a
+Shop by Sport   #111
+Latest Coll.    #0a0a0a
+Featured        #111
+Shop by League  #0a0a0a
+FAQ             #111
+Newsletter      #0a0a0a
+```
+
+### Typography
+
+- **Display headings**: `font-bold` or `font-black`, `letter-spacing: -0.035em` to `-0.04em`, `line-height: 0.95–1.08`, `clamp()` for responsive sizing
+- **Section labels**: `font-semibold`, `text-transform: uppercase`, `letter-spacing: 0.09em`, `color: rgba(255,255,255,0.35)`, `font-size: 11–13px`
+- **Body text**: `color: rgba(255,255,255,0.38)`, `line-height: 1.7–1.72`
+- **Active/interactive text**: `#fff` for selected state, `rgba(255,255,255,0.18)` for idle, `rgba(255,255,255,0.45)` on hover
+
+### CTA Buttons
+
+**Primary (white pill):**
+```jsx
+style={{
+  background: '#fff',
+  color: '#0a0a0a',
+  fontWeight: 700,
+  borderRadius: '100px',
+  padding: '13px 30px',
+  textDecoration: 'none',
+}}
+```
+
+**Secondary (outlined pill):**
+```jsx
+style={{
+  border: '1px solid rgba(255,255,255,0.14)',
+  color: 'rgba(255,255,255,0.55)',
+  borderRadius: '100px',
+  padding: '13px 30px',
+  textDecoration: 'none',
+}}
+```
+
+Hover state on all pills: `opacity: 0.88`, `translateY(-1px)`.
+
+### Badge / Label Pill
+
+```jsx
+style={{
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(255,255,255,0.10)',
+  borderRadius: '100px',
+  padding: '5px 16px',
+}}
+```
+Content: 11px uppercase semibold, `color: rgba(255,255,255,0.38)`.
+
+### Navbar Pill-Morph
+
+The fixed header starts transparent (on home at top) and morphs to a frosted glass pill on scroll:
+
+- **Shell**: `position: fixed; top: 0; left: 0; right: 0; z-index: 50; pointer-events: none`
+- **Shell padding**: transitions from `'0'` → `'14px 7%'` (spring easing)
+- **Nav inner**: `height` 80px→52px, `border-radius` 0→100px, `background` transparent→`rgba(10,10,10,0.82)`, `backdropFilter: blur(24px) saturate(180%)`
+- **Easing**: `cubic-bezier(0.34, 1.3, 0.64, 1)` (spring with slight overshoot)
+- **Duration**: 480ms for padding, 420ms for nav inner
+
+### Section Transitions — Dome Arc
+
+To create a "floating on a platform" effect between a dark section and the Try-On showcase:
+
+```jsx
+// CSS dome div (convex top edge, 104% wide, no SVG needed)
+style={{
+  position: 'absolute',
+  bottom: 0,
+  left: '-2%',
+  width: '104%',
+  height: 'clamp(160px, 28vw, 270px)',
+  background: '#f9fafb',                      // matches next section bg
+  borderRadius: '50% 50% 0 0 / 50px 50px 0 0', // gentle convex arc
+  zIndex: 1,
+}}
+
+// Radial ground shadow (contact shadow on dome surface)
+style={{
+  background: 'radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.13) 0%, transparent 72%)',
+  width: '78%',
+  height: '90px',
+  // centered, absolute, bottom: 0
+}}
+```
+
+### Background Texture
+
+Hero and try-on sections use a subtle crosshatch grid + radial vignette:
+
+```jsx
+backgroundImage: [
+  'repeating-linear-gradient(0deg, transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
+  'repeating-linear-gradient(90deg, transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
+].join(', '),
+maskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
+```
+
+---
+
 ## Design Inspiration
 
-- [MoreLabs](https://morelabs.com) — Homepage layout, button hover animations, product interactions, circle collections section, instafeed layout
-- Philippine sports culture — Color palette (Deep Navy, Championship Gold, Flag Red)
+- Dark editorial tech-product aesthetic (inspired by AI/SaaS landing pages)
+- Philippine sports culture — identity driven by pride and community
+- [MoreLabs](https://morelabs.com) — Original product interactions, button hover animations, circle collections section
 
 ## Support
 

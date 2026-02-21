@@ -469,25 +469,36 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Shop by Sport - Tabbed Carousel (MoreLabs style) */}
-      <section className="py-10 md:py-16 lg:py-24 bg-gray-50 overflow-hidden">
+      {/* Shop by Sport - Tabbed Carousel */}
+      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#111' }}>
         <div className="container-custom">
           <div className="text-center mb-8 md:mb-10">
-            <h2 className="text-xl md:text-display-sm mb-2 md:mb-4 font-semibold">Shop by Sport</h2>
-            <p className="text-gray-600 text-sm md:text-lg mb-6 md:mb-8">Find gear for your favorite league</p>
+            <h2
+              className="text-xl md:text-display-sm mb-2 md:mb-4 font-semibold"
+              style={{ color: '#fff' }}
+            >
+              Shop by Sport
+            </h2>
+            <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(255,255,255,0.38)' }}>
+              Find gear for your favorite league
+            </p>
 
             {/* Category Tabs */}
-            <div className="inline-flex bg-white rounded-xl p-1 md:p-1.5 shadow-soft">
+            <div
+              className="inline-flex rounded-xl p-1 md:p-1.5"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
                   aria-pressed={activeCategory === cat.id}
-                  className={`px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2 ${
+                  className="px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2"
+                  style={
                     activeCategory === cat.id
-                      ? 'bg-primary-600 text-white shadow-md'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                      ? { background: '#fff', color: '#0a0a0a' }
+                      : { color: 'rgba(255,255,255,0.38)' }
+                  }
                 >
                   <span>{cat.icon}</span>
                   <span>{cat.label}</span>
@@ -501,10 +512,11 @@ const Home = () => {
             {/* Scroll Right Button */}
             <button
               onClick={() => scrollCarousel('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 bg-white rounded-full shadow-card flex items-center justify-center hover:shadow-card-hover transition-shadow hidden md:flex"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all hidden md:flex"
+              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
               aria-label="Scroll products"
             >
-              <ChevronRightIcon className="w-6 h-6 text-gray-600" />
+              <ChevronRightIcon className="w-6 h-6" style={{ color: '#fff' }} />
             </button>
 
             {/* Carousel Container */}
@@ -528,8 +540,19 @@ const Home = () => {
                 ))
               ) : (
                 <div className="w-full text-center py-12">
-                  <p className="text-gray-500">No {activeCategory} products available yet</p>
-                  <Link to="/products" className="btn-primary mt-4 inline-block">
+                  <p style={{ color: 'rgba(255,255,255,0.38)' }}>No {activeCategory} products available yet</p>
+                  <Link
+                    to="/products"
+                    className="mt-4 inline-flex items-center gap-2 font-semibold active:scale-[0.97] transition-transform"
+                    style={{
+                      background: '#fff',
+                      color: '#0a0a0a',
+                      borderRadius: '100px',
+                      padding: '12px 28px',
+                      fontSize: '14px',
+                      textDecoration: 'none',
+                    }}
+                  >
                     Browse All Products
                   </Link>
                 </div>
@@ -541,7 +564,8 @@ const Home = () => {
           <div className="text-center mt-8">
             <Link
               to={`/products?sport=${activeCategory}`}
-              className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700 font-semibold"
+              className="inline-flex items-center gap-2 font-semibold transition-opacity hover:opacity-70"
+              style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
             >
               View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Products
               <ChevronRightIcon className="w-5 h-5" />
@@ -551,12 +575,15 @@ const Home = () => {
       </section>
 
       {/* Latest Collection — image left, text right */}
-      <section className="py-12 md:py-28 bg-white">
+      <section className="py-12 md:py-28" style={{ background: '#0a0a0a' }}>
         <div className="container-custom">
           <div className="grid md:grid-cols-2 gap-6 md:gap-16 items-center">
             {/* Image */}
             <div className="order-1">
-              <div className="aspect-[4/5] bg-gray-100 rounded-2xl md:rounded-3xl overflow-hidden">
+              <div
+                className="aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden"
+                style={{ background: '#1a1a1a' }}
+              >
                 <img
                   src={collectionImage}
                   alt="Latest Collection"
@@ -570,17 +597,42 @@ const Home = () => {
 
             {/* Text */}
             <div className="order-2">
-              <p className="text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider mb-3 md:mb-4">New Collection</p>
-              <h2 className="text-xl md:text-display-sm lg:text-display mb-4 md:mb-6 font-semibold">
+              <p
+                className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4"
+                style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
+              >
+                New Collection
+              </p>
+              <h2
+                className="font-bold mb-4 md:mb-6"
+                style={{
+                  fontSize: 'clamp(2rem, 5vw, 4rem)',
+                  letterSpacing: '-0.035em',
+                  lineHeight: 1.05,
+                  color: '#fff',
+                }}
+              >
                 Game Day Ready
               </h2>
-              <p className="text-sm md:text-lg text-gray-600 mb-6 md:mb-8 leading-relaxed">
+              <p
+                className="text-sm md:text-lg mb-6 md:mb-8"
+                style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+              >
                 Introducing our 2025 collection of authentic jerseys, training gear, and accessories.
                 From courtside to streetwear — designed for fans who live and breathe Philippine sports.
               </p>
               <Link
                 to="/products"
-                className="btn-secondary inline-flex items-center gap-2 text-sm md:text-base"
+                className="inline-flex items-center gap-2 text-sm md:text-base font-semibold active:scale-[0.97] transition-all"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  color: 'rgba(255,255,255,0.7)',
+                  borderRadius: '100px',
+                  padding: '13px 30px',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
               >
                 explore the collection
                 <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -592,9 +644,14 @@ const Home = () => {
 
       {/* Featured Products — clickable list with changing image */}
       {featuredProducts.length > 0 && (
-        <section className="py-12 md:py-28 bg-gray-50">
+        <section className="py-12 md:py-28" style={{ background: '#111' }}>
           <div className="container-custom">
-            <p className="text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wider mb-4 md:mb-6">our featured gear</p>
+            <p
+              className="text-xs md:text-sm font-semibold uppercase mb-4 md:mb-6"
+              style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
+            >
+              our featured gear
+            </p>
 
             <div className="grid md:grid-cols-2 gap-6 md:gap-16 items-start">
               {/* Left — product list */}
@@ -604,15 +661,20 @@ const Home = () => {
                     <button
                       key={product._id}
                       onClick={() => setActiveFeatured(index)}
-                      className={`block text-left w-full transition-all duration-300 text-base md:text-2xl lg:text-[calc(2.2rem*0.9)] ${
-                        activeFeatured === index
-                          ? 'text-gray-900'
-                          : 'text-gray-300 hover:text-gray-500'
-                      }`}
+                      className="block text-left w-full transition-all duration-300 text-base md:text-2xl lg:text-[calc(2.2rem*0.9)]"
+                      style={{ color: activeFeatured === index ? '#fff' : 'rgba(255,255,255,0.18)' }}
+                      onMouseEnter={e => { if (activeFeatured !== index) e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
+                      onMouseLeave={e => { if (activeFeatured !== index) e.currentTarget.style.color = 'rgba(255,255,255,0.18)'; }}
                     >
-                      <span className={`font-semibold leading-tight ${
-                        activeFeatured === index ? 'underline underline-offset-4 decoration-2' : ''
-                      }`}>
+                      <span
+                        className="font-semibold leading-tight"
+                        style={activeFeatured === index ? {
+                          textDecoration: 'underline',
+                          textDecorationColor: 'rgba(255,255,255,0.35)',
+                          textUnderlineOffset: '4px',
+                          textDecorationThickness: '2px',
+                        } : {}}
+                      >
                         {product.name.replace(/ (2024|2025|2024-25)$/, '')}
                       </span>
                     </button>
@@ -620,13 +682,25 @@ const Home = () => {
                 </div>
 
                 {/* Description of active product */}
-                <p className="text-sm md:text-base text-gray-600 mt-5 md:mt-8 mb-5 md:mb-8 leading-relaxed max-w-md transition-all duration-300">
+                <p
+                  className="text-sm md:text-base mt-5 md:mt-8 mb-5 md:mb-8 max-w-md transition-all duration-300"
+                  style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+                >
                   {featuredProducts[activeFeatured]?.description}
                 </p>
 
                 <Link
                   to={`/products/${featuredProducts[activeFeatured]?.slug}`}
-                  className="btn-secondary inline-flex items-center gap-2 text-sm md:text-base"
+                  className="inline-flex items-center gap-2 text-sm md:text-base font-bold active:scale-[0.97] transition-all"
+                  style={{
+                    background: '#fff',
+                    color: '#0a0a0a',
+                    borderRadius: '100px',
+                    padding: '13px 30px',
+                    textDecoration: 'none',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
                 >
                   shop now
                   <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -635,7 +709,10 @@ const Home = () => {
 
               {/* Right — product image */}
               <div className="order-first md:order-last">
-                <div className="aspect-[4/5] bg-gray-100 rounded-2xl md:rounded-3xl overflow-hidden relative">
+                <div
+                  className="aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden relative"
+                  style={{ background: '#1a1a1a' }}
+                >
                   {featuredProducts.map((product, index) => (
                     <img
                       key={product._id}
@@ -657,8 +734,13 @@ const Home = () => {
       )}
 
       {/* Shop by League — horizontal scroll, 3.5 visible */}
-      <section className="py-12 md:py-24 bg-white overflow-hidden">
-        <h2 className="text-xl md:text-display-sm font-semibold pl-4 sm:pl-6 md:pl-10 mb-6 md:mb-10">Shop by League</h2>
+      <section className="py-12 md:py-24 overflow-hidden" style={{ background: '#0a0a0a' }}>
+        <h2
+          className="text-xl md:text-display-sm font-semibold pl-4 sm:pl-6 md:pl-10 mb-6 md:mb-10"
+          style={{ color: '#fff' }}
+        >
+          Shop by League
+        </h2>
 
         <div
           className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 md:pl-10 pt-4 -mt-4 gap-5 md:gap-10"
@@ -702,7 +784,10 @@ const Home = () => {
                   </div>
                 )}
               </div>
-              <span className="mt-3 md:mt-5 font-semibold text-gray-900 group-hover:text-primary-600 transition-colors text-center text-xs md:text-base lg:text-lg">
+              <span
+                className="mt-3 md:mt-5 font-semibold text-center text-xs md:text-base lg:text-lg transition-opacity group-hover:opacity-100"
+                style={{ color: 'rgba(255,255,255,0.65)' }}
+              >
                 {league.name}
               </span>
             </Link>
@@ -713,16 +798,19 @@ const Home = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-12 md:py-24 bg-gray-50">
+      <section className="py-12 md:py-24" style={{ background: '#111' }}>
         <div className="container-custom max-w-3xl">
-          <h2 className="text-xl md:text-display-sm font-semibold text-center mb-3 md:mb-4">
+          <h2
+            className="font-bold text-center mb-3 md:mb-4"
+            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#fff' }}
+          >
             Frequently Asked Questions
           </h2>
-          <p className="text-sm md:text-base text-gray-500 text-center mb-8 md:mb-12">
+          <p className="text-sm md:text-base text-center mb-8 md:mb-12" style={{ color: 'rgba(255,255,255,0.38)' }}>
             Everything you need to know about Puso Pilipinas
           </p>
 
-          <div className="divide-y divide-gray-200">
+          <div>
             {[
               {
                 q: 'Are all your products authentic?',
@@ -749,16 +837,22 @@ const Home = () => {
                 a: 'Yes! We ship worldwide so our kababayans abroad can rep Philippine sports no matter where they are. International shipping rates and delivery times vary by destination and will be calculated at checkout.',
               },
             ].map((faq, index) => (
-              <div key={index}>
+              <div key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <button
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
-                  className="w-full flex items-center justify-between py-5 md:py-6 text-left group"
+                  className="w-full flex items-center justify-between py-5 md:py-6 text-left"
                   aria-expanded={openFaq === index}
                 >
-                  <span className="font-medium text-sm md:text-base text-gray-900 pr-4 group-hover:text-primary-600 transition-colors">
+                  <span
+                    className="font-medium text-sm md:text-base pr-4 transition-colors"
+                    style={{ color: openFaq === index ? '#fff' : 'rgba(255,255,255,0.7)' }}
+                  >
                     {faq.q}
                   </span>
-                  <span className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-gray-400 group-hover:text-primary-600 transition-colors">
+                  <span
+                    className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center"
+                    style={{ color: 'rgba(255,255,255,0.38)' }}
+                  >
                     <svg
                       className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${openFaq === index ? 'rotate-45' : ''}`}
                       fill="none"
@@ -777,7 +871,10 @@ const Home = () => {
                     opacity: openFaq === index ? 1 : 0,
                   }}
                 >
-                  <p className="text-sm md:text-base text-gray-600 pb-5 md:pb-6 leading-relaxed">
+                  <p
+                    className="text-sm md:text-base pb-5 md:pb-6"
+                    style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+                  >
                     {faq.a}
                   </p>
                 </div>
@@ -940,12 +1037,18 @@ const Home = () => {
       })()}
 
       {/* Newsletter */}
-      <section className="py-12 md:py-16 lg:py-24 bg-primary-600">
+      <section
+        className="py-12 md:py-16 lg:py-24"
+        style={{ background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+      >
         <div className="container-custom max-w-2xl text-center">
-          <h2 className="text-2xl md:text-4xl font-bold text-white mb-3 md:mb-4">
+          <h2
+            className="font-bold mb-3 md:mb-4"
+            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#fff' }}
+          >
             Join the Puso Pilipinas Family
           </h2>
-          <p className="text-sm md:text-lg text-white/80 mb-6 md:mb-8">
+          <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(255,255,255,0.45)' }}>
             Get exclusive deals, early access to new releases, and 10% off your first order.
           </p>
           <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
@@ -954,16 +1057,27 @@ const Home = () => {
               id="newsletter-email"
               type="email"
               placeholder="Enter your email"
-              className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-xl text-gray-900 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-white"
+              className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-xl text-sm md:text-base focus:outline-none"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: '#fff',
+              }}
             />
             <button
               type="submit"
-              className="hover-fill hover-fill-navy bg-white text-primary-700 px-6 py-3 md:px-8 md:py-3.5 rounded-xl font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98] whitespace-nowrap"
+              className="font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98] whitespace-nowrap"
+              style={{
+                background: '#fff',
+                color: '#0a0a0a',
+                borderRadius: '100px',
+                padding: '12px 28px',
+              }}
             >
               Subscribe
             </button>
           </form>
-          <p className="text-xs md:text-sm text-white/60 mt-3 md:mt-4">
+          <p className="text-xs md:text-sm mt-3 md:mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
             No spam. Unsubscribe anytime.
           </p>
         </div>
