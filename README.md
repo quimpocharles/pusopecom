@@ -70,7 +70,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 
 The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#111` alternating sections):
 
-1. **Hero** (`#0a0a0a`) — Full-viewport dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso.", pill CTAs, bouncing scroll hint
+1. **Hero** (`#0a0a0a`) — Dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso.", pill CTAs, bouncing scroll hint; height is `65svh` on mobile, `75vh` on `md+`
 2. **Marquee Bar** (`#111`) — Scrolling ticker with shipping info and promos
 3. **Virtual Try-On Showcase** (`#0a0a0a`) — Centered text + floating browser-frame mockup on a CSS dome arc
 4. **Shop by Sport** (`#111`) — Tabbed carousel (Basketball, Volleyball, Football) with dark-themed tab pills
