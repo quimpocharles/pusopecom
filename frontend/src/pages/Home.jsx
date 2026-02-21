@@ -315,26 +315,56 @@ const Home = () => {
         </div>
 
         {/* ── Stage: dome + floating mockup ── */}
-        <div className="relative" style={{ paddingBottom: '40px' }}>
+        {/*
+          paddingBottom: 0  → card's bottom edge sits flush with the container floor.
+          The dome rises clamp(160px,28vw,270px) upward from the floor, tucking behind
+          roughly the bottom 50% of the 16∶9 card. Card is z:2, dome is z:1.
+        */}
+        <div className="relative" style={{ paddingBottom: '0' }}>
 
-          {/* Dome SVG — gray-50 fill matches the next section exactly */}
-          {/* viewBox is 80 units tall = 80px; arc peak at y≈30 → ~50px of gentle rise */}
-          <svg
-            viewBox="0 0 1440 80"
-            preserveAspectRatio="none"
+          {/* ── White dome — CSS border-radius arc, no SVG needed ── */}
+          {/*
+            Extends 2% beyond each side so the arc corners are never visible.
+            border-radius 50% 50% 0 0 / 50px creates a gentle convex top edge:
+            center rises ~50px above the left/right edges — barely perceptible.
+            Height ≈ 50% of the 16∶9 card, making the card appear to sit on the dome.
+          */}
+          <div
             aria-hidden="true"
             style={{
               position: 'absolute',
               bottom: 0,
-              left: 0,
-              width: '100%',
-              height: '80px',
+              left: '-2%',
+              width: '104%',
+              height: 'clamp(160px, 28vw, 270px)',
+              background: '#f9fafb',
+              borderRadius: '50% 50% 0 0 / 50px 50px 0 0',
               zIndex: 1,
-              display: 'block',
+              pointerEvents: 'none',
             }}
-          >
-            <path d="M0,80 C480,13 960,13 1440,80 L1440,80 L0,80 Z" fill="#f9fafb" />
-          </svg>
+          />
+
+          {/* ── Ground shadow — soft radial ellipse on the white dome surface ── */}
+          {/*
+            Sits behind the card (z:1, DOM after dome so stacks on top of it).
+            Card covers most of it; only the edges bleed out, creating a natural
+            "light from above" contact shadow on the white surface.
+          */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '78%',
+              maxWidth: '800px',
+              height: '90px',
+              background: 'radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.13) 0%, transparent 72%)',
+              zIndex: 1,
+              pointerEvents: 'none',
+            }}
+          />
 
           {/* Floating mockup */}
           <div
@@ -347,13 +377,7 @@ const Home = () => {
                 maxWidth: '940px',
                 borderRadius: '18px',
                 overflow: 'hidden',
-                /* Multi-layer shadow: tight contact shadow + broad floating shadow */
-                boxShadow: [
-                  '0 0 0 1px rgba(255,255,255,0.07)',
-                  '0 4px 8px rgba(0,0,0,0.18)',
-                  '0 24px 48px rgba(0,0,0,0.32)',
-                  '0 64px 120px rgba(0,0,0,0.40)',
-                ].join(', '),
+                /* No box-shadow on the card — ground shadow handles depth */
               }}
             >
               {/* Browser chrome bar */}
