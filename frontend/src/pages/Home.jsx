@@ -315,11 +315,12 @@ const Home = () => {
         </div>
 
         {/* ── Stage: dome + floating mockup ── */}
-        <div className="relative" style={{ paddingBottom: 'clamp(72px, 10vw, 140px)' }}>
+        <div className="relative" style={{ paddingBottom: '40px' }}>
 
           {/* Dome SVG — gray-50 fill matches the next section exactly */}
+          {/* viewBox is 80 units tall = 80px; arc peak at y≈30 → ~50px of gentle rise */}
           <svg
-            viewBox="0 0 1440 380"
+            viewBox="0 0 1440 80"
             preserveAspectRatio="none"
             aria-hidden="true"
             style={{
@@ -327,13 +328,12 @@ const Home = () => {
               bottom: 0,
               left: 0,
               width: '100%',
-              height: '80%',
+              height: '80px',
               zIndex: 1,
               display: 'block',
             }}
           >
-            {/* Convex arc — rises in the center, dips at the edges */}
-            <path d="M0,380 C360,-30 1080,-30 1440,380 L1440,380 L0,380 Z" fill="#f9fafb" />
+            <path d="M0,80 C480,13 960,13 1440,80 L1440,80 L0,80 Z" fill="#f9fafb" />
           </svg>
 
           {/* Floating mockup */}
