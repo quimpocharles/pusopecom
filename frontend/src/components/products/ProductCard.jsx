@@ -10,8 +10,7 @@ const ProductCard = ({ product, onBuyNow }) => {
   const effectivePrice = product.effectivePrice || product.salePrice || product.price;
   const hasDiscount = product.salePrice && product.salePrice < product.price;
 
-  const isTryOnEligible = ['jersey', 'jerseys', 'tshirt', 'shirts', 'tops']
-    .includes(product.category?.toLowerCase());
+  const isTryOnEligible = product.tryOnEnabled === true;
 
   // Primary image and hover image
   const primaryImage = product.images?.[0] || '/placeholder.jpg';
