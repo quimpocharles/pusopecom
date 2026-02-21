@@ -6,7 +6,7 @@ const SPORTS = ['basketball', 'volleyball', 'football', 'general'];
 
 const emptyForm = {
   name: '',
-  sport: 'basketball',
+  sports: ['basketball'],
   teams: [''],
 };
 
@@ -48,7 +48,7 @@ const AdminLeagues = () => {
     setEditingId(league._id);
     setForm({
       name: league.name,
-      sport: league.sport,
+      sports: league.sports?.length ? [...league.sports] : ['basketball'],
       teams: league.teams.length ? [...league.teams] : [''],
     });
     setError('');
@@ -80,7 +80,7 @@ const AdminLeagues = () => {
     try {
       const payload = {
         name: form.name,
-        sport: form.sport,
+        sports: form.sports,
         teams: form.teams.filter(Boolean),
       };
 
@@ -119,7 +119,7 @@ const AdminLeagues = () => {
   };
 
   const filtered = filterSport
-    ? leagues.filter((l) => l.sport === filterSport)
+    ? leagues.filter((l) => l.sports?.includes(filterSport))
     : leagues;
 
   return (
@@ -180,7 +180,7 @@ const AdminLeagues = () => {
                 filtered.map((league) => (
                   <tr key={league._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{league.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">{league.sport}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">{league.sports?.join(', ')}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{league.teams.length}</td>
                     <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                       {league.teams.slice(0, 4).join(', ')}
@@ -258,16 +258,25 @@ const AdminLeagues = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sport</label>
-                <select
-                  value={form.sport}
-                  onChange={(e) => setForm({ ...form, sport: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sports</label>
+                <div className="flex flex-wrap gap-3">
                   {SPORTS.map((s) => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    <label key={s} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.sports.includes(s)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...form.sports, s]
+                            : form.sports.filter((x) => x !== s);
+                          setForm({ ...form, sports: next });
+                        }}
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               <div>

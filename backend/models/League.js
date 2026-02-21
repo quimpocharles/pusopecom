@@ -6,10 +6,14 @@ const leagueSchema = new mongoose.Schema({
     required: [true, 'League name is required'],
     trim: true
   },
-  sport: {
-    type: String,
-    required: [true, 'Sport is required'],
-    enum: ['basketball', 'volleyball', 'football', 'general']
+  sports: {
+    type: [String],
+    required: [true, 'At least one sport is required'],
+    enum: ['basketball', 'volleyball', 'football', 'general'],
+    validate: {
+      validator: (v) => v.length > 0,
+      message: 'At least one sport is required'
+    }
   },
   teams: [{
     type: String,
@@ -23,8 +27,7 @@ const leagueSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Unique constraint on name + sport combination
-leagueSchema.index({ name: 1, sport: 1 }, { unique: true });
+leagueSchema.index({ name: 1 }, { unique: true });
 
 const League = mongoose.model('League', leagueSchema);
 

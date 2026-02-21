@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const filter = { active: true };
-    if (req.query.sport) filter.sport = req.query.sport;
+    if (req.query.sport) filter.sports = req.query.sport;
 
     const leagues = await League.find(filter).sort('name');
 
@@ -46,9 +46,9 @@ router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
 // Create league (admin)
 router.post('/', authenticate, isAdmin, async (req, res) => {
   try {
-    const { name, sport, teams } = req.body;
+    const { name, sports, teams } = req.body;
 
-    const league = new League({ name, sport, teams: teams || [] });
+    const league = new League({ name, sports, teams: teams || [] });
     await league.save();
 
     res.status(201).json({
