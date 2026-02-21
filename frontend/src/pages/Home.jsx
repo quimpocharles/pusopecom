@@ -114,8 +114,8 @@ const Home = () => {
       />
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <section
-        className="relative flex flex-col items-center justify-center text-center overflow-hidden"
-        style={{ background: '#0a0a0a', minHeight: '100svh' }}
+        className="relative flex flex-col items-center justify-center text-center overflow-hidden min-h-[65svh] md:min-h-[100svh]"
+        style={{ background: '#0a0a0a' }}
       >
         {/* Subtle grid lines */}
         <div
