@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import heroImage from '../assets/images/banner-home.jpeg';
 import gilasImage from '../assets/images/gilas.png';
 import pbaImage from '../assets/images/pba.png';
 import uaapImage from '../assets/images/uaap.webp';
@@ -36,20 +35,6 @@ const Home = () => {
     productUrl: '/products/gilas-pilipinas-t-shirt',
   });
   const carouselRef = useRef(null);
-  const heroImgRef = useRef(null);
-  const heroRef = useRef(null);
-
-  useEffect(() => {
-    const handleParallax = () => {
-      if (!heroImgRef.current || !heroRef.current) return;
-      const rect = heroRef.current.getBoundingClientRect();
-      if (rect.bottom < 0) return;
-      const scrolled = Math.max(0, -rect.top);
-      heroImgRef.current.style.transform = `translateY(${scrolled * 0.35}px)`;
-    };
-    window.addEventListener('scroll', handleParallax, { passive: true });
-    return () => window.removeEventListener('scroll', handleParallax);
-  }, []);
 
   const categories = [
     { id: 'basketball', label: 'Basketball', icon: '🏀' },
@@ -127,73 +112,167 @@ const Home = () => {
         title="Puso Pilipinas — Philippine Sports Merchandise"
         description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, and football. Free shipping on select items."
       />
-      {/* Hero Section */}
-      <section ref={heroRef} className="relative text-white overflow-hidden min-h-[70svh] md:min-h-[88vh]">
-        <img
-          ref={heroImgRef}
-          src={heroImage}
-          alt="Puso Pilipinas hero banner"
-          className="absolute top-0 left-0 w-full object-cover object-center"
-          style={{ height: '120%', willChange: 'transform' }}
-          width={1920}
-          height={1080}
+      {/* ── Hero Section ─────────────────────────────────────────── */}
+      <section
+        className="relative flex flex-col items-center justify-center text-center overflow-hidden"
+        style={{ background: '#0a0a0a', minHeight: '100svh' }}
+      >
+        {/* Subtle grid lines */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: [
+              'repeating-linear-gradient(0deg,   transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
+              'repeating-linear-gradient(90deg,  transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
+            ].join(', '),
+            maskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
+          }}
         />
-        {/* Subtle gradient — dark at top and bottom, transparent in middle */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/75" />
+        {/* Radial glow at top */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 80% 55% at 50% -5%, rgba(255,255,255,0.055) 0%, transparent 70%)' }}
+        />
 
-        {/* Mobile: headline centered in hero section */}
-        <div className="absolute top-[38%] -translate-y-1/2 left-0 right-0 md:hidden z-10 px-3">
-          <h1 className="font-black uppercase leading-none tracking-tight text-white text-center w-full">
-            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>SHOW</span>
-            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>YOUR</span>
-            <span className="block" style={{ fontSize: 'clamp(3rem, 33vw, 6rem)', lineHeight: 1.05 }}>PUSO</span>
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center px-6 pt-28 pb-24 md:pt-36 md:pb-28">
+          {/* Badge */}
+          <div
+            className="inline-flex items-center gap-2 mb-8 md:mb-10"
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.10)',
+              borderRadius: '100px',
+              padding: '6px 16px',
+            }}
+          >
+            {/* Heart / puso icon */}
+            <svg width="12" height="12" viewBox="0 0 24 22" fill="rgba(255,255,255,0.4)">
+              <path d="M12 21.5C12 21.5 1 14.3 1 7.1 1 3.6 3.8 1 7 1c2.1 0 3.9 1.1 5 2.8C13.1 2.1 14.9 1 17 1c3.2 0 6 2.6 6 6.1 0 7.2-11 14.4-11 14.4z" />
+            </svg>
+            <span
+              className="font-semibold uppercase"
+              style={{ fontSize: '11px', letterSpacing: '0.09em', color: 'rgba(255,255,255,0.42)' }}
+            >
+              Filipino Sports Merch
+            </span>
+          </div>
+
+          {/* Heading */}
+          <h1
+            className="text-white font-black text-center"
+            style={{
+              fontSize: 'clamp(3.2rem, 10vw, 9.5rem)',
+              lineHeight: 0.95,
+              letterSpacing: '-0.04em',
+              marginBottom: '28px',
+            }}
+          >
+            Show Your<br />
+            <span style={{ color: 'rgba(255,255,255,0.22)' }}>Puso.</span>
           </h1>
-        </div>
 
-        {/* Desktop: headline pinned to top */}
-        <div className="absolute top-0 left-0 right-0 z-10 px-6 pt-8 hidden md:block">
-          <h1 className="font-black uppercase leading-none tracking-tight text-white whitespace-nowrap text-center" style={{ fontSize: 'clamp(2.5rem, 8.8vw, 11rem)' }}>
-            SHOW YOUR PUSO
-          </h1>
-        </div>
+          {/* Subtext */}
+          <p
+            className="text-center"
+            style={{
+              fontSize: 'clamp(0.9rem, 1.8vw, 1.1rem)',
+              color: 'rgba(255,255,255,0.38)',
+              maxWidth: '460px',
+              lineHeight: 1.7,
+              marginBottom: '44px',
+            }}
+          >
+            Authentic jerseys and gear from Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more.
+          </p>
 
-        {/* Bottom-left supporting text + CTAs */}
-        <div className="absolute bottom-0 left-0 z-10 px-5 md:px-12 pb-10 md:pb-14 max-w-lg">
-          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-white/60 mb-3">
-            Official Licensed Merchandise
-          </p>
-          <p className="text-base md:text-xl text-white/90 mb-6 leading-snug">
-            Authentic jerseys and gear from Gilas Pilipinas, Alas Pilipinas, PBA, PVL, UAAP, NCAA, and more.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Link to="/products" className="btn-secondary-light text-sm md:text-base">
-              Shop All Products
+          {/* CTAs */}
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <Link
+              to="/products"
+              className="font-bold active:scale-[0.97] transition-transform"
+              style={{
+                background: '#fff',
+                color: '#0a0a0a',
+                borderRadius: '100px',
+                padding: '14px 36px',
+                fontSize: '15px',
+                textDecoration: 'none',
+              }}
+            >
+              Shop Now
+            </Link>
+            <Link
+              to="/products?sale=true"
+              className="active:scale-[0.97] transition-all"
+              style={{
+                border: '1px solid rgba(255,255,255,0.14)',
+                color: 'rgba(255,255,255,0.55)',
+                borderRadius: '100px',
+                padding: '14px 36px',
+                fontSize: '15px',
+                textDecoration: 'none',
+              }}
+            >
+              View Sale
             </Link>
           </div>
         </div>
+
+        {/* Scroll hint */}
+        <div
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          style={{
+            color: 'rgba(255,255,255,0.18)',
+            fontSize: '10px',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            animation: 'heroScrollBob 2.2s ease-in-out infinite',
+          }}
+        >
+          <span>Scroll</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+        </div>
+
+        <style>{`
+          @keyframes heroScrollBob {
+            0%, 100% { transform: translateX(-50%) translateY(0);  opacity: 0.6; }
+            50%       { transform: translateX(-50%) translateY(7px); opacity: 1;   }
+          }
+        `}</style>
       </section>
 
-      {/* Marquee Announcement Bar */}
-      <div className="bg-primary-600 text-white py-2 md:py-2.5 overflow-x-hidden text-xs md:text-sm">
+      {/* ── Marquee bar ──────────────────────────────────────────── */}
+      <div
+        className="overflow-x-hidden text-xs md:text-sm"
+        style={{
+          background: '#111',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: '10px 0',
+          color: 'rgba(255,255,255,0.35)',
+        }}
+      >
         <div className="animate-marquee whitespace-nowrap flex">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex items-center gap-6 md:gap-12 px-4 md:px-6">
+            <div key={i} className="flex items-center gap-8 md:gap-14 px-6 md:px-8">
               <span className="flex items-center gap-2">
-                <SparklesIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-secondary-400" />
-                <span>Try jerseys virtually before you buy!</span>
+                <SparklesIcon className="w-3 h-3 opacity-50" />
+                <span>Try jerseys virtually before you buy</span>
               </span>
-              <span className="text-white/40">✦</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
               <span className="flex items-center gap-2">
-                <TruckIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span><strong>FREE SHIPPING</strong> on orders over ₱2,000</span>
+                <TruckIcon className="w-3 h-3 opacity-50" />
+                <span>Free shipping on orders over ₱2,000</span>
               </span>
-              <span className="text-white/40">✦</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
               <span>Authentic licensed merchandise</span>
-              <span className="text-white/40">✦</span>
-              <span className="flex items-center gap-2">
-                <span>Support Philippine Sports 🇵🇭</span>
-              </span>
-              <span className="text-white/40">✦</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span>Support Philippine Sports 🇵🇭</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
             </div>
           ))}
         </div>
