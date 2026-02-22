@@ -8,7 +8,7 @@
  *
  * Regular users pass through untouched and receive the normal React SPA.
  *
- * Requires env var: API_BASE_URL (e.g. https://api.pusostore.com/api)
+ * Uses the existing VITE_API_URL env var (already set in Vercel project settings).
  */
 
 const BOT_PATTERN =
@@ -23,7 +23,7 @@ export async function middleware(request) {
   if (!match || !BOT_PATTERN.test(ua)) return;
 
   const slug = match[1];
-  const apiBase = process.env.API_BASE_URL;
+  const apiBase = process.env.VITE_API_URL;
   if (!apiBase) return;
 
   try {
