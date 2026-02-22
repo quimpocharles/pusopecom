@@ -53,6 +53,8 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - JSON-LD structured data (Product schema with ratings)
 - Dynamic sitemap.xml generation from active products
 - robots.txt with admin/auth page exclusions
+- Homepage meta targets basketball, volleyball, football, and **e-sports** keywords to attract e-sports enthusiasts
+- E-Sports tab in Shop by Sport section surfaces the `sport=esports` filter to crawlers
 
 ### Admin
 - Product management (CRUD with color variant support, try-on toggle)
@@ -73,10 +75,10 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alter
 1. **Hero** (`#0a0a0a`) — Dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso ❤️", animated Philippine flag gradient sweep on "Puso ❤️", pill CTAs (hidden on desktop, visible on mobile/tablet), bouncing scroll hint; height is `min-h-[88vh]` on all viewports
 2. **Marquee Bar** (`#1a1a1a`) — Scrolling ticker with shipping info and promos
 3. **Virtual Try-On Showcase** (`#0a0a0a`) — Centered text + floating browser-frame mockup on a CSS dome arc
-4. **Shop by Sport** (`#1a1a1a`) — Tabbed carousel (Basketball, Volleyball, Football) with dark-themed tab pills
+4. **Shop by Sport** (`#1a1a1a`) — Tabbed carousel (Basketball, Volleyball, Football, E-Sports) with dark-themed tab pills
 5. **Latest Collection** (`#0a0a0a`) — Image left, text right; outlined pill CTA
 6. **Featured Products** (`#1a1a1a`) — Clickable product name list; active name white with underline, inactive muted; white pill CTA
-7. **Our Partners** (`#0a0a0a`) — Dual-row infinite auto-scrolling logo marquee; top row scrolls left-to-right, bottom row right-to-left; partner logos: Gilas, PBA, PVL, UAAP, NCAA, SBP; 30 cards per row (15 per copy) to guarantee gap-free loop on all screen widths
+7. **Our Partners** (`#0a0a0a`) — Dual-row infinite auto-scrolling logo marquee; top row scrolls left-to-right, bottom row right-to-left; Row 1: Gilas, PBA, PVL, Smart-O (32 cards, 16 per copy); Row 2: UAAP, NCAA, SBP (30 cards, 15 per copy); both sized to guarantee gap-free loop on screens up to 2560px wide
 8. **FAQ** (`#1a1a1a`) — Accordion with `rgba(255,255,255,0.08)` dividers; no blue accents
 9. **Newsletter** (`#0a0a0a`) — Dark input + white pill submit button; top border separator
 10. **Instafeed / Social** — Currently hidden (`{false && ...}`)
@@ -87,7 +89,7 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alter
 - **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button (`#0a0a0a` bg, white text)
 - **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors; "Buy it with" upsell section shows complementary products with inline color swatch + size chip selectors — Add button disabled until a size is chosen
 - **Size chart modal** - "Size Guide" link next to the Size heading opens a modal with XS–3XL measurements (shoulder, chest, body length); full size grid always rendered — unavailable sizes are greyed out with a diagonal slash overlay
-- **Our Partners marquee** - Dual-row infinite auto-scroll; top row L→R (`partnersMarqueeL`, 76s), bottom row R→L (`partnersMarqueeR`, 76s); 30 logo cards per row (15 per copy × ~192px = ~2880px) guarantees gap-free display on screens up to 2560px wide
+- **Our Partners marquee** - Dual-row infinite auto-scroll; top row L→R (`partnersMarqueeL`, 76s), bottom row R→L (`partnersMarqueeR`, 76s); Row 1 has 32 cards (Gilas/PBA/PVL/Smart-O, 16 per copy × ~192px = ~3072px), Row 2 has 30 cards (UAAP/NCAA/SBP, 15 per copy × ~192px = ~2880px); both cover screens up to 2560px
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
 - **Navbar & footer** - `#0a0a0a` background with white text; Logo.png replaces text branding; footer is compact single-row layout (`py-8 md:py-10`), small logo (`h-7`), social icon buttons with `rgba(255,255,255,0.06)` bg; footer social links point to Facebook and Instagram (no X/Twitter)
