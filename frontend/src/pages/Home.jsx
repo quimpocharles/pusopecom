@@ -5,6 +5,7 @@ import uaapImage from '../assets/images/uaap.png';
 import pvlImage from '../assets/images/pvl.png';
 import ncaaImage from '../assets/images/ncaa.png';
 import sbpImage from '../assets/images/sbp.png';
+import smartOImage from '../assets/images/smart-o.png';
 import bahayImage from '../assets/images/bahay.webp';
 import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
@@ -42,6 +43,7 @@ const Home = () => {
     { id: 'basketball', label: 'Basketball', icon: '🏀' },
     { id: 'volleyball', label: 'Volleyball', icon: '🏐' },
     { id: 'football', label: 'Football', icon: '⚽' },
+    { id: 'esports', label: 'E-Sports', icon: '🎮' },
   ];
 
   // Fetch site settings for try-on section
@@ -111,8 +113,8 @@ const Home = () => {
   return (
     <Layout>
       <SEO
-        title="Puso Pilipinas — Philippine Sports Merchandise"
-        description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, and football. Free shipping on select items."
+        title="Puso Pilipinas — Philippine Sports Merchandise | Basketball, Volleyball, E-Sports"
+        description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, football, and e-sports. Rep Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more. Free shipping on select items."
       />
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <section
@@ -198,7 +200,7 @@ const Home = () => {
               marginBottom: '44px',
             }}
           >
-            Authentic jerseys and gear from Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more.
+            Authentic jerseys and gear for basketball, volleyball, football, and e-sports — from Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and beyond.
           </p>
 
           {/* CTAs — visible on mobile/tablet, hidden on desktop */}
@@ -787,7 +789,7 @@ const Home = () => {
           {/* Row 1 — right to left */}
           <div style={{ overflow: 'hidden', marginBottom: '12px' }}>
             <div className="partners-track-l" style={{ display: 'flex', width: 'max-content' }}>
-              {Array.from({ length: 30 }, (_, i) => [gilasImage, pbaImage, pvlImage][i % 3]).map((src, i) => (
+              {Array.from({ length: 32 }, (_, i) => [gilasImage, pbaImage, pvlImage, smartOImage][i % 4]).map((src, i) => (
                 <div
                   key={i}
                   style={{
