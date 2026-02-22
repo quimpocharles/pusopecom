@@ -75,7 +75,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
-        timeout: 120000
+        timeout: 75000
       });
 
       if (response.data.success) {

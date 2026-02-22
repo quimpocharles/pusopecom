@@ -92,8 +92,9 @@ IMAGE DEFINITIONS:
       throw new Error('Failed to start try-on generation');
     }
 
-    // Poll for completion (max 120 seconds)
-    const maxAttempts = 40;
+    // Poll for completion — based on Replicate data: successful runs take 28–44s.
+    // 30 attempts × 2s = 60s max (gives ~16s buffer above the observed worst case).
+    const maxAttempts = 30;
     let attempts = 0;
 
     while (attempts < maxAttempts) {
@@ -127,7 +128,7 @@ IMAGE DEFINITIONS:
 
       // Status is 'starting' or 'processing'
       attempts++;
-      await sleep(3000);
+      await sleep(2000);
     }
 
     // Timed out — cancel the prediction on Replicate before throwing
