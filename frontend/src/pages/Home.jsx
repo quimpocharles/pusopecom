@@ -563,7 +563,7 @@ const Home = () => {
                     key={product._id}
                     className="flex-shrink-0 w-[220px] md:w-[280px] snap-start"
                   >
-                    <ProductCard product={product} onBuyNow={handleBuyNow} />
+                    <ProductCard product={product} onBuyNow={handleBuyNow} dark={true} />
                   </div>
                 ))
               ) : (

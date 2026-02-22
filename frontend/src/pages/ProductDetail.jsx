@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   SparklesIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   StarIcon as StarOutline,
   TruckIcon,
@@ -168,6 +169,7 @@ const SizeChartModal = ({ category, onClose }) => {
 
 const ProductDetail = () => {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const addItem = useCartStore((state) => state.addItem);
   const { user, isAuthenticated } = useAuthStore();
 
@@ -345,8 +347,15 @@ const ProductDetail = () => {
         ogType="product"
         jsonLd={productJsonLd}
       />
-      {/* Breadcrumb */}
-      <div className="container-custom pt-4 pb-2">
+      {/* Back button + Breadcrumb */}
+      <div className="container-custom pt-4 pb-2 flex items-center gap-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors flex-shrink-0"
+        >
+          <ChevronLeftIcon className="w-3.5 h-3.5" />
+          Back
+        </button>
         <nav className="flex items-center gap-1.5 text-xs text-gray-400">
           <Link to="/" className="hover:text-gray-600">Home</Link>
           <ChevronRightIcon className="w-3 h-3" />
