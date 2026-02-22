@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import gilasImage from '../assets/images/gilas.png';
 import pbaImage from '../assets/images/pba.png';
-import uaapImage from '../assets/images/uaap.webp';
+import uaapImage from '../assets/images/uaap.png';
 import pvlImage from '../assets/images/pvl.png';
+import ncaaImage from '../assets/images/ncaa.png';
+import sbpImage from '../assets/images/sbp.png';
 import bahayImage from '../assets/images/bahay.webp';
 import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
@@ -114,7 +116,7 @@ const Home = () => {
       />
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <section
-        className="relative flex flex-col items-center justify-center text-center overflow-hidden min-h-[65svh] md:min-h-[75vh]"
+        className="relative flex flex-col items-center justify-center text-center overflow-hidden min-h-[88vh]"
         style={{ background: '#0a0a0a' }}
       >
         {/* Subtle grid lines */}
@@ -138,7 +140,7 @@ const Home = () => {
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center px-6 pt-28 pb-24 md:pt-36 md:pb-28">
           {/* Badge */}
-          <div
+          {/* <div
             className="inline-flex items-center gap-2 mb-8 md:mb-10"
             style={{
               background: 'rgba(255,255,255,0.05)',
@@ -146,31 +148,43 @@ const Home = () => {
               borderRadius: '100px',
               padding: '6px 16px',
             }}
-          >
+          > */}
             {/* Heart / puso icon */}
-            <svg width="12" height="12" viewBox="0 0 24 22" fill="rgba(255,255,255,0.4)">
+            {/* <svg width="12" height="12" viewBox="0 0 24 22" fill="rgba(255,255,255,0.4)">
               <path d="M12 21.5C12 21.5 1 14.3 1 7.1 1 3.6 3.8 1 7 1c2.1 0 3.9 1.1 5 2.8C13.1 2.1 14.9 1 17 1c3.2 0 6 2.6 6 6.1 0 7.2-11 14.4-11 14.4z" />
             </svg>
             <span
               className="font-semibold uppercase"
               style={{ fontSize: '11px', letterSpacing: '0.09em', color: 'rgba(255,255,255,0.42)' }}
             >
-              Filipino Sports Merch
+              Pilipinas Sports Merch
             </span>
-          </div>
+          </div> */}
 
           {/* Heading */}
           <h1
             className="text-white font-black text-center"
             style={{
-              fontSize: 'clamp(3.2rem, 10vw, 9.5rem)',
-              lineHeight: 0.95,
-              letterSpacing: '-0.04em',
+              fontSize: 'clamp(5rem, 18vw, 14rem)',
+              lineHeight: 0.90,
+              letterSpacing: '-0.01em',
               marginBottom: '28px',
             }}
           >
-            Show Your<br />
-            <span style={{ color: 'rgba(255,255,255,0.22)' }}>Puso.</span>
+            Wear Your<br />
+            <span
+              style={{
+                display: 'inline-block',
+                background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
+                backgroundSize: '200% 100%',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+                animation: 'pusoFlagSweep 6s linear infinite',
+                willChange: 'background-position',
+              }}
+            >Puso <span style={{ fontSize: '0.52em', verticalAlign: 'middle' }}>❤️</span></span>
           </h1>
 
           {/* Subtext */}
@@ -187,8 +201,8 @@ const Home = () => {
             Authentic jerseys and gear from Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more.
           </p>
 
-          {/* CTAs */}
-          <div className="flex items-center gap-3 flex-wrap justify-center">
+          {/* CTAs — visible on mobile/tablet, hidden on desktop */}
+          <div className="flex items-center gap-3 flex-wrap justify-center lg:hidden">
             <Link
               to="/products"
               className="font-bold active:scale-[0.97] transition-transform"
@@ -242,6 +256,20 @@ const Home = () => {
             0%, 100% { transform: translateX(-50%) translateY(0);  opacity: 0.6; }
             50%       { transform: translateX(-50%) translateY(7px); opacity: 1;   }
           }
+          @keyframes pusoFlagSweep {
+            0%   { background-position: 100% center; }
+            100% { background-position: 0%   center; }
+          }
+          @keyframes partnersMarqueeL {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-50%); }
+          }
+          @keyframes partnersMarqueeR {
+            from { transform: translateX(-50%); }
+            to   { transform: translateX(0); }
+          }
+          .partners-track-l { animation: partnersMarqueeL 76s linear infinite; }
+          .partners-track-r { animation: partnersMarqueeR 76s linear infinite; }
         `}</style>
       </section>
 
@@ -249,7 +277,7 @@ const Home = () => {
       <div
         className="overflow-x-hidden text-xs md:text-sm"
         style={{
-          background: '#111',
+          background: '#1a1a1a',
           borderTop: '1px solid rgba(255,255,255,0.06)',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           padding: '10px 0',
@@ -337,7 +365,7 @@ const Home = () => {
               left: '-2%',
               width: '104%',
               height: 'clamp(160px, 28vw, 270px)',
-              background: '#111',
+              background: '#1a1a1a',
               borderRadius: '50% 50% 0 0 / 50px 50px 0 0',
               zIndex: 1,
               pointerEvents: 'none',
@@ -470,7 +498,7 @@ const Home = () => {
       </section>
 
       {/* Shop by Sport - Tabbed Carousel */}
-      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#111' }}>
+      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#1a1a1a' }}>
         <div className="container-custom">
           <div className="text-center mb-8 md:mb-10">
             <h2
@@ -644,7 +672,7 @@ const Home = () => {
 
       {/* Featured Products — clickable list with changing image */}
       {featuredProducts.length > 0 && (
-        <section className="py-12 md:py-28" style={{ background: '#111' }}>
+        <section className="py-12 md:py-28" style={{ background: '#1a1a1a' }}>
           <div className="container-custom">
             <p
               className="text-xs md:text-sm font-semibold uppercase mb-4 md:mb-6"
@@ -733,72 +761,85 @@ const Home = () => {
         </section>
       )}
 
-      {/* Shop by League — horizontal scroll, 3.5 visible */}
-      <section className="py-12 md:py-24 overflow-hidden" style={{ background: '#0a0a0a' }}>
-        <h2
-          className="text-xl md:text-display-sm font-semibold pl-4 sm:pl-6 md:pl-10 mb-6 md:mb-10"
-          style={{ color: '#fff' }}
+      {/* ── Our Partners ─────────────────────────────────────────── */}
+      <section style={{ background: '#0a0a0a', padding: '64px 0 72px', overflow: 'hidden' }}>
+        {/* Label */}
+        <p
+          className="text-center mb-10"
+          style={{
+            fontSize: '11px',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.28)',
+            fontWeight: 600,
+          }}
         >
-          Shop by League
-        </h2>
+          Our Partners
+        </p>
 
+        {/* Marquee area — edge fades via mask */}
         <div
-          className="flex overflow-x-auto scrollbar-hide pl-4 sm:pl-6 md:pl-10 pt-4 -mt-4 gap-5 md:gap-10"
+          style={{
+            WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)',
+            maskImage: 'linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)',
+          }}
         >
-          {[
-            { name: 'Gilas Pilipinas', abbr: 'GILAS', bg: '#f6f6f6', text: '#FFFFFF', image: gilasImage, link: '/products?team=Gilas+Pilipinas' },
-            // { name: 'Alas Pilipinas', abbr: 'ALAS', bg: '#7C3AED', text: '#FFFFFF', link: '/products?team=Alas+Pilipinas' }, 
-            // { name: 'Philippine Azkals', abbr: 'PFF', bg: '#0D9488', text: '#FFFFFF', link: '/products?team=Philippine+Azkals' },
-            { name: 'PBA', abbr: 'PBA', bg: '#444444', text: '#F59E0B', image: pbaImage, link: '/products?league=PBA' },
-            { name: 'PVL', abbr: 'PVL', bg: '#0D9488', text: '#FFFFFF',image: pvlImage, link: '/products?league=PVL' },
-            { name: 'UAAP', abbr: 'UAAP', bg: '#305CDE', text: '#FFFFFF', image: uaapImage, link: '/products?league=UAAP' },
-            // { name: 'NCAA', abbr: 'NCAA', bg: '#DC2626', text: '#FFFFFF', link: '/products?league=NCAA' },
-          ].map((league) => (
-            <Link
-              key={league.abbr}
-              to={league.link}
-              className="flex flex-col items-center group flex-shrink-0 w-[calc((100vw-80px)/3.5)] md:w-[calc((100vw-160px)/3.5)]"
-            >
-              {/* Outer wrapper — fixed size, no scaling */}
-              <div className="relative w-[70%] mx-auto aspect-square">
-                {/* Circle bg — this is what scales on hover */}
+          {/* Row 1 — right to left */}
+          <div style={{ overflow: 'hidden', marginBottom: '12px' }}>
+            <div className="partners-track-l" style={{ display: 'flex', width: 'max-content' }}>
+              {Array.from({ length: 30 }, (_, i) => [gilasImage, pbaImage, pvlImage][i % 3]).map((src, i) => (
                 <div
-                  className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110"
-                  style={{ backgroundColor: league.bg }}
-                />
-                {/* Image or text — stays fixed size */}
-                {league.image ? (
-                  <img
-                    src={league.image}
-                    alt={league.name}
-                    className="absolute inset-0 w-full h-full object-contain z-10 p-3"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <span
-                      className="text-sm md:text-lg lg:text-xl font-bold tracking-wide select-none"
-                      style={{ color: league.text }}
-                    >
-                      {league.abbr}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <span
-                className="mt-3 md:mt-5 font-semibold text-center text-xs md:text-base lg:text-lg transition-opacity group-hover:opacity-100"
-                style={{ color: 'rgba(255,255,255,0.65)' }}
-              >
-                {league.name}
-              </span>
-            </Link>
-          ))}
-          {/* Right padding spacer */}
-          <div className="flex-shrink-0 w-4 sm:w-6 lg:w-8" />
+                  key={i}
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '84px',
+                    minWidth: '172px',
+                    margin: '0 10px',
+                    padding: '0 32px',
+                    borderRadius: '100px',
+                    border: '1px solid rgba(255,255,255,0.11)',
+                    background: 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2 — left to right */}
+          <div style={{ overflow: 'hidden' }}>
+            <div className="partners-track-r" style={{ display: 'flex', width: 'max-content' }}>
+              {Array.from({ length: 30 }, (_, i) => [uaapImage, ncaaImage, sbpImage][i % 3]).map((src, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '84px',
+                    minWidth: '172px',
+                    margin: '0 10px',
+                    padding: '0 32px',
+                    borderRadius: '100px',
+                    border: '1px solid rgba(255,255,255,0.11)',
+                    background: 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
       {/* FAQ Section */}
-      <section className="py-12 md:py-24" style={{ background: '#111' }}>
+      <section className="py-12 md:py-24" style={{ background: '#1a1a1a' }}>
         <div className="container-custom max-w-3xl">
           <h2
             className="font-bold text-center mb-3 md:mb-4"

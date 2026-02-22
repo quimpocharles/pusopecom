@@ -68,16 +68,16 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 
 ### Homepage Sections
 
-The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#111` alternating sections):
+The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alternating sections):
 
-1. **Hero** (`#0a0a0a`) — Dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso.", pill CTAs, bouncing scroll hint; height is `65svh` on mobile, `75vh` on `md+`
-2. **Marquee Bar** (`#111`) — Scrolling ticker with shipping info and promos
+1. **Hero** (`#0a0a0a`) — Dark section with crosshatch grid, radial glow, badge pill, large display heading "Show Your / Puso ❤️", animated Philippine flag gradient sweep on "Puso ❤️", pill CTAs (hidden on desktop, visible on mobile/tablet), bouncing scroll hint; height is `min-h-[88vh]` on all viewports
+2. **Marquee Bar** (`#1a1a1a`) — Scrolling ticker with shipping info and promos
 3. **Virtual Try-On Showcase** (`#0a0a0a`) — Centered text + floating browser-frame mockup on a CSS dome arc
-4. **Shop by Sport** (`#111`) — Tabbed carousel (Basketball, Volleyball, Football) with dark-themed tab pills
+4. **Shop by Sport** (`#1a1a1a`) — Tabbed carousel (Basketball, Volleyball, Football) with dark-themed tab pills
 5. **Latest Collection** (`#0a0a0a`) — Image left, text right; outlined pill CTA
-6. **Featured Products** (`#111`) — Clickable product name list; active name white with underline, inactive muted; white pill CTA
-7. **Shop by League** (`#0a0a0a`) — Horizontal scroll with circular league logos (Gilas, PBA, PVL, UAAP)
-8. **FAQ** (`#111`) — Accordion with `rgba(255,255,255,0.08)` dividers; no blue accents
+6. **Featured Products** (`#1a1a1a`) — Clickable product name list; active name white with underline, inactive muted; white pill CTA
+7. **Our Partners** (`#0a0a0a`) — Dual-row infinite auto-scrolling logo marquee; top row scrolls left-to-right, bottom row right-to-left; partner logos: Gilas, PBA, PVL, UAAP, NCAA, SBP; 30 cards per row (15 per copy) to guarantee gap-free loop on all screen widths
+8. **FAQ** (`#1a1a1a`) — Accordion with `rgba(255,255,255,0.08)` dividers; no blue accents
 9. **Newsletter** (`#0a0a0a`) — Dark input + white pill submit button; top border separator
 10. **Instafeed / Social** — Currently hidden (`{false && ...}`)
 
@@ -87,10 +87,10 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#111` alternat
 - **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button
 - **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors; "Buy it with" upsell section shows complementary products with inline color swatch + size chip selectors — Add button disabled until a size is chosen
 - **Size chart modal** - "Size Guide" link next to the Size heading opens a modal with XS–3XL measurements (shoulder, chest, body length); full size grid always rendered — unavailable sizes are greyed out with a diagonal slash overlay
-- **Shop by League circles** - Left-aligned heading + circles, shows 3.5 circles on wide viewports with horizontal scroll, each links to exact league or team filter
+- **Our Partners marquee** - Dual-row infinite auto-scroll; top row L→R (`partnersMarqueeL`, 76s), bottom row R→L (`partnersMarqueeR`, 76s); 30 logo cards per row (15 per copy × ~192px = ~2880px) guarantees gap-free display on screens up to 2560px wide
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
-- **Navbar & footer** - Off-black `#26282f` background with white text; Logo.png replaces text branding; footer social links point to Facebook and Instagram (no X/Twitter)
+- **Navbar & footer** - `#0a0a0a` background with white text; Logo.png replaces text branding; footer is compact single-row layout (`py-8 md:py-10`), small logo (`h-7`), social icon buttons with `rgba(255,255,255,0.06)` bg; footer social links point to Facebook and Instagram (no X/Twitter)
 - **Virtual try-on result** - Download button (saves base64 image) + "Add to Cart" button; no retry button to discourage spam
 - **Virtual try-on loading** - Lower half shows a Playtime.ph video ad (autoplay, audio on) with an overlaid CTA button; disclaimer hidden during loading to maximise ad space
 - **Products sort** - Dropdown in filter bar: Newest, Alphabetical, Most Bought, Trending (persisted in URL)
@@ -237,7 +237,7 @@ puso-shop/
 │   │   ├── services/    # API service layer (product, auth, order, league, report, activity)
 │   │   ├── store/       # Zustand stores (cart, auth)
 │   │   ├── utils/       # Utility functions
-│   │   ├── index.css    # Global styles (button fill-up effects)
+│   │   ├── index.css    # Global styles (button fill-up effects, Dharma Gothic E + Pro Sans @font-face, h1/h2/h3 base rules)
 │   │   ├── App.jsx      # Routes (lazy-loaded)
 │   │   └── main.jsx     # Entry point (HelmetProvider)
 │   ├── public/          # robots.txt, static assets
@@ -449,7 +449,7 @@ Puso Store uses a **dark B&W editorial** aesthetic throughout the storefront.
 | Token | Value | Usage |
 |---|---|---|
 | `dark-primary` | `#0a0a0a` | Main section backgrounds, hero |
-| `dark-secondary` | `#111` | Alternating sections (marquee, FAQ, featured) |
+| `dark-secondary` | `#1a1a1a` | Alternating sections (marquee, FAQ, featured) |
 | `dark-elevated` | `#1a1a1c` | Browser chrome bar, card surfaces |
 | `dark-surface` | `rgba(255,255,255,0.06)` | Subtle input backgrounds, tab containers |
 | `white` | `#ffffff` | Primary headings, primary CTA background |
@@ -461,26 +461,52 @@ Puso Store uses a **dark B&W editorial** aesthetic throughout the storefront.
 
 ### Section Alternation
 
-Sections alternate between `#0a0a0a` and `#111` to create rhythm without harsh contrast:
+Sections alternate between `#0a0a0a` and `#1a1a1a` to create rhythm with visible but not harsh contrast:
 
 ```
 Hero            #0a0a0a
-Marquee         #111
+Marquee         #1a1a1a
 Try-On          #0a0a0a
-Shop by Sport   #111
+Shop by Sport   #1a1a1a
 Latest Coll.    #0a0a0a
-Featured        #111
-Shop by League  #0a0a0a
-FAQ             #111
+Featured        #1a1a1a
+Our Partners    #0a0a0a
+FAQ             #1a1a1a
 Newsletter      #0a0a0a
 ```
 
 ### Typography
 
-- **Display headings**: `font-bold` or `font-black`, `letter-spacing: -0.035em` to `-0.04em`, `line-height: 0.95–1.08`, `clamp()` for responsive sizing
+- **Display font**: Dharma Gothic E (condensed, bold display typeface) — loaded via `@font-face` in `index.css`; applied globally to all `h1`, `h2`, `h3` via `@layer base`; weights: 900 (Heavy), 800 (ExBold), 700 (Bold)
+- **Body font**: Pro Sans — loaded via `@font-face`; weights: 400 (Regular), 600/700 (Semibold)
+- **Hero heading**: `font-size: clamp(5rem, 18vw, 14rem)`, `line-height: 0.90`, `letter-spacing: -0.01em`, `text-transform: uppercase`
 - **Section labels**: `font-semibold`, `text-transform: uppercase`, `letter-spacing: 0.09em`, `color: rgba(255,255,255,0.35)`, `font-size: 11–13px`
 - **Body text**: `color: rgba(255,255,255,0.38)`, `line-height: 1.7–1.72`
 - **Active/interactive text**: `#fff` for selected state, `rgba(255,255,255,0.18)` for idle, `rgba(255,255,255,0.45)` on hover
+
+### Hero Flag Animation
+
+The word "Puso ❤️" in the hero uses a CSS-only animated Philippine flag gradient sweep:
+
+```jsx
+// CSS keyframe (inline <style> block in Home.jsx)
+// @keyframes pusoFlagSweep {
+//   0%   { background-position: 100% center; }
+//   100% { background-position: 0%   center; }
+// }
+
+style={{
+  background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
+  backgroundSize: '200% 100%',
+  WebkitBackgroundClip: 'text',
+  backgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  color: 'transparent',
+  animation: 'pusoFlagSweep 6s linear infinite',
+}}
+```
+
+Double-repeat gradient (colors appear twice at 0–100%) + `background-size: 200%` ensures a seamless loop as `background-position` sweeps from `100% → 0%` (left-to-right visual flow).
 
 ### CTA Buttons
 

@@ -1,4 +1,28 @@
 @font-face {
+  font-family: 'Dharma Gothic E';
+  src: url('./assets/fonts/DharmaGothicE_Heavy_R.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Dharma Gothic E';
+  src: url('./assets/fonts/DharmaGothicE_ExBold_R.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Dharma Gothic E';
+  src: url('./assets/fonts/DharmaGothicE_Bold_R.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'Pro Sans';
   src: url('./assets/fonts/prox-reg.otf') format('opentype');
   font-weight: 400;
@@ -39,6 +63,27 @@
   /* Better focus styles */
   *:focus-visible {
     @apply outline-none ring-2 ring-primary-600 ring-offset-2;
+  }
+
+  /* Display font — headings */
+  h1, h2, h3 {
+    font-family: 'Dharma Gothic E', 'Pro Sans', system-ui, sans-serif;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-weight: 900;
+    letter-spacing: 0.03em;
+  }
+
+  h2 {
+    font-weight: 800;
+    letter-spacing: 0.025em;
+  }
+
+  h3 {
+    font-weight: 700;
+    letter-spacing: 0.02em;
   }
 }
 

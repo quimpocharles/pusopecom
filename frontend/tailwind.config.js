@@ -54,7 +54,7 @@ export default {
       },
       fontFamily: {
         sans: ['Pro Sans', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Pro Sans', 'system-ui', 'sans-serif'],
+        display: ['Dharma Gothic E', 'Pro Sans', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         'display-lg': ['4rem', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '700' }],

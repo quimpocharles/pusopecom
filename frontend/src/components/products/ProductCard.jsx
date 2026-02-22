@@ -100,7 +100,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         )}
       </div>
 
-      {/* Product Info — MoreLabs style rows */}
+      {/* Product Info */}
       <div className="mt-4 space-y-1">
         {/* Color swatches */}
         {product.colors?.length > 0 && (
@@ -108,20 +108,23 @@ const ProductCard = ({ product, onBuyNow }) => {
             {product.colors.slice(0, 5).map((c) => (
               <span
                 key={c._id || c.color}
-                className="w-3.5 h-3.5 rounded-full border border-gray-200"
-                style={c.hex ? { backgroundColor: c.hex } : undefined}
+                className="w-3.5 h-3.5 rounded-full"
+                style={{ backgroundColor: c.hex || 'transparent', border: '1px solid rgba(255,255,255,0.18)' }}
                 title={c.color}
               />
             ))}
             {product.colors.length > 5 && (
-              <span className="text-[10px] text-gray-400">+{product.colors.length - 5}</span>
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>+{product.colors.length - 5}</span>
             )}
           </div>
         )}
 
         {/* Row 1: Name + Stars */}
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-semibold text-gray-900 text-sm md:text-base leading-tight line-clamp-2 group-hover:text-primary-600 transition-colors">
+          <h3
+            className="font-semibold text-sm md:text-base leading-tight line-clamp-2"
+            style={{ color: '#fff' }}
+          >
             {toTitleCase(product.name)}
           </h3>
           {product.reviewCount > 0 && (
@@ -130,27 +133,30 @@ const ProductCard = ({ product, onBuyNow }) => {
                 {[...Array(5)].map((_, i) => (
                   <StarIcon
                     key={i}
-                    className={`w-3 h-3 md:w-3.5 md:h-3.5 ${i < Math.round(product.avgRating) ? 'text-primary-600' : 'text-gray-200'}`}
+                    className="w-3 h-3 md:w-3.5 md:h-3.5"
+                    style={{ color: i < Math.round(product.avgRating) ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.12)' }}
                   />
                 ))}
               </div>
-              <span className="text-xs text-gray-500 hidden sm:inline">{product.reviewCount} reviews</span>
+              <span className="text-xs hidden sm:inline" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                {product.reviewCount} reviews
+              </span>
             </div>
           )}
         </div>
 
         {/* Row 2: Team/variant + Price */}
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-xs md:text-sm text-gray-500 truncate">
+          <p className="text-xs md:text-sm truncate" style={{ color: 'rgba(255,255,255,0.42)' }}>
             {product.team || product.sport}
           </p>
           <div className="flex items-baseline gap-1.5 flex-shrink-0">
             {hasDiscount && (
-              <span className="text-xs text-gray-400 line-through">
+              <span className="text-xs line-through" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 ₱{product.price?.toLocaleString()}
               </span>
             )}
-            <span className="text-sm md:text-base font-semibold text-gray-900">
+            <span className="text-sm md:text-base font-semibold" style={{ color: '#fff' }}>
               ₱{effectivePrice?.toLocaleString()}
             </span>
           </div>
@@ -158,10 +164,13 @@ const ProductCard = ({ product, onBuyNow }) => {
 
         {/* Row 3: Category + learn more */}
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.28)' }}>
             {categoryLabel}
           </p>
-          <span className="text-xs font-medium text-gray-900 underline underline-offset-2 group-hover:text-primary-600 transition-colors">
+          <span
+            className="text-xs font-medium underline underline-offset-2"
+            style={{ color: 'rgba(255,255,255,0.55)' }}
+          >
             learn more
           </span>
         </div>
