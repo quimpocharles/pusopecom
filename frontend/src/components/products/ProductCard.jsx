@@ -118,7 +118,7 @@ const ProductCard = ({ product, onBuyNow, dark = false }) => {
           <div className="absolute inset-x-0 bottom-0 p-3 z-10 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
             <button
               onClick={handleBuyNow}
-              className="hover-fill hover-fill-navy w-full bg-white text-gray-900 py-2.5 rounded-xl text-sm font-semibold shadow-lg active:scale-[0.98] transition-all"
+              className="w-full bg-[#0a0a0a] text-white py-2.5 rounded-xl text-sm font-semibold shadow-lg active:scale-[0.98] transition-all"
             >
               Buy Now
             </button>
