@@ -19,9 +19,8 @@ router.get('/', async (req, res) => {
 router.put('/', authenticate, isAdmin, async (req, res) => {
   try {
     const settings = await SiteSettings.get();
-    if (req.body.tryOn) {
-      Object.assign(settings.tryOn, req.body.tryOn);
-    }
+    if (req.body.tryOn)   Object.assign(settings.tryOn,   req.body.tryOn);
+    if (req.body.tryOnAd) Object.assign(settings.tryOnAd, req.body.tryOnAd);
     await settings.save();
     res.json({ success: true, data: settings });
   } catch (error) {

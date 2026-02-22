@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PhotoIcon } from '@heroicons/react/24/outline';
+import { PhotoIcon, FilmIcon } from '@heroicons/react/24/outline';
 import settingsService from '../../services/settingsService';
 import api from '../../services/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -8,11 +8,17 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [message, setMessage] = useState(null);
   const [tryOn, setTryOn] = useState({
     title: '',
     image: '',
     productUrl: '',
+  });
+  const [tryOnAd, setTryOnAd] = useState({
+    videoUrl: '',
+    buttonText: '',
+    buttonUrl: '',
   });
 
   useEffect(() => {
@@ -24,6 +30,13 @@ const AdminSettings = () => {
             title: res.data.tryOn.title || '',
             image: res.data.tryOn.image || '',
             productUrl: res.data.tryOn.productUrl || '',
+          });
+        }
+        if (res.data?.tryOnAd) {
+          setTryOnAd({
+            videoUrl:   res.data.tryOnAd.videoUrl   || '',
+            buttonText: res.data.tryOnAd.buttonText || '',
+            buttonUrl:  res.data.tryOnAd.buttonUrl  || '',
           });
         }
       } catch (error) {
@@ -55,12 +68,31 @@ const AdminSettings = () => {
     }
   };
 
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingVideo(true);
+    try {
+      const formData = new FormData();
+      formData.append('video', file);
+      const res = await api.post('/upload/video', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setTryOnAd((prev) => ({ ...prev, videoUrl: res.data.data.url }));
+    } catch (error) {
+      console.error('Video upload failed:', error);
+      setMessage({ type: 'error', text: 'Failed to upload video' });
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
     try {
-      await settingsService.updateSettings({ tryOn });
+      await settingsService.updateSettings({ tryOn, tryOnAd });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -139,6 +171,71 @@ const AdminSettings = () => {
                 placeholder="/products/gilas-pilipinas-t-shirt"
               />
               <p className="text-xs text-gray-500 mt-1">Path to the product page, e.g. /products/some-slug</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Try-On Loading Ad */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Try-On Loading Ad</h2>
+          <p className="text-sm text-gray-500 mb-4">Shown in the lower half of the try-on modal while the AI is generating.</p>
+
+          <div className="space-y-4">
+            {/* Video URL + Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Video URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={tryOnAd.videoUrl}
+                  onChange={(e) => setTryOnAd((prev) => ({ ...prev, videoUrl: e.target.value }))}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                  placeholder="https://res.cloudinary.com/.../video.mp4"
+                />
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer text-sm font-medium text-gray-700 transition-colors whitespace-nowrap">
+                  <FilmIcon className="w-5 h-5" />
+                  {uploadingVideo ? 'Uploading...' : 'Upload'}
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoUpload}
+                    className="hidden"
+                    disabled={uploadingVideo}
+                  />
+                </label>
+              </div>
+              {tryOnAd.videoUrl && (
+                <video
+                  src={tryOnAd.videoUrl}
+                  className="mt-3 w-48 rounded-lg border border-gray-200"
+                  controls
+                  muted
+                />
+              )}
+            </div>
+
+            {/* Button Text */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
+              <input
+                type="text"
+                value={tryOnAd.buttonText}
+                onChange={(e) => setTryOnAd((prev) => ({ ...prev, buttonText: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                placeholder="Visit Playtime.ph"
+              />
+            </div>
+
+            {/* Button URL */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Button URL</label>
+              <input
+                type="text"
+                value={tryOnAd.buttonUrl}
+                onChange={(e) => setTryOnAd((prev) => ({ ...prev, buttonUrl: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+                placeholder="https://www.playtime.ph/"
+              />
             </div>
           </div>
         </div>

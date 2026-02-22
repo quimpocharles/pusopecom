@@ -5,7 +5,12 @@ const siteSettingsSchema = new mongoose.Schema({
     title: { type: String, default: 'Try on the Gilas Pilipinas shirt!' },
     image: { type: String, default: '' },
     productUrl: { type: String, default: '/products/gilas-pilipinas-t-shirt' }
-  }
+  },
+  tryOnAd: {
+    videoUrl:   { type: String, default: '' },
+    buttonText: { type: String, default: 'Visit Playtime.ph' },
+    buttonUrl:  { type: String, default: 'https://www.playtime.ph/' },
+  },
 }, { timestamps: true });
 
 siteSettingsSchema.statics.get = async function () {

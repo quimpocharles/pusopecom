@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { XMarkIcon, CameraIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 import useCartStore from '../../store/cartStore';
-import playtimeVideo from '../../assets/media/playtime.mp4';
+import settingsService from '../../services/settingsService';
 
 const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [userImage, setUserImage] = useState(null);
@@ -11,7 +11,15 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState('');
+  const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    settingsService.getSettings().then((res) => {
+      if (res.data?.tryOnAd) setAd(res.data.tryOnAd);
+    }).catch(() => {});
+  }, [isOpen]);
 
   // Simulate progress during loading
   useEffect(() => {
@@ -132,27 +140,31 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             <p className="text-gray-700 font-medium text-sm">Creating your look...</p>
           </div>
 
-          {/* Lower Half: Playtime video with overlaid CTA */}
-          <div className="flex-1 relative overflow-hidden">
-            <video
-              autoPlay
-              loop
-              playsInline
-              className="w-full h-full object-cover"
-            >
-              <source src={playtimeVideo} type="video/mp4" />
-            </video>
-            <div className="absolute inset-x-0 bottom-4 flex justify-center">
-              <a
-                href="https://www.playtime.ph/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-white/90 hover:bg-white text-primary-700 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-lg backdrop-blur-sm"
+          {/* Lower Half: Ad video with overlaid CTA */}
+          {ad.videoUrl && (
+            <div className="flex-1 relative overflow-hidden">
+              <video
+                autoPlay
+                loop
+                playsInline
+                className="w-full h-full object-cover"
               >
-                Visit Playtime.ph
-              </a>
+                <source src={ad.videoUrl} type="video/mp4" />
+              </video>
+              {ad.buttonText && ad.buttonUrl && (
+                <div className="absolute inset-x-0 bottom-4 flex justify-center">
+                  <a
+                    href={ad.buttonUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-white/90 hover:bg-white text-gray-900 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-lg backdrop-blur-sm"
+                  >
+                    {ad.buttonText}
+                  </a>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       );
     }
