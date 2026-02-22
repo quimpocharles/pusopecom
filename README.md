@@ -55,6 +55,9 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - robots.txt with admin/auth page exclusions
 - Homepage meta targets basketball, volleyball, football, and **e-sports** keywords to attract e-sports enthusiasts
 - E-Sports tab in Shop by Sport section surfaces the `sport=esports` filter to crawlers
+- **Vercel Edge Middleware** (`frontend/middleware.js`) — intercepts `/products/:slug` requests from known social crawlers (Facebook, WhatsApp, iMessage, Telegram, Slack, Discord, LinkedIn, Google, Bing, etc.), fetches product data from `VITE_API_URL` server-side, and returns a minimal HTML page with correct `og:title`, `og:description`, `og:image`, `product:price:*`, and Twitter Card tags; regular users pass through to the React SPA untouched
+- Viewport zoom disabled via `user-scalable=no, maximum-scale=1.0` in the HTML meta tag
+- Font filenames and CSS family names obfuscated (`puso-display`, `puso-body`) to prevent font identification from network requests
 
 ### Admin
 - Product management (CRUD with color variant support, try-on toggle)
