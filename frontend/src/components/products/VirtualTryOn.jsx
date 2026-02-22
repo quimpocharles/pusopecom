@@ -10,6 +10,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [generatedImage, setGeneratedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState('');
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
   const fileInputRef = useRef(null);
@@ -20,6 +21,16 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       if (res.data?.tryOnAd) setAd(res.data.tryOnAd);
     }).catch(() => {});
   }, [isOpen]);
+
+  // Show blurred preview after 30s to signal "almost done"
+  useEffect(() => {
+    if (!loading) {
+      setShowPreview(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowPreview(true), 30000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   // Simulate progress during loading
   useEffect(() => {
@@ -109,7 +120,30 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
     if (loading) {
       return (
         <div className="w-full aspect-[3/4] flex flex-col rounded-xl overflow-hidden">
-          {/* Upper Half: Progress */}
+          {/* Upper Half: Progress or blurred preview */}
+          {showPreview ? (
+            <div className="flex-none relative flex items-center justify-center h-36 overflow-hidden">
+              <img
+                src={product.images[0]}
+                alt="Preview"
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ filter: 'blur(12px)', transform: 'scale(1.1)' }}
+              />
+              <div className="absolute inset-0 bg-black/30" />
+              <div className="relative flex flex-col items-center gap-1.5">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="w-2 h-2 rounded-full bg-white animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </div>
+                <p className="text-white font-semibold text-sm drop-shadow">Almost ready...</p>
+              </div>
+            </div>
+          ) : (
           <div className="flex-none flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-4 h-36">
             <div className="relative w-20 h-20 mb-2">
               <svg className="w-full h-full transform -rotate-90">
@@ -139,6 +173,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             </div>
             <p className="text-gray-700 font-medium text-sm">Creating your look...</p>
           </div>
+          )}
 
           {/* Lower Half: Ad video with overlaid CTA */}
           {ad.videoUrl && (
