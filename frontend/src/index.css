@@ -163,17 +163,17 @@
     color: #fff;
   }
 
-  /* Secondary Button — white bg, navy border */
+  /* Secondary Button — white bg, black border */
   .btn-secondary {
-    @apply inline-flex items-center justify-center bg-white text-primary-600 border-2 border-primary-600
+    @apply inline-flex items-center justify-center bg-white text-gray-900 border-2 border-gray-900
            px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
            transition-all duration-200;
   }
   .btn-secondary::before {
-    background-color: #0A2463; /* primary-600 */
+    background-color: #0a0a0a;
   }
   .btn-secondary:hover {
-    @apply text-white border-primary-600;
+    @apply text-white border-gray-900;
   }
 
   /* Secondary Light — transparent, white border (for use on dark backgrounds) */

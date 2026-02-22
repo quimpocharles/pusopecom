@@ -29,9 +29,9 @@ const Stars = ({ rating, size = 'sm' }) => {
       {[1, 2, 3, 4, 5].map((star) => (
         <span key={star}>
           {rating >= star ? (
-            <StarSolid className={`${sizeClass} text-primary-600`} />
+            <StarSolid className={`${sizeClass} text-yellow-400`} />
           ) : rating >= star - 0.5 ? (
-            <StarSolid className={`${sizeClass} text-primary-600 opacity-50`} />
+            <StarSolid className={`${sizeClass} text-yellow-400 opacity-50`} />
           ) : (
             <StarOutline className={`${sizeClass} text-gray-300`} />
           )}
@@ -52,9 +52,9 @@ const StarSelect = ({ value, onChange }) => (
         className="focus:outline-none"
       >
         {star <= value ? (
-          <StarSolid className="w-6 h-6 text-primary-600" />
+          <StarSolid className="w-6 h-6 text-yellow-400" />
         ) : (
-          <StarOutline className="w-6 h-6 text-gray-300 hover:text-primary-400" />
+          <StarOutline className="w-6 h-6 text-gray-300 hover:text-yellow-300" />
         )}
       </button>
     ))}
@@ -389,7 +389,7 @@ const ProductDetail = () => {
               {isTryOnEligible && (
                 <button
                   onClick={() => setShowTryOn(true)}
-                  className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm text-primary-700 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md hover:bg-white transition-colors"
+                  className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm text-gray-900 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md hover:bg-white transition-colors"
                 >
                   <SparklesIcon className="w-4 h-4" />
                   Virtual Try-On
@@ -405,7 +405,7 @@ const ProductDetail = () => {
                     key={index}
                     onClick={() => setSelectedImage(index)}
                     className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden border-2 transition-colors ${
-                      selectedImage === index ? 'border-primary-600' : 'border-transparent hover:border-gray-300'
+                      selectedImage === index ? 'border-[#0a0a0a]' : 'border-transparent hover:border-gray-300'
                     }`}
                   >
                     <img src={image} alt={`${product.name} ${index + 1}`} className="w-full h-full object-cover" />
@@ -434,7 +434,7 @@ const ProductDetail = () => {
                 className="flex items-center gap-2 mb-4 group"
               >
                 <Stars rating={reviewSummary.avgRating} size="md" />
-                <span className="text-sm text-gray-500 group-hover:text-primary-600 transition-colors">
+                <span className="text-sm text-gray-500 group-hover:text-gray-900 transition-colors">
                   {reviewSummary.avgRating} ({reviewSummary.reviewCount} review{reviewSummary.reviewCount !== 1 ? 's' : ''})
                 </span>
               </button>
@@ -492,7 +492,7 @@ const ProductDetail = () => {
                         title={colorObj.color}
                         className={`w-10 h-10 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
                           selectedColor === colorObj.color
-                            ? 'border-primary-600 ring-2 ring-primary-600 ring-offset-2'
+                            ? 'border-[#0a0a0a] ring-2 ring-[#0a0a0a] ring-offset-2'
                             : !colorInStock
                             ? 'border-gray-200 opacity-30 cursor-not-allowed'
                             : 'border-gray-200 hover:border-gray-400'
@@ -519,7 +519,7 @@ const ProductDetail = () => {
                       <h3 className="text-sm font-semibold text-gray-900">Size</h3>
                       <button
                         onClick={() => setShowSizeChart(true)}
-                        className="text-xs text-primary-600 hover:text-primary-700 underline underline-offset-2 transition-colors"
+                        className="text-xs text-gray-900 hover:text-gray-700 underline underline-offset-2 transition-colors"
                       >
                         Size Guide
                       </button>
@@ -539,7 +539,7 @@ const ProductDetail = () => {
                           disabled={unavailable}
                           className={`relative min-w-[3rem] px-4 py-2.5 rounded-xl text-sm font-medium border transition-all duration-200 overflow-hidden ${
                             isSelected
-                              ? 'bg-primary-600 text-white border-primary-600'
+                              ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
                               : unavailable
                               ? 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'
                               : 'border-gray-200 text-gray-700 hover:border-gray-400'
@@ -594,7 +594,7 @@ const ProductDetail = () => {
                   ? 'bg-green-600 text-white'
                   : product.totalStock === 0
                   ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'hover-fill hover-fill-dark bg-primary-600 text-white active:scale-[0.98]'
+                  : 'hover-fill hover-fill-dark bg-[#0a0a0a] text-white active:scale-[0.98]'
               }`}
             >
               {addedToCart ? 'Added to Cart ✓' : product.totalStock === 0 ? 'Out of Stock' : 'Add to Cart'}
@@ -664,10 +664,10 @@ const ProductDetail = () => {
                     return (
                       <div key={star} className="flex items-center gap-3">
                         <span className="text-sm text-gray-600 w-6 text-right">{star}</span>
-                        <StarSolid className="w-3.5 h-3.5 text-primary-600" />
+                        <StarSolid className="w-3.5 h-3.5 text-yellow-400" />
                         <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-primary-600 rounded-full transition-all duration-500"
+                            className="h-full bg-[#0a0a0a] rounded-full transition-all duration-500"
                             style={{ width: `${pct}%` }}
                           />
                         </div>
@@ -700,7 +700,7 @@ const ProductDetail = () => {
                       type="text"
                       value={reviewForm.title}
                       onChange={(e) => setReviewForm(p => ({ ...p, title: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0a0a0a] focus:border-transparent"
                       placeholder="Summarize your experience"
                     />
                   </div>
@@ -712,7 +712,7 @@ const ProductDetail = () => {
                       rows={4}
                       value={reviewForm.body}
                       onChange={(e) => setReviewForm(p => ({ ...p, body: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent resize-none"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0a0a0a] focus:border-transparent resize-none"
                       placeholder="Tell others what you think about this product..."
                     />
                   </div>
@@ -722,7 +722,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={reviewSubmitting}
-                    className="hover-fill hover-fill-dark bg-primary-600 text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
+                    className="hover-fill hover-fill-dark bg-[#0a0a0a] text-white px-8 py-3 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit Review'}
                   </button>
@@ -763,7 +763,7 @@ const ProductDetail = () => {
                   <div className="text-center pt-4">
                     <button
                       onClick={() => setReviewPage(p => p + 1)}
-                      className="text-sm font-medium text-primary-600 hover:text-primary-700 underline underline-offset-2"
+                      className="text-sm font-medium text-gray-900 hover:text-gray-700 underline underline-offset-2"
                     >
                       Show more reviews
                     </button>
