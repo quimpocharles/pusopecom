@@ -84,13 +84,15 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alter
 ### UI/UX Details
 
 - **Button hover fill-up effect** - Color fills from bottom to top using CSS `::before` pseudo-elements with `translateY` transitions
-- **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button
+- **Product card hover** - Second image crossfades in on hover with a slide-up "Buy Now" button (`#0a0a0a` bg, white text)
 - **Cart side drawer** - Clicking "Buy Now" opens a slide-in drawer with size and quantity selectors; "Buy it with" upsell section shows complementary products with inline color swatch + size chip selectors — Add button disabled until a size is chosen
 - **Size chart modal** - "Size Guide" link next to the Size heading opens a modal with XS–3XL measurements (shoulder, chest, body length); full size grid always rendered — unavailable sizes are greyed out with a diagonal slash overlay
 - **Our Partners marquee** - Dual-row infinite auto-scroll; top row L→R (`partnersMarqueeL`, 76s), bottom row R→L (`partnersMarqueeR`, 76s); 30 logo cards per row (15 per copy × ~192px = ~2880px) guarantees gap-free display on screens up to 2560px wide
 - **Featured product switcher** - Clickable product names with active underline; image and description swap on click
 - **Instafeed layout** - Desktop uses a 5-column CSS grid with images flanking centered text; mobile stacks 4 circles, text, 4 circles
 - **Navbar & footer** - `#0a0a0a` background with white text; Logo.png replaces text branding; footer is compact single-row layout (`py-8 md:py-10`), small logo (`h-7`), social icon buttons with `rgba(255,255,255,0.06)` bg; footer social links point to Facebook and Instagram (no X/Twitter)
+- **ProductCard dark mode** - Pass `dark={true}` prop for white text (home page dark sections); default is dark gray text for light-background pages (Products, You May Also Like)
+- **Product detail back navigation** - `← Back` button left of breadcrumb calls `navigate(-1)` to return to previous page
 - **Virtual try-on result** - Download button (saves base64 image) + "Add to Cart" button; no retry button to discourage spam
 - **Virtual try-on loading** - Lower half shows a Playtime.ph video ad (autoplay, audio on) with an overlaid CTA button; disclaimer hidden during loading to maximise ad space
 - **Products sort** - Dropdown in filter bar: Newest, Alphabetical, Most Bought, Trending (persisted in URL)
@@ -507,6 +509,23 @@ style={{
 ```
 
 Double-repeat gradient (colors appear twice at 0–100%) + `background-size: 200%` ensures a seamless loop as `background-position` sweeps from `100% → 0%` (left-to-right visual flow).
+
+### Interactive Element Colors (Light Pages)
+
+On light-background pages (Products, ProductDetail), all interactive elements use `#0a0a0a` instead of navy for cohesiveness:
+
+| Element | Class / Style |
+|---|---|
+| Selected size chip | `bg-[#0a0a0a] border-[#0a0a0a] text-white` |
+| Add to Cart button | `bg-[#0a0a0a] text-white` |
+| Submit Review button | `bg-[#0a0a0a] text-white` |
+| Selected thumbnail border | `border-[#0a0a0a]` |
+| Selected color swatch ring | `ring-[#0a0a0a]` |
+| Rating bar fill | `bg-[#0a0a0a]` |
+| Form focus rings | `focus:ring-[#0a0a0a]` |
+| `btn-secondary` (global) | `border-gray-900` fill `#0a0a0a` |
+| Star ratings | `text-yellow-400` (amber, not navy) |
+| Buy Now hover button | `bg-[#0a0a0a] text-white` |
 
 ### CTA Buttons
 
