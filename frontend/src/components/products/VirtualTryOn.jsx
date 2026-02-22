@@ -147,7 +147,15 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
                 autoPlay
                 loop
                 playsInline
-                className="w-full h-full object-cover"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  height: '100%',
+                  width: 'auto',
+                  maxWidth: 'none',
+                }}
               >
                 <source src={ad.videoUrl} type="video/mp4" />
               </video>
