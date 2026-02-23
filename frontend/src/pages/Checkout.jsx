@@ -149,7 +149,7 @@ const Checkout = () => {
         // Pickup orders: use venue details from the selected slot option
         shippingAddress = {
           fullName: '(Venue Pickup)',
-          phone: '',
+          phone: data.phone,
           country: 'Philippines',
           address: effectiveOption?.venueAddress || effectiveOption?.venueName || 'Venue Pickup',
           city: effectiveOption?.venueName || 'Venue',
@@ -283,6 +283,20 @@ const Checkout = () => {
                       <p className="text-red-600 text-sm mt-1">{errors.email.message}</p>
                     )}
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      {...register('phone', { required: 'Phone number is required' })}
+                      className="input-field"
+                    />
+                    {errors.phone && (
+                      <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -318,6 +332,7 @@ const Checkout = () => {
                     {/* Standard Delivery / International — always the first option */}
                     {standardOption && (
                       <DeliveryCard
+                        key="standard"
                         selected={deliveryMethod === 'standard'}
                         onClick={() => setDeliveryMethod('standard')}
                         label={standardOption.label}
@@ -367,20 +382,6 @@ const Checkout = () => {
                     />
                     {errors.fullName && (
                       <p className="text-red-600 text-sm mt-1">{errors.fullName.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      {...register('phone', { required: 'Phone number is required' })}
-                      className="input-field"
-                    />
-                    {errors.phone && (
-                      <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
                     )}
                   </div>
 
