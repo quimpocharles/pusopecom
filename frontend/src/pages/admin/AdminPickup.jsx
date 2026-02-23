@@ -17,8 +17,6 @@ const computeDeadlineLabel = (slot, deadlineHours) => {
   const [h, m] = slot.pickupStartTime.split(':').map(Number);
   const slotStartUtcMs = Date.UTC(year, month - 1, day, h - 8, m);
   const deadlineMs = slotStartUtcMs - deadlineHours * 3_600_000;
-  const deadlineDate = new Date(deadlineMs);
-  // Convert UTC deadline back to PHT for display
   const phtOffset = 8 * 60;
   const phtMs = deadlineMs + phtOffset * 60_000;
   const phtDate = new Date(phtMs);
@@ -57,26 +55,29 @@ const SlotCard = ({ slot, index, deadlineHours, onChange, onRemove }) => {
   const set = (field) => (e) => onChange(index, { ...slot, [field]: e.target.value });
   const setEnabled = () => onChange(index, { ...slot, enabled: !slot.enabled });
 
+  const headerLabel = [
+    slot.venueName,
+    formatSlotDate(slot.pickupDate),
+    slot.pickupHours,
+  ].filter(Boolean).join(' · ');
+
   return (
     <div className={`border rounded-xl p-5 space-y-4 transition-opacity ${!slot.enabled ? 'opacity-60' : ''}`}>
       {/* Slot header */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Toggle checked={slot.enabled} onChange={setEnabled} />
           <span className="text-sm font-semibold text-gray-900">
             Slot {index + 1}
-            {slot.pickupDate && (
-              <span className="ml-2 text-gray-500 font-normal">
-                — {formatSlotDate(slot.pickupDate)}
-                {slot.pickupHours ? ` · ${slot.pickupHours}` : ''}
-              </span>
+            {headerLabel && (
+              <span className="ml-2 text-gray-500 font-normal truncate">— {headerLabel}</span>
             )}
           </span>
         </div>
         <button
           type="button"
           onClick={() => onRemove(index)}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
           title="Remove slot"
         >
           <TrashIcon className="w-4 h-4" />
@@ -97,6 +98,36 @@ const SlotCard = ({ slot, index, deadlineHours, onChange, onRemove }) => {
       )}
 
       <fieldset disabled={!slot.enabled} className="space-y-4">
+        {/* Venue */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Venue Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={slot.venueName}
+            onChange={set('venueName')}
+            required={slot.enabled}
+            placeholder="e.g. Smart Araneta Coliseum"
+            className="input-field disabled:bg-gray-100 disabled:cursor-not-allowed"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Venue Address <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={slot.venueAddress}
+            onChange={set('venueAddress')}
+            required={slot.enabled}
+            rows={2}
+            placeholder="e.g. Araneta City, Cubao, Quezon City"
+            className="input-field disabled:bg-gray-100 disabled:cursor-not-allowed"
+          />
+        </div>
+
+        {/* Date & time */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -160,6 +191,8 @@ const SlotCard = ({ slot, index, deadlineHours, onChange, onRemove }) => {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const BLANK_SLOT = () => ({
+  venueName:           '',
+  venueAddress:        '',
   pickupDate:          '',
   pickupHours:         '',
   pickupStartTime:     '',
@@ -170,8 +203,6 @@ const BLANK_SLOT = () => ({
 const AdminPickup = () => {
   const [form, setForm] = useState({
     enabled:       false,
-    venueName:     '',
-    venueAddress:  '',
     deadlineHours: 6,
     slots:         [],
   });
@@ -185,10 +216,10 @@ const AdminPickup = () => {
         if (res.data) {
           setForm({
             enabled:       res.data.enabled       ?? false,
-            venueName:     res.data.venueName     || '',
-            venueAddress:  res.data.venueAddress  || '',
             deadlineHours: res.data.deadlineHours ?? 6,
             slots:         (res.data.slots || []).map(s => ({
+              venueName:           s.venueName           || '',
+              venueAddress:        s.venueAddress        || '',
               pickupDate:          s.pickupDate          || '',
               pickupHours:         s.pickupHours         || '',
               pickupStartTime:     s.pickupStartTime     || '',
@@ -201,9 +232,6 @@ const AdminPickup = () => {
       .catch(() => setMessage({ type: 'error', text: 'Failed to load current configuration' }))
       .finally(() => setLoading(false));
   }, []);
-
-  const setRoot = (field) => (e) =>
-    setForm(f => ({ ...f, [field]: e.target.value }));
 
   const addSlot = () =>
     setForm(f => ({ ...f, slots: [...f.slots, BLANK_SLOT()] }));
@@ -246,7 +274,7 @@ const AdminPickup = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Venue Pick-Up</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Configure pick-up slots at checkout. Each slot has its own date and time.
+          Configure pick-up slots at checkout. Each slot has its own venue, date, and time.
           A slot is automatically hidden when its deadline passes.
         </p>
       </div>
@@ -274,69 +302,33 @@ const AdminPickup = () => {
           </div>
         </div>
 
-        {/* ── Venue-level details ── */}
-        <div className="card p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-900">Venue Details</h2>
-          <p className="text-xs text-gray-500 -mt-2">Shared across all slots</p>
-
-          <fieldset
-            disabled={!form.enabled}
-            className={`space-y-4 transition-opacity ${!form.enabled ? 'opacity-50' : ''}`}
-          >
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Venue Name <span className="text-red-500">*</span>
-              </label>
+        {/* ── Global deadline setting ── */}
+        <div className={`card p-6 transition-opacity ${!form.enabled ? 'opacity-50' : ''}`}>
+          <fieldset disabled={!form.enabled}>
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Slot Deadline</h2>
+            <div className="flex items-center gap-3 mt-3">
               <input
-                type="text"
-                value={form.venueName}
-                onChange={setRoot('venueName')}
-                required={form.enabled}
-                placeholder="e.g. Smart Araneta Coliseum"
-                className="input-field disabled:bg-gray-100 disabled:cursor-not-allowed"
+                type="number"
+                min="1"
+                max="72"
+                value={form.deadlineHours}
+                onChange={(e) => setForm(f => ({ ...f, deadlineHours: Number(e.target.value) || 6 }))}
+                className="input-field w-24 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
+              <span className="text-sm text-gray-600">hours before each slot's start time</span>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Venue Address <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={form.venueAddress}
-                onChange={setRoot('venueAddress')}
-                required={form.enabled}
-                rows={2}
-                placeholder="e.g. Araneta City, Cubao, Quezon City"
-                className="input-field disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Slot Deadline
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min="1"
-                  max="72"
-                  value={form.deadlineHours}
-                  onChange={(e) => setForm(f => ({ ...f, deadlineHours: Number(e.target.value) || 6 }))}
-                  className="input-field w-24 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <span className="text-sm text-gray-600">hours before slot start time</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Slots are automatically hidden from buyers this many hours before they start.
-              </p>
-            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Applies to all slots. Each slot is hidden this many hours before it starts.
+            </p>
           </fieldset>
         </div>
 
         {/* ── Slots ── */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">Pick-Up Slots ({form.slots.length})</h2>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Pick-Up Slots ({form.slots.length})
+            </h2>
             <button
               type="button"
               onClick={addSlot}

@@ -75,7 +75,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Site settings management (try-on feature configuration)
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - **Shipping Analytics** — donut chart + breakdown table by shipping method (domestic standard/free, international by zone, venue pick-up); 4 summary cards; date range filter; CSV export
-- **Venue Pick-Up settings** — enable/disable toggle, shared venue name/address, configurable deadline hours; slot management UI with Add/Remove per slot, per-slot enable toggle, date, start time (PHT), display hours, and special instructions; live deadline label turns red when a slot's deadline has passed
+- **Venue Pick-Up settings** — enable/disable toggle, configurable deadline hours; slot management UI with Add/Remove per slot; each slot has its own venue name, venue address, date, start time (PHT), display hours, and special instructions; multiple venues at different locations can be active simultaneously; live deadline label turns red when a slot's deadline has passed
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
 - **Inventory CSV export** — downloads all products with size breakdown, remaining stock per size, total QTY, and unit price; filename: `YYMMDD - Inventory Report.csv`
@@ -426,8 +426,8 @@ puso-shop/
 
 ### VenuePickupConfig
 - Singleton document (one document per collection)
-- Root-level: `enabled` flag, `venueName`, `venueAddress`, `deadlineHours` (default 6)
-- `slots[]` array — each slot has `pickupDate` (YYYY-MM-DD string), `pickupHours` (display string), `pickupStartTime` (HH:MM 24h PHT, used for deadline computation), `specialInstructions`, `enabled`
+- Root-level: `enabled` flag, `deadlineHours` (default 6)
+- `slots[]` array — each slot carries its own `venueName`, `venueAddress`, `pickupDate` (YYYY-MM-DD string), `pickupHours` (display string), `pickupStartTime` (HH:MM 24h PHT, for deadline), `specialInstructions`, `enabled`; multiple venues at different locations/dates are supported simultaneously
 - A slot is hidden from buyers once `now ≥ slotStartPHT − deadlineHours`; deadline is computed by `isSlotActive()` in `calculateShipping.js` using `Date.UTC` PHT→UTC arithmetic
 
 ### ShippingEvent

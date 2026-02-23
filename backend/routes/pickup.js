@@ -21,18 +21,14 @@ router.get('/', async (req, res) => {
 // PUT /api/admin/pickup — replaces the entire VenuePickupConfig document
 router.put('/', async (req, res) => {
   try {
-    const { enabled, venueName, venueAddress, deadlineHours, slots } = req.body;
-
-    // Validate root-level fields when enabled
-    if (enabled) {
-      if (!venueName?.trim())    return res.status(400).json({ success: false, message: 'Venue name is required when pick-up is enabled' });
-      if (!venueAddress?.trim()) return res.status(400).json({ success: false, message: 'Venue address is required when pick-up is enabled' });
-    }
+    const { enabled, deadlineHours, slots } = req.body;
 
     // Validate each slot
     if (Array.isArray(slots)) {
       for (let i = 0; i < slots.length; i++) {
         const s = slots[i];
+        if (!s.venueName?.trim())       return res.status(400).json({ success: false, message: `Slot ${i + 1}: venue name is required` });
+        if (!s.venueAddress?.trim())    return res.status(400).json({ success: false, message: `Slot ${i + 1}: venue address is required` });
         if (!s.pickupDate?.trim())      return res.status(400).json({ success: false, message: `Slot ${i + 1}: pick-up date is required` });
         if (!s.pickupHours?.trim())     return res.status(400).json({ success: false, message: `Slot ${i + 1}: pick-up hours are required` });
         if (!s.pickupStartTime?.trim()) return res.status(400).json({ success: false, message: `Slot ${i + 1}: start time is required` });
@@ -40,6 +36,8 @@ router.put('/', async (req, res) => {
     }
 
     const cleanSlots = (slots || []).map(s => ({
+      venueName:           s.venueName?.trim()           || '',
+      venueAddress:        s.venueAddress?.trim()        || '',
       pickupDate:          s.pickupDate?.trim()          || '',
       pickupHours:         s.pickupHours?.trim()         || '',
       pickupStartTime:     s.pickupStartTime?.trim()     || '',
@@ -52,8 +50,6 @@ router.put('/', async (req, res) => {
       {
         $set: {
           enabled:       Boolean(enabled),
-          venueName:     venueName?.trim()     || '',
-          venueAddress:  venueAddress?.trim()  || '',
           deadlineHours: Number(deadlineHours) || 6,
           slots:         cleanSlots,
           updatedAt:     new Date(),

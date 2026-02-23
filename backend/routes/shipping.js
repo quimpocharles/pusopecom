@@ -56,15 +56,15 @@ router.post('/options', async (req, res) => {
               slotId: slot._id.toString(),
               label: 'Pick Up at Venue',
               description: [
-                config.venueName,
+                slot.venueName,
                 formatSlotDate(slot.pickupDate),
                 slot.pickupHours,
               ].filter(Boolean).join(' · '),
               fee: 0,
               isFree: true,
               note: slot.specialInstructions || null,
-              venueName: config.venueName,
-              venueAddress: config.venueAddress,
+              venueName: slot.venueName,
+              venueAddress: slot.venueAddress,
             });
           }
         }
