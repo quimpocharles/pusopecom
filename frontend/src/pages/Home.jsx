@@ -116,10 +116,10 @@ const Home = () => {
         title="Puso Pilipinas — Philippine Sports Merchandise | Basketball, Volleyball, E-Sports"
         description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, football, and e-sports. Rep Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more. Free shipping on select items."
       />
-      {/* ── Hero Section ─────────────────────────────────────────── */}
+      {/* ── Hero Section: Virtual Try-On Lead ───────────────────────── */}
       <section
-        className="relative flex flex-col items-center justify-center text-center overflow-hidden min-h-[88vh]"
-        style={{ background: '#0a0a0a' }}
+        className="relative flex flex-col items-center text-center overflow-hidden"
+        style={{ background: '#0a0a0a', minHeight: '100vh' }}
       >
         {/* Subtle grid lines */}
         <div
@@ -139,106 +139,204 @@ const Home = () => {
           style={{ background: 'radial-gradient(ellipse 80% 55% at 50% -5%, rgba(255,255,255,0.055) 0%, transparent 70%)' }}
         />
 
-        {/* Content */}
-        <div className="relative z-10 flex flex-col items-center px-6 pt-28 pb-24 md:pt-36 md:pb-28">
+        {/* ── Top content: badge · H1 · subline · CTA ── */}
+        <div className="relative z-10 flex flex-col items-center px-6 pt-28 pb-12 md:pt-36 md:pb-16 w-full">
           {/* Badge */}
-          {/* <div
-            className="inline-flex items-center gap-2 mb-8 md:mb-10"
+          <div
+            className="inline-flex items-center gap-2 mb-6 md:mb-8"
             style={{
               background: 'rgba(255,255,255,0.05)',
               border: '1px solid rgba(255,255,255,0.10)',
               borderRadius: '100px',
-              padding: '6px 16px',
+              padding: '5px 16px',
             }}
-          > */}
-            {/* Heart / puso icon */}
-            {/* <svg width="12" height="12" viewBox="0 0 24 22" fill="rgba(255,255,255,0.4)">
-              <path d="M12 21.5C12 21.5 1 14.3 1 7.1 1 3.6 3.8 1 7 1c2.1 0 3.9 1.1 5 2.8C13.1 2.1 14.9 1 17 1c3.2 0 6 2.6 6 6.1 0 7.2-11 14.4-11 14.4z" />
-            </svg>
-            <span
-              className="font-semibold uppercase"
-              style={{ fontSize: '11px', letterSpacing: '0.09em', color: 'rgba(255,255,255,0.42)' }}
-            >
-              Pilipinas Sports Merch
+          >
+            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.38)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)' }}>
+              ✦ AI-Powered Feature
             </span>
-          </div> */}
+          </div>
 
-          {/* Heading */}
+          {/* H1 */}
           <h1
             className="text-white font-black text-center"
             style={{
-              fontSize: 'clamp(5rem, 18vw, 14rem)',
-              lineHeight: 0.90,
-              letterSpacing: '-0.01em',
-              marginBottom: '28px',
+              fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
+              lineHeight: 1.0,
+              letterSpacing: '-0.04em',
+              marginBottom: '20px',
             }}
           >
-            Wear Your<br />
-            <span
-              style={{
-                display: 'inline-block',
-                background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
-                backgroundSize: '200% 100%',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                color: 'transparent',
-                animation: 'pusoFlagSweep 6s linear infinite',
-                willChange: 'background-position',
-              }}
-            >Puso <span style={{ fontSize: '0.52em', verticalAlign: 'middle' }}>❤️</span></span>
+            See it on you,<br />before you buy.
           </h1>
 
-          {/* Subtext */}
+          {/* Subline tagline */}
           <p
             className="text-center"
             style={{
-              fontSize: 'clamp(0.9rem, 1.8vw, 1.1rem)',
-              color: 'rgba(255,255,255,0.38)',
-              maxWidth: '460px',
-              lineHeight: 1.7,
-              marginBottom: '44px',
+              fontSize: 'clamp(1rem, 2vw, 1.2rem)',
+              color: 'rgba(255,255,255,0.50)',
+              letterSpacing: '-0.01em',
+              marginBottom: '36px',
             }}
           >
-            Authentic jerseys and gear for basketball, volleyball, football, and e-sports — from Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and beyond.
+            Wear your Puso — before checkout.
           </p>
 
-          {/* CTAs — visible on mobile/tablet, hidden on desktop */}
-          <div className="flex items-center gap-3 flex-wrap justify-center lg:hidden">
-            <Link
-              to="/products"
-              className="font-bold active:scale-[0.97] transition-transform"
+          {/* Primary CTA — animated Philippine flag gradient */}
+          <Link
+            to={tryOnSettings.productUrl}
+            className="inline-flex items-center gap-2 font-bold active:scale-[0.97] transition-transform"
+            style={{
+              background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'pusoFlagSweep 6s linear infinite',
+              color: '#fff',
+              textShadow: '0 1px 3px rgba(0,0,0,0.35)',
+              borderRadius: '100px',
+              padding: '14px 32px',
+              fontSize: '15px',
+              textDecoration: 'none',
+            }}
+          >
+            Try On a Jersey Now
+            <ChevronRightIcon className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {/* ── Browser mockup ── */}
+        <div className="relative w-full" style={{ zIndex: 2 }}>
+          {/* Ground shadow on the section floor */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '78%',
+              maxWidth: '800px',
+              height: '90px',
+              background: 'radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.20) 0%, transparent 72%)',
+              zIndex: 1,
+              pointerEvents: 'none',
+            }}
+          />
+
+          {/* Floating mockup card */}
+          <div
+            className="relative flex justify-center"
+            style={{ padding: '0 clamp(12px, 4vw, 48px)', zIndex: 2 }}
+          >
+            <div
               style={{
-                background: '#fff',
-                color: '#0a0a0a',
-                borderRadius: '100px',
-                padding: '14px 36px',
-                fontSize: '15px',
-                textDecoration: 'none',
+                width: '100%',
+                maxWidth: '940px',
+                borderRadius: '18px',
+                overflow: 'hidden',
               }}
             >
-              Shop Now
-            </Link>
-            <Link
-              to="/products?sale=true"
-              className="active:scale-[0.97] transition-all"
-              style={{
-                border: '1px solid rgba(255,255,255,0.14)',
-                color: 'rgba(255,255,255,0.55)',
-                borderRadius: '100px',
-                padding: '14px 36px',
-                fontSize: '15px',
-                textDecoration: 'none',
-              }}
-            >
-              View Sale
-            </Link>
+              {/* Browser chrome bar */}
+              <div
+                style={{
+                  background: '#1a1a1c',
+                  padding: '11px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                {[0.18, 0.18, 0.18].map((op, i) => (
+                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: `rgba(255,255,255,${op})`, flexShrink: 0 }} />
+                ))}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px 20px', fontSize: '11px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.01em', userSelect: 'none' }}>
+                    pusostore.com — Virtual Try-On
+                  </div>
+                </div>
+              </div>
+
+              {/* Screen content */}
+              <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0d0d0d' }}>
+                <img
+                  src={tryOnSettings.image || tryOnPreviewFallback}
+                  alt="Virtual try-on demo — see yourself wearing Philippine sports jerseys"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
+                  loading="eager"
+                />
+                {/* Glass overlay with admin-configurable title + CTA */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.42)',
+                    backdropFilter: 'blur(4px)',
+                    WebkitBackdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '24px',
+                    textAlign: 'center',
+                    gap: '20px',
+                  }}
+                >
+                  <p style={{
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 'clamp(0.95rem, 2.4vw, 1.625rem)',
+                    letterSpacing: '-0.02em',
+                    textShadow: '0 2px 16px rgba(0,0,0,0.7)',
+                    maxWidth: '560px',
+                  }}>
+                    ✦ {tryOnSettings.title}
+                  </p>
+                  <Link
+                    to={tryOnSettings.productUrl}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      background: '#fff',
+                      color: '#0a0a0a',
+                      fontWeight: 700,
+                      fontSize: 'clamp(12px, 1.4vw, 15px)',
+                      padding: 'clamp(10px, 1.2vw, 14px) clamp(20px, 2.5vw, 32px)',
+                      borderRadius: '100px',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
+                      transition: 'opacity 0.18s, transform 0.15s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    Try It Now
+                    <ChevronRightIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* SEO trust line */}
+        <p
+          className="relative z-10 text-center px-6 py-6 md:py-8"
+          style={{
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.25)',
+            maxWidth: '600px',
+            margin: '0 auto',
+            lineHeight: 1.7,
+          }}
+        >
+          Authentic jerseys and gear for basketball, volleyball, football &amp; e-sports — Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and beyond.
+        </p>
+
         {/* Scroll hint */}
         <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
           style={{
             color: 'rgba(255,255,255,0.18)',
             fontSize: '10px',
@@ -308,196 +406,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* ── Virtual Try-On Floating Showcase ─────────────────────── */}
-      <section style={{ background: '#0a0a0a', position: 'relative', overflow: 'hidden' }}>
-
-        {/* ── Text content (dark zone) ── */}
-        <div
-          className="relative text-center px-6"
-          style={{ paddingTop: 'clamp(72px, 9vw, 128px)', paddingBottom: '52px', zIndex: 10 }}
-        >
-          {/* Badge */}
-          <div
-            className="inline-flex items-center gap-2 mb-6"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.10)',
-              borderRadius: '100px',
-              padding: '5px 16px',
-            }}
-          >
-            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.38)' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)' }}>
-              AI-Powered Feature
-            </span>
-          </div>
-
-          <h2
-            className="text-white font-bold"
-            style={{ fontSize: 'clamp(1.75rem, 4.5vw, 3.5rem)', letterSpacing: '-0.035em', lineHeight: 1.08, marginBottom: '18px' }}
-          >
-            See it on you,<br />before you buy.
-          </h2>
-
-          <p style={{ color: 'rgba(255,255,255,0.36)', fontSize: 'clamp(0.875rem, 1.5vw, 1rem)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.72 }}>
-            Upload any photo and our AI shows you wearing your favourite team's jersey — instantly.
-          </p>
-        </div>
-
-        {/* ── Stage: dome + floating mockup ── */}
-        {/*
-          paddingBottom: 0  → card's bottom edge sits flush with the container floor.
-          The dome rises clamp(160px,28vw,270px) upward from the floor, tucking behind
-          roughly the bottom 50% of the 16∶9 card. Card is z:2, dome is z:1.
-        */}
-        <div className="relative" style={{ paddingBottom: '0' }}>
-
-          {/* ── White dome — CSS border-radius arc, no SVG needed ── */}
-          {/*
-            Extends 2% beyond each side so the arc corners are never visible.
-            border-radius 50% 50% 0 0 / 50px creates a gentle convex top edge:
-            center rises ~50px above the left/right edges — barely perceptible.
-            Height ≈ 50% of the 16∶9 card, making the card appear to sit on the dome.
-          */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: '-2%',
-              width: '104%',
-              height: 'clamp(160px, 28vw, 270px)',
-              background: '#f5f5f7',
-              borderRadius: '50% 50% 0 0 / 50px 50px 0 0',
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
-          />
-
-          {/* ── Ground shadow — soft radial ellipse on the white dome surface ── */}
-          {/*
-            Sits behind the card (z:1, DOM after dome so stacks on top of it).
-            Card covers most of it; only the edges bleed out, creating a natural
-            "light from above" contact shadow on the white surface.
-          */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '78%',
-              maxWidth: '800px',
-              height: '90px',
-              background: 'radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.13) 0%, transparent 72%)',
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
-          />
-
-          {/* Floating mockup */}
-          <div
-            className="relative flex justify-center"
-            style={{ padding: '0 clamp(12px, 4vw, 48px)', zIndex: 2 }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '940px',
-                borderRadius: '18px',
-                overflow: 'hidden',
-                /* No box-shadow on the card — ground shadow handles depth */
-              }}
-            >
-              {/* Browser chrome bar */}
-              <div
-                style={{
-                  background: '#1a1a1c',
-                  padding: '11px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '7px',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                {/* Traffic lights */}
-                {[0.18, 0.18, 0.18].map((op, i) => (
-                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: `rgba(255,255,255,${op})`, flexShrink: 0 }} />
-                ))}
-                {/* URL bar */}
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px 20px', fontSize: '11px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.01em', userSelect: 'none' }}>
-                    pusostore.com — Virtual Try-On
-                  </div>
-                </div>
-              </div>
-
-              {/* Screen content */}
-              <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0d0d0d' }}>
-                <img
-                  src={tryOnSettings.image || tryOnPreviewFallback}
-                  alt="Virtual try-on demo"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
-                  loading="lazy"
-                />
-
-                {/* Centered glass overlay with title + CTA */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.42)',
-                    backdropFilter: 'blur(4px)',
-                    WebkitBackdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '24px',
-                    textAlign: 'center',
-                    gap: '20px',
-                  }}
-                >
-                  <p style={{
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 'clamp(0.95rem, 2.4vw, 1.625rem)',
-                    letterSpacing: '-0.02em',
-                    textShadow: '0 2px 16px rgba(0,0,0,0.7)',
-                    maxWidth: '560px',
-                  }}>
-                    ✦ {tryOnSettings.title}
-                  </p>
-
-                  <Link
-                    to={tryOnSettings.productUrl}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '7px',
-                      background: '#fff',
-                      color: '#0a0a0a',
-                      fontWeight: 700,
-                      fontSize: 'clamp(12px, 1.4vw, 15px)',
-                      padding: 'clamp(10px, 1.2vw, 14px) clamp(20px, 2.5vw, 32px)',
-                      borderRadius: '100px',
-                      textDecoration: 'none',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
-                      transition: 'opacity 0.18s, transform 0.15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
-                  >
-                    Try It Now
-                    <ChevronRightIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Shop by Sport - Tabbed Carousel */}
       <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
