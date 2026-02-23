@@ -352,12 +352,20 @@ const Home = () => {
           </svg>
         </div>
 
-        {/* Curve → next section (#f5f5f7) */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ zIndex: 2 }}>
-          <svg viewBox="0 0 1440 100" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100px' }}>
-            <path d="M0,100 C400,5 1040,5 1440,100 L1440,100 L0,100 Z" fill="#f5f5f7" />
-          </svg>
-        </div>
+        {/* Dome platform — large ellipse in next-section color, rises behind the mockup */}
+        <div
+          aria-hidden="true"
+          className="absolute pointer-events-none"
+          style={{
+            bottom: 0,
+            left: '-20%',
+            right: '-20%',
+            height: '700px',
+            background: '#f5f5f7',
+            borderRadius: '50%',
+            zIndex: 1,
+          }}
+        />
 
         <style>{`
           @keyframes heroScrollBob {
