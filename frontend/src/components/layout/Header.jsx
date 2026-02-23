@@ -200,13 +200,13 @@ const Header = () => {
 
           {/* Right-side actions */}
           <div className="flex items-center gap-1 md:gap-1.5">
-            {/* Search */}
+            {/* Search — desktop only; mobile search lives in the side nav */}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className={`p-2 ${hoverBtn} rounded-full transition-colors`}
+              className={`hidden md:flex p-2 ${hoverBtn} rounded-full transition-colors`}
               aria-label="Search"
             >
-              <MagnifyingGlassIcon className={`w-4 h-4 md:w-5 md:h-5 transition-colors duration-[450ms] ${iconCls}`} />
+              <MagnifyingGlassIcon className={`w-5 h-5 transition-colors duration-[450ms] ${iconCls}`} />
             </button>
 
             {/* User menu */}
@@ -380,9 +380,9 @@ const Header = () => {
       {/* ── Mobile slide-in menu ──────────────────────────────────── */}
       {showMobileMenu && (
         <>
-          <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setShowMobileMenu(false)} />
+          <div className="fixed inset-0 bg-black/60 z-[55]" onClick={() => setShowMobileMenu(false)} />
           <div
-            className="fixed inset-y-0 left-0 w-80 max-w-[85vw] z-50 animate-slide-down flex flex-col"
+            className="fixed inset-y-0 left-0 w-80 max-w-[85vw] z-[60] animate-slide-down flex flex-col"
             style={{
               background: 'rgba(10, 10, 10, 0.97)',
               borderRight: '1px solid rgba(255,255,255,0.08)',
@@ -398,6 +398,53 @@ const Header = () => {
               <button onClick={() => setShowMobileMenu(false)} className="p-2 hover:bg-white/10 rounded-full" aria-label="Close menu">
                 <XMarkIcon className="w-5 h-5 text-white" />
               </button>
+            </div>
+
+            {/* Mobile search */}
+            <div className="px-4 pt-4 pb-2" ref={searchContainerRef}>
+              <form onSubmit={(e) => { handleSearch(e); setShowMobileMenu(false); }} className="relative">
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={handleSearchInput}
+                  onKeyDown={handleSearchKeyDown}
+                  aria-label="Search products"
+                  className="w-full px-4 py-2.5 pl-10 bg-white/10 text-white placeholder-white/30 border border-white/10 rounded-xl focus:outline-none focus:ring-1 focus:ring-white/30 text-sm"
+                />
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              </form>
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="mt-1 bg-white rounded-xl shadow-card border border-gray-100 py-2 max-h-60 overflow-y-auto">
+                  {suggestions.map((item, i) => (
+                    <button
+                      key={item.slug}
+                      onClick={() => {
+                        navigate(`/products/${item.slug}`);
+                        setShowMobileMenu(false);
+                        setShowSuggestions(false);
+                        setSuggestions([]);
+                        setSearchTerm('');
+                      }}
+                      className={`flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors ${selectedIndex === i ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                    >
+                      {item.image && (
+                        <img src={item.image} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">{toTitleCase(item.name)}</p>
+                        <p className="text-sm text-gray-500">
+                          {item.salePrice ? (
+                            <><span className="text-accent-500 font-semibold">₱{item.salePrice.toLocaleString()}</span><span className="line-through ml-1 text-gray-400">₱{item.price.toLocaleString()}</span></>
+                          ) : (
+                            <span className="font-semibold">₱{item.price.toLocaleString()}</span>
+                          )}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <nav className="p-4 flex-1 overflow-y-auto">
