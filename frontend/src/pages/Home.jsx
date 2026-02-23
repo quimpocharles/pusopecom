@@ -162,9 +162,9 @@ const Home = () => {
           <h1
             className="text-white font-black text-center"
             style={{
-              fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
+              fontSize: 'clamp(3.5rem, 9vw, 7rem)',
               lineHeight: 1.0,
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.04em',
               marginBottom: '20px',
             }}
           >
@@ -175,9 +175,9 @@ const Home = () => {
           <p
             className="text-center"
             style={{
-              fontSize: 'clamp(1rem, 2vw, 1.2rem)',
+              fontSize: 'clamp(0.75rem, 1.4vw, 0.9rem)',
               color: 'rgba(255,255,255,0.50)',
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.03em',
             }}
           >
             Virtually wear your favorite Pilipinas apparel — before checkout.
