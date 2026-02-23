@@ -1,5 +1,4 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import LogoColor from '../../assets/images/puso.png';
 import LogoWhite from '../../assets/images/puso-white.png';
 import {
   ShoppingBagIcon,
@@ -46,7 +45,11 @@ const Header = () => {
   const debounceRef        = useRef(null);
 
   // isExpanded: full-width transparent bar at top; collapses to dark pill on scroll
-  const isExpanded = !scrolled;
+  // useDarkText: dark text only on non-home pages when expanded (light page bg beneath)
+  //              home page at top uses white text (dark hero beneath)
+  const isHome      = location.pathname === '/';
+  const isExpanded  = !scrolled;
+  const useDarkText = isExpanded && !isHome;
 
   // ── Scroll listener ──────────────────────────────────────────────
   useEffect(() => {
@@ -58,9 +61,9 @@ const Header = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // ── Color tokens (dark text at top, white text in pill) ─────────
-  const iconCls   = isExpanded ? 'text-gray-700'          : 'text-white/80';
-  const hoverBtn  = isExpanded ? 'hover:bg-black/[0.06]'  : 'hover:bg-white/10';
+  // ── Color tokens ─────────────────────────────────────────────────
+  const iconCls   = useDarkText ? 'text-gray-700'         : 'text-white/80';
+  const hoverBtn  = useDarkText ? 'hover:bg-black/[0.06]' : 'hover:bg-white/10';
 
   // ── Shell style (outer full-width positioner) ────────────────────
   const shellStyle = {
@@ -150,7 +153,7 @@ const Header = () => {
     { label: 'Football',   href: '/products?sport=football' },
   ];
 
-  const linkCls = isExpanded
+  const linkCls = useDarkText
     ? 'text-gray-600 hover:text-gray-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-black/[0.06] transition-colors whitespace-nowrap'
     : 'text-white/70 hover:text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white/[0.08] transition-colors whitespace-nowrap';
 
@@ -177,7 +180,7 @@ const Header = () => {
 
           {/* Logo — allowed to overflow the navbar height */}
           <Link to="/" className="flex-shrink-0 relative z-10">
-            <img src={isExpanded ? LogoColor : LogoWhite} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto transition-opacity duration-[450ms]" />
+            <img src={LogoWhite} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto" />
           </Link>
 
           {/* Desktop nav — absolutely centred so it doesn't push the logo/actions */}
@@ -187,7 +190,7 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link to="/products?sale=true" className={`${isExpanded ? 'text-gray-800 hover:text-gray-900 hover:bg-black/[0.06]' : 'text-white/90 hover:text-white hover:bg-white/[0.08]'} text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors`}>
+            <Link to="/products?sale=true" className={`${useDarkText ? 'text-gray-800 hover:text-gray-900 hover:bg-black/[0.06]' : 'text-white/90 hover:text-white hover:bg-white/[0.08]'} text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors`}>
               Sale
             </Link>
           </nav>
@@ -278,7 +281,7 @@ const Header = () => {
             >
               <ShoppingBagIcon className={`w-4 h-4 md:w-5 md:h-5 transition-colors duration-[450ms] ${iconCls}`} />
               {cartCount > 0 && (
-                <span className={`absolute -top-0.5 -right-0.5 text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold transition-colors duration-[450ms] ${isExpanded ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
+                <span className={`absolute -top-0.5 -right-0.5 text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold transition-colors duration-[450ms] ${useDarkText ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
                   {cartCount > 9 ? '9+' : cartCount}
                 </span>
               )}
@@ -287,7 +290,7 @@ const Header = () => {
             {/* Shop Now CTA — desktop only */}
             <Link
               to="/products"
-              className={`hidden md:inline-flex items-center text-sm font-bold px-4 py-2 rounded-full transition-all whitespace-nowrap ml-1 active:scale-[0.97] ${isExpanded ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-gray-900 hover:bg-white/88'}`}
+              className={`hidden md:inline-flex items-center text-sm font-bold px-4 py-2 rounded-full transition-all whitespace-nowrap ml-1 active:scale-[0.97] ${useDarkText ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-gray-900 hover:bg-white/88'}`}
             >
               Shop Now
             </Link>
