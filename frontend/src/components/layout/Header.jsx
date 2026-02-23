@@ -44,11 +44,10 @@ const Header = () => {
   const searchContainerRef = useRef(null);
   const debounceRef        = useRef(null);
 
-  const isHome        = location.pathname === '/';
   // isExpanded: full-width bar at top of ANY page (drives layout/shape)
-  // isTransparent: fully transparent bg — only on home hero before scrolling
+  // isTransparent: hero bg is now light (#f5f5f7) so the nav is never transparent
   const isExpanded    = !scrolled;
-  const isTransparent = isHome && isExpanded;
+  const isTransparent = false;
 
   // ── Scroll listener ──────────────────────────────────────────────
   useEffect(() => {

@@ -119,24 +119,24 @@ const Home = () => {
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <section
         className="relative flex flex-col items-center justify-center text-center overflow-hidden min-h-[88vh]"
-        style={{ background: '#0a0a0a' }}
+        style={{ background: '#f5f5f7' }}
       >
         {/* Subtle grid lines */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage: [
-              'repeating-linear-gradient(0deg,   transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
-              'repeating-linear-gradient(90deg,  transparent, transparent 64px, rgba(255,255,255,0.025) 64px, rgba(255,255,255,0.025) 65px)',
+              'repeating-linear-gradient(0deg,   transparent, transparent 64px, rgba(0,0,0,0.05) 64px, rgba(0,0,0,0.05) 65px)',
+              'repeating-linear-gradient(90deg,  transparent, transparent 64px, rgba(0,0,0,0.05) 64px, rgba(0,0,0,0.05) 65px)',
             ].join(', '),
             maskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
             WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
           }}
         />
-        {/* Radial glow at top */}
+        {/* Radial vignette at top */}
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 80% 55% at 50% -5%, rgba(255,255,255,0.055) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 80% 55% at 50% -5%, rgba(0,0,0,0.04) 0%, transparent 70%)' }}
         />
 
         {/* Content */}
@@ -165,7 +165,7 @@ const Home = () => {
 
           {/* Heading */}
           <h1
-            className="text-white font-black text-center"
+            className="text-gray-900 font-black text-center"
             style={{
               fontSize: 'clamp(5rem, 18vw, 14rem)',
               lineHeight: 0.90,
@@ -194,7 +194,7 @@ const Home = () => {
             className="text-center"
             style={{
               fontSize: 'clamp(0.9rem, 1.8vw, 1.1rem)',
-              color: 'rgba(255,255,255,0.38)',
+              color: 'rgba(0,0,0,0.45)',
               maxWidth: '460px',
               lineHeight: 1.7,
               marginBottom: '44px',
@@ -209,8 +209,8 @@ const Home = () => {
               to="/products"
               className="font-bold active:scale-[0.97] transition-transform"
               style={{
-                background: '#fff',
-                color: '#0a0a0a',
+                background: '#0a0a0a',
+                color: '#ffffff',
                 borderRadius: '100px',
                 padding: '14px 36px',
                 fontSize: '15px',
@@ -223,8 +223,8 @@ const Home = () => {
               to="/products?sale=true"
               className="active:scale-[0.97] transition-all"
               style={{
-                border: '1px solid rgba(255,255,255,0.14)',
-                color: 'rgba(255,255,255,0.55)',
+                border: '1px solid rgba(0,0,0,0.15)',
+                color: 'rgba(0,0,0,0.55)',
                 borderRadius: '100px',
                 padding: '14px 36px',
                 fontSize: '15px',
@@ -240,7 +240,7 @@ const Home = () => {
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
           style={{
-            color: 'rgba(255,255,255,0.18)',
+            color: 'rgba(0,0,0,0.28)',
             fontSize: '10px',
             letterSpacing: '0.14em',
             textTransform: 'uppercase',
