@@ -63,7 +63,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Dynamic shipping options calculated at checkout via `POST /api/shipping/options`
 - **Domestic (Philippines)**: flat-rate per PSGC region (₱99–₱200); free for orders ₱2,000+
 - **International**: flat rate ₱2,100 for mapped zones (SEA, Middle East, North America, Europe); "Contact Us" for unmapped countries
-- **Venue Pick-Up**: free option; supports multiple pick-up slots per event, each with its own date, display hours, start time (PHT), and optional instructions; a slot is automatically hidden when its deadline passes (configurable — default 6 hours before start time)
+- **Venue Pick-Up**: free option; each slot is labelled "Pick Up at [Venue Name]" at checkout; supports multiple slots across different venues simultaneously (e.g. Araneta Coliseum on Feb 26, MoA Arena on Feb 27), each with its own venue name, address, date, display hours, and optional instructions; a slot is automatically hidden when its deadline passes (configurable — default 6 hours before start time)
 - Free shipping progress bar in the cart drawer + dismissible announcement bar at the top of every page
 - Shipping method and region stored on every order for analytics
 
@@ -437,14 +437,15 @@ puso-shop/
 
 ## Payment Flow
 
-1. User selects delivery method at checkout (domestic standard/free, international, or venue pick-up)
-2. Backend creates order with `paymentStatus: pending`, `shippingMethod`, and `shippingRegion`
-3. Backend initiates Maya checkout session and redirects user to payment page
-4. User completes payment on Maya
-5. Maya sends webhook to backend → order updated to `paymentStatus: paid`; `ShippingEvent` written for analytics
-6. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment` (also writes `ShippingEvent`)
-7. User receives order confirmation email
-8. User is redirected to order confirmation page
+1. User fills Contact Information (email, phone, full name — always collected for all delivery types)
+2. User selects delivery method (domestic standard/free, international, or one of the active venue pick-up slots)
+3. Backend creates order with `paymentStatus: pending`, `shippingMethod`, and `shippingRegion`
+4. Backend initiates Maya checkout session and redirects user to payment page
+5. User completes payment on Maya
+6. Maya sends webhook to backend → order updated to `paymentStatus: paid`; `ShippingEvent` written for analytics
+7. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment` (also writes `ShippingEvent`)
+8. User receives order confirmation email
+9. User is redirected to order confirmation page
 
 ## Email Templates
 
