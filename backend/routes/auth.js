@@ -217,7 +217,7 @@ router.post('/login',
 
 // Resend Verification Email
 router.post('/resend-verification',
-  [body('email').isEmail().normalizeEmail()],
+  [body('email').isEmail().normalizeEmail({ gmail_remove_dots: false })],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -267,7 +267,7 @@ router.post('/resend-verification',
 
 // Forgot Password
 router.post('/forgot-password',
-  [body('email').isEmail().normalizeEmail()],
+  [body('email').isEmail().normalizeEmail({ gmail_remove_dots: false })],
   async (req, res) => {
     try {
       const errors = validationResult(req);
