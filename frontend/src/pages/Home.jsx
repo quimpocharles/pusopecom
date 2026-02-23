@@ -360,9 +360,9 @@ const Home = () => {
             bottom: 0,
             left: '-20%',
             right: '-20%',
-            height: '700px',
+            height: '500px',
             background: '#f5f5f7',
-            borderRadius: '50%',
+            borderRadius: '50% 50% 0 0 / 100% 100% 0 0',
             zIndex: 1,
           }}
         />
