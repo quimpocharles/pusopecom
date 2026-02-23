@@ -6,6 +6,15 @@ import CartUpsell from './CartUpsell';
 import FreeShippingBar from './FreeShippingBar';
 import { toTitleCase } from '../../utils/text';
 
+// Returns stock for a given cart item using the product data stored at add-time
+const getItemStock = (item) => {
+  if (item.color && item.product.colors?.length > 0) {
+    const colorObj = item.product.colors.find((c) => c.color === item.color);
+    return colorObj?.sizes.find((s) => s.size === item.size)?.stock ?? 99;
+  }
+  return item.product.sizes?.find((s) => s.size === item.size)?.stock ?? 99;
+};
+
 const CartDrawer = () => {
   const navigate = useNavigate();
   const {
@@ -260,7 +269,8 @@ const CartDrawer = () => {
                         <span className="px-3 text-sm font-medium">{item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.product._id, item.size, item.color, item.quantity + 1)}
-                          className="p-1.5 hover:bg-gray-50 transition-colors"
+                          disabled={item.quantity >= getItemStock(item)}
+                          className="p-1.5 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
                         >
                           <PlusIcon className="w-3.5 h-3.5 text-gray-500" />

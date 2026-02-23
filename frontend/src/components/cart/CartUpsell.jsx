@@ -10,6 +10,7 @@ const CartUpsell = ({ cartProductIds }) => {
   // Per-product selection state: { [productId]: { color, size } }
   const [selections, setSelections] = useState({});
   const addItem = useCartStore((state) => state.addItem);
+  const cartItems = useCartStore((state) => state.items);
 
   useEffect(() => {
     if (cartProductIds.length === 0) {
@@ -58,6 +59,13 @@ const CartUpsell = ({ cartProductIds }) => {
   const handleAdd = (product) => {
     const sel = selections[product._id] || {};
     if (!sel.size) return;
+    const sizeStock = sel.color
+      ? product.colors?.find((c) => c.color === sel.color)?.sizes.find((s) => s.size === sel.size)?.stock ?? 0
+      : product.sizes?.find((s) => s.size === sel.size)?.stock ?? 0;
+    const inCart = cartItems.find(
+      (item) => item.product._id === product._id && item.size === sel.size && (item.color || null) === (sel.color || null)
+    )?.quantity ?? 0;
+    if (inCart >= sizeStock) return;
     addItem(product, sel.size, 1, sel.color || null);
   };
 
