@@ -63,7 +63,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Dynamic shipping options calculated at checkout via `POST /api/shipping/options`
 - **Domestic (Philippines)**: flat-rate per PSGC region (₱99–₱200); free for orders ₱2,000+
 - **International**: flat rate ₱2,100 for mapped zones (SEA, Middle East, North America, Europe); "Contact Us" for unmapped countries
-- **Venue Pick-Up**: free option shown only when a future event is configured and the buyer is in Philippines
+- **Venue Pick-Up**: free option; supports multiple pick-up slots per event, each with its own date, display hours, start time (PHT), and optional instructions; a slot is automatically hidden when its deadline passes (configurable — default 6 hours before start time)
 - Free shipping progress bar in the cart drawer + dismissible announcement bar at the top of every page
 - Shipping method and region stored on every order for analytics
 
@@ -75,7 +75,7 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Site settings management (try-on feature configuration)
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
 - **Shipping Analytics** — donut chart + breakdown table by shipping method (domestic standard/free, international by zone, venue pick-up); 4 summary cards; date range filter; CSV export
-- **Venue Pick-Up settings** — enable/disable toggle, venue name/address, pick-up date/hours, special instructions; live preview mirrors the checkout card; automatically hidden when date passes
+- **Venue Pick-Up settings** — enable/disable toggle, shared venue name/address, configurable deadline hours; slot management UI with Add/Remove per slot, per-slot enable toggle, date, start time (PHT), display hours, and special instructions; live deadline label turns red when a slot's deadline has passed
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
 - **Inventory CSV export** — downloads all products with size breakdown, remaining stock per size, total QTY, and unit price; filename: `YYMMDD - Inventory Report.csv`
@@ -238,7 +238,7 @@ puso-shop/
 │   │                    #   tryon, upload, settings, activity, shipping, pickup)
 │   ├── lib/
 │   │   ├── config/      # shipping.js — thresholds, DOMESTIC_RATES, COUNTRY_REGION_MAP, SHIPPING_METHODS
-│   │   └── shipping/    # calculateShipping.js — getDomesticRate, getInternationalRate, getVenuePickupRate
+│   │   └── shipping/    # calculateShipping.js — getDomesticRate, getInternationalRate, getVenuePickupRate, isSlotActive
 │   ├── __tests__/       # Vitest unit tests (calculateShipping)
 │   ├── services/        # Business logic (email, Maya payment, Replicate, daily sales)
 │   ├── middleware/      # auth.js — authenticate, isAdmin, optionalAuth
@@ -330,11 +330,11 @@ puso-shop/
 - `GET /shipping` - Shipping method breakdown with date range filter; returns `methodBreakdown` (aggregated by method + region), `rawEvents` (for CSV export), `totalOrders` (Admin)
 
 ### Shipping (`/api/shipping`)
-- `POST /options` - Calculate shipping options for a cart; body: `{ cartTotal, country, region? }`; returns `{ shippingOptions, venuePickup }`
+- `POST /options` - Calculate shipping options for a cart; body: `{ cartTotal, country, region? }`; returns `{ shippingOptions }` — each active venue pickup slot appears as a separate entry with a unique `slotId`
 
 ### Venue Pick-Up (`/api/admin/pickup`)
 - `GET /` - Get current venue pick-up configuration (Admin)
-- `PUT /` - Update venue pick-up configuration; validates required fields when `enabled: true` (Admin)
+- `PUT /` - Replace entire configuration; body: `{ enabled, venueName, venueAddress, deadlineHours, slots[] }`; validates venue fields when enabled and each slot's required fields independently (Admin)
 
 ### Leagues (`/api/leagues`)
 - `GET /` - Get all active leagues (public)
@@ -426,9 +426,9 @@ puso-shop/
 
 ### VenuePickupConfig
 - Singleton document (one document per collection)
-- `enabled` flag, venue name, venue address
-- Pick-up date, pick-up hours, special instructions
-- Auto-disabled at checkout when `pickupDate` is in the past
+- Root-level: `enabled` flag, `venueName`, `venueAddress`, `deadlineHours` (default 6)
+- `slots[]` array — each slot has `pickupDate` (YYYY-MM-DD string), `pickupHours` (display string), `pickupStartTime` (HH:MM 24h PHT, used for deadline computation), `specialInstructions`, `enabled`
+- A slot is hidden from buyers once `now ≥ slotStartPHT − deadlineHours`; deadline is computed by `isSlotActive()` in `calculateShipping.js` using `Date.UTC` PHT→UTC arithmetic
 
 ### ShippingEvent
 - Written on every successfully paid order (both `verify-payment` and `webhooks/maya` paths)
