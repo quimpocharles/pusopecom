@@ -16,7 +16,7 @@ const DARK      = '#1a1a1a';
 const WHITE     = '#ffffff';
 const MUTED     = 'rgba(255,255,255,0.55)';
 const BORDER    = 'rgba(255,255,255,0.10)';
-const LOGO_URL  = `${process.env.FRONTEND_URL}/Logo.png`;
+const LOGO_URL  = `${process.env.FRONTEND_URL}/puso-white.png`;
 
 // ── Shared wrapper ─────────────────────────────────────────────────────────────
 const getEmailTemplate = (content) => `
