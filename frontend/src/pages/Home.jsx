@@ -119,7 +119,7 @@ const Home = () => {
       {/* ── Hero Section: Virtual Try-On Lead ───────────────────────── */}
       <section
         className="relative flex flex-col items-center text-center overflow-hidden"
-        style={{ background: '#0a0a0a', minHeight: '100vh' }}
+        style={{ background: '#0a0a0a' }}
       >
         {/* Subtle grid lines */}
         <div
@@ -322,7 +322,7 @@ const Home = () => {
 
         {/* SEO trust line */}
         <p
-          className="relative z-10 text-center px-6 py-6 md:py-8"
+          className="relative z-10 text-center px-6 pt-3 pb-6"
           style={{
             fontSize: '12px',
             color: 'rgba(255,255,255,0.25)',
@@ -390,7 +390,7 @@ const Home = () => {
       </section>
 
       {/* Shop by Sport - Tabbed Carousel */}
-      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
+      <section className="pt-4 pb-10 md:pt-6 md:pb-16 lg:pt-8 lg:pb-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
         <div className="container-custom">
           <div className="text-center mb-8 md:mb-10">
             <h2
