@@ -43,6 +43,29 @@ export function getInternationalRate(countryName) {
 }
 
 /**
+ * Returns true when the given slot is still open for selection (i.e. the
+ * deadline — `deadlineHours` before the slot's start time in PHT — has not yet
+ * passed).
+ *
+ * @param {{ pickupDate: string, pickupStartTime: string, enabled: boolean }} slot
+ * @param {number} [deadlineHours=6]
+ * @returns {boolean}
+ */
+export function isSlotActive(slot, deadlineHours = 6) {
+  if (!slot.enabled || !slot.pickupDate || !slot.pickupStartTime) return false;
+
+  const [year, month, day] = slot.pickupDate.split('-').map(Number);
+  const [h, m] = slot.pickupStartTime.split(':').map(Number);
+
+  // pickupDate + pickupStartTime are in PHT (UTC+8). Subtract 8h to get UTC.
+  // Date.UTC handles out-of-range hours correctly (e.g. h=0 → prev day 16:00 UTC).
+  const slotStartUtcMs = Date.UTC(year, month - 1, day, h - 8, m);
+  const deadlineMs = slotStartUtcMs - deadlineHours * 3_600_000;
+
+  return Date.now() < deadlineMs;
+}
+
+/**
  * Returns the venue pickup rate (always free).
  *
  * @returns {{ method: string, fee: number }}

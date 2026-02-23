@@ -11,37 +11,52 @@ router.use(authenticate, isAdmin);
 router.get('/', async (req, res) => {
   try {
     const config = await VenuePickupConfig.findOne().lean();
-    res.json({ success: true, data: config || { enabled: false } });
+    res.json({ success: true, data: config || { enabled: false, slots: [], deadlineHours: 6 } });
   } catch (error) {
     console.error('Get pickup config error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch pickup config' });
   }
 });
 
-// PUT /api/admin/pickup — upserts the single VenuePickupConfig document
+// PUT /api/admin/pickup — replaces the entire VenuePickupConfig document
 router.put('/', async (req, res) => {
   try {
-    const { enabled, venueName, venueAddress, pickupDate, pickupHours, specialInstructions } = req.body;
+    const { enabled, venueName, venueAddress, deadlineHours, slots } = req.body;
 
-    // Required-field validation when pick-up is enabled
+    // Validate root-level fields when enabled
     if (enabled) {
       if (!venueName?.trim())    return res.status(400).json({ success: false, message: 'Venue name is required when pick-up is enabled' });
       if (!venueAddress?.trim()) return res.status(400).json({ success: false, message: 'Venue address is required when pick-up is enabled' });
-      if (!pickupDate)           return res.status(400).json({ success: false, message: 'Pick-up date is required when pick-up is enabled' });
-      if (!pickupHours?.trim())  return res.status(400).json({ success: false, message: 'Pick-up hours are required when pick-up is enabled' });
     }
+
+    // Validate each slot
+    if (Array.isArray(slots)) {
+      for (let i = 0; i < slots.length; i++) {
+        const s = slots[i];
+        if (!s.pickupDate?.trim())      return res.status(400).json({ success: false, message: `Slot ${i + 1}: pick-up date is required` });
+        if (!s.pickupHours?.trim())     return res.status(400).json({ success: false, message: `Slot ${i + 1}: pick-up hours are required` });
+        if (!s.pickupStartTime?.trim()) return res.status(400).json({ success: false, message: `Slot ${i + 1}: start time is required` });
+      }
+    }
+
+    const cleanSlots = (slots || []).map(s => ({
+      pickupDate:          s.pickupDate?.trim()          || '',
+      pickupHours:         s.pickupHours?.trim()         || '',
+      pickupStartTime:     s.pickupStartTime?.trim()     || '',
+      specialInstructions: s.specialInstructions?.trim() || '',
+      enabled:             Boolean(s.enabled ?? true),
+    }));
 
     const config = await VenuePickupConfig.findOneAndUpdate(
       {},
       {
         $set: {
-          enabled:             Boolean(enabled),
-          venueName:           venueName?.trim()           || '',
-          venueAddress:        venueAddress?.trim()        || '',
-          pickupDate:          pickupDate ? new Date(pickupDate) : null,
-          pickupHours:         pickupHours?.trim()         || '',
-          specialInstructions: specialInstructions?.trim() || '',
-          updatedAt:           new Date(),
+          enabled:       Boolean(enabled),
+          venueName:     venueName?.trim()     || '',
+          venueAddress:  venueAddress?.trim()  || '',
+          deadlineHours: Number(deadlineHours) || 6,
+          slots:         cleanSlots,
+          updatedAt:     new Date(),
         },
       },
       { upsert: true, new: true }

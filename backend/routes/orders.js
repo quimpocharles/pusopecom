@@ -4,7 +4,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import ShippingEvent from '../models/ShippingEvent.js';
 import VenuePickupConfig from '../models/VenuePickupConfig.js';
-import { getDomesticRate, getInternationalRate } from '../lib/shipping/calculateShipping.js';
+import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import { createCheckout, getCheckoutStatus } from '../services/mayaService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
@@ -39,7 +39,7 @@ router.post('/',
         });
       }
 
-      const { email, items, shippingAddress, notes, shippingMethod, shippingRegion } = req.body;
+      const { email, items, shippingAddress, notes, shippingMethod, shippingRegion, slotId } = req.body;
 
       // Validate items and calculate totals
       let subtotal = 0;
@@ -104,13 +104,14 @@ router.post('/',
       let shippingFee;
 
       if (shippingMethod === 'venue_pickup' && country === 'Philippines') {
-        // Verify venue pickup is still active at time of order
+        // Verify the specific slot is still active at time of order
         const venue = await VenuePickupConfig.findOne().lean();
-        const venueValid =
+        const targetSlot = venue?.slots?.find(s => s._id.toString() === slotId);
+        const slotValid =
           venue?.enabled &&
-          venue?.pickupDate &&
-          new Date(venue.pickupDate) > new Date();
-        shippingFee = venueValid ? 0 : getDomesticRate(shippingRegion || '', subtotal).fee;
+          targetSlot &&
+          isSlotActive(targetSlot, venue.deadlineHours ?? 6);
+        shippingFee = slotValid ? 0 : getDomesticRate(shippingRegion || '', subtotal).fee;
       } else if (country === 'Philippines') {
         shippingFee = getDomesticRate(shippingRegion || '', subtotal).fee;
       } else {

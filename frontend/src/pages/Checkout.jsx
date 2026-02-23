@@ -43,11 +43,6 @@ const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note
   </button>
 );
 
-const formatPickupDate = (dateStr) => {
-  if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
 const Checkout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,9 +52,8 @@ const Checkout = () => {
   const [redirecting, setRedirecting] = useState(false);
   const redirectingRef = useRef(false);
   const [error, setError] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState('standard'); // 'standard' | 'pickup'
+  const [deliveryMethod, setDeliveryMethod] = useState('standard'); // 'standard' | slotId
   const [shippingOptions, setShippingOptions] = useState([]);
-  const [venuePickup, setVenuePickup] = useState(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
@@ -91,11 +85,12 @@ const Checkout = () => {
     api.post('/shipping/options', { cartTotal: subtotal, country, region })
       .then(res => {
         if (res.data.success) {
-          setShippingOptions(res.data.data.shippingOptions);
-          setVenuePickup(res.data.data.venuePickup);
-          // Drop pickup selection if it's no longer available
-          if (deliveryMethod === 'pickup' && !res.data.data.venuePickup) {
-            setDeliveryMethod('standard');
+          const opts = res.data.data.shippingOptions;
+          setShippingOptions(opts);
+          // Drop pickup selection if that slot is no longer available
+          if (deliveryMethod !== 'standard') {
+            const stillAvailable = opts.some(o => o.slotId === deliveryMethod);
+            if (!stillAvailable) setDeliveryMethod('standard');
           }
         }
       })
@@ -124,9 +119,11 @@ const Checkout = () => {
   }
 
   // Derive the currently-selected shipping option from the API response
-  const standardOption = shippingOptions.find(o => o.method !== 'venue_pickup') ?? null;
-  const pickupOption   = shippingOptions.find(o => o.method === 'venue_pickup') ?? null;
-  const effectiveOption = deliveryMethod === 'pickup' ? pickupOption : standardOption;
+  const standardOption  = shippingOptions.find(o => o.method !== 'venue_pickup') ?? null;
+  const pickupSlots     = shippingOptions.filter(o => o.method === 'venue_pickup');
+  const effectiveOption = deliveryMethod === 'standard'
+    ? standardOption
+    : (pickupSlots.find(o => o.slotId === deliveryMethod) ?? standardOption);
   const shippingFee = effectiveOption?.fee ?? null; // null → contact_us or still loading
   const total = shippingFee != null ? subtotal + shippingFee : null;
 
@@ -144,18 +141,18 @@ const Checkout = () => {
     setError('');
 
     try {
-      const isPickup = deliveryMethod === 'pickup';
+      const isPickup = deliveryMethod !== 'standard';
       const isPH = data.country === 'Philippines';
       let shippingAddress;
 
       if (isPickup) {
-        // Pickup orders: use venue details as the address record
+        // Pickup orders: use venue details from the selected slot option
         shippingAddress = {
           fullName: '(Venue Pickup)',
           phone: '',
           country: 'Philippines',
-          address: venuePickup?.venueAddress || venuePickup?.venueName || 'Venue Pickup',
-          city: venuePickup?.venueName || 'Venue',
+          address: effectiveOption?.venueAddress || effectiveOption?.venueName || 'Venue Pickup',
+          city: effectiveOption?.venueName || 'Venue',
           province: 'Metro Manila',
           region: 'National Capital Region (NCR)',
           zipCode: '0000',
@@ -201,6 +198,7 @@ const Checkout = () => {
         shippingAddress,
         shippingFee: shippingFee ?? 0,
         shippingMethod: effectiveOption?.method ?? null,
+        slotId: isPickup ? (effectiveOption?.slotId ?? null) : undefined,
         shippingRegion: isPickup ? null
           : data.country === 'Philippines' ? (data.region || null)
           : (standardOption?.region || null),
@@ -329,18 +327,19 @@ const Checkout = () => {
                       />
                     )}
 
-                    {/* Venue Pickup — only present when admin enables it and date hasn't passed */}
-                    {pickupOption && (
+                    {/* Venue Pickup — one card per active slot */}
+                    {pickupSlots.map(slot => (
                       <DeliveryCard
-                        selected={deliveryMethod === 'pickup'}
-                        onClick={() => setDeliveryMethod('pickup')}
-                        label={pickupOption.label}
-                        description={pickupOption.description}
-                        isFree={pickupOption.isFree}
-                        fee={pickupOption.fee}
-                        note={pickupOption.note}
+                        key={slot.slotId}
+                        selected={deliveryMethod === slot.slotId}
+                        onClick={() => setDeliveryMethod(slot.slotId)}
+                        label={slot.label}
+                        description={slot.description}
+                        isFree={slot.isFree}
+                        fee={slot.fee}
+                        note={slot.note}
                       />
-                    )}
+                    ))}
                   </div>
                 )}
 
@@ -353,7 +352,7 @@ const Checkout = () => {
               </div>
 
               {/* Shipping Address — hidden when venue pickup is selected */}
-              {deliveryMethod !== 'pickup' && <div className="card p-6">
+              {deliveryMethod === 'standard' && <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
 
                 <div className="space-y-4">

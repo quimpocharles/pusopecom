@@ -1,17 +1,25 @@
 import express from 'express';
 import VenuePickupConfig from '../models/VenuePickupConfig.js';
-import { getDomesticRate, getInternationalRate } from '../lib/shipping/calculateShipping.js';
+import {
+  getDomesticRate,
+  getInternationalRate,
+  isSlotActive,
+} from '../lib/shipping/calculateShipping.js';
 
 const router = express.Router();
 
-const formatPickupDate = (date) => {
-  if (!date) return '';
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+// Format "YYYY-MM-DD" → "Mar 15" without timezone shift
+const formatSlotDate = (dateStr) => {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
 };
 
 // POST /api/shipping/options
 // Body: { cartTotal: number, country: string, region?: string }
-// Returns computed shipping options + venue pickup config (auto-disabled if date passed)
 router.post('/options', async (req, res) => {
   try {
     const { cartTotal, country, region } = req.body;
@@ -24,17 +32,10 @@ router.post('/options', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid country' });
     }
 
-    // Venue pickup: auto-disable when pickup date has passed
-    const rawVenue = await VenuePickupConfig.findOne().lean();
-    const isVenueActive =
-      rawVenue?.enabled &&
-      rawVenue?.pickupDate &&
-      new Date(rawVenue.pickupDate) > new Date();
-    const venuePickup = isVenueActive ? rawVenue : null;
-
     const shippingOptions = [];
 
     if (country === 'Philippines') {
+      // Standard domestic delivery
       const domestic = getDomesticRate(region || '', total);
       shippingOptions.push({
         method: domestic.method,
@@ -44,19 +45,29 @@ router.post('/options', async (req, res) => {
         isFree: domestic.fee === 0,
       });
 
-      if (venuePickup) {
-        shippingOptions.push({
-          method: 'venue_pickup',
-          label: 'Pick Up at Venue',
-          description: [
-            venuePickup.venueName,
-            formatPickupDate(venuePickup.pickupDate),
-            venuePickup.pickupHours,
-          ].filter(Boolean).join(' · '),
-          fee: 0,
-          isFree: true,
-          note: venuePickup.specialInstructions || null,
-        });
+      // Venue pickup — one card per active slot
+      const config = await VenuePickupConfig.findOne().lean();
+      if (config?.enabled && config.slots?.length) {
+        const deadlineHours = config.deadlineHours ?? 6;
+        for (const slot of config.slots) {
+          if (isSlotActive(slot, deadlineHours)) {
+            shippingOptions.push({
+              method: 'venue_pickup',
+              slotId: slot._id.toString(),
+              label: 'Pick Up at Venue',
+              description: [
+                config.venueName,
+                formatSlotDate(slot.pickupDate),
+                slot.pickupHours,
+              ].filter(Boolean).join(' · '),
+              fee: 0,
+              isFree: true,
+              note: slot.specialInstructions || null,
+              venueName: config.venueName,
+              venueAddress: config.venueAddress,
+            });
+          }
+        }
       }
     } else {
       const intl = getInternationalRate(country);
@@ -74,7 +85,7 @@ router.post('/options', async (req, res) => {
       }
     }
 
-    res.json({ success: true, data: { shippingOptions, venuePickup } });
+    res.json({ success: true, data: { shippingOptions } });
   } catch (error) {
     console.error('Shipping options error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch shipping options' });
