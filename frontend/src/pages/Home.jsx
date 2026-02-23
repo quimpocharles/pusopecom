@@ -145,14 +145,15 @@ const Home = () => {
           <div
             className="inline-flex items-center gap-2 mb-6 md:mb-8"
             style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'pusoFlagSweep 6s linear infinite',
               borderRadius: '100px',
               padding: '5px 16px',
             }}
           >
-            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.38)' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)' }}>
+            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.85)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
               ✦ AI-Powered Feature
             </span>
           </div>
@@ -164,7 +165,7 @@ const Home = () => {
               fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
               lineHeight: 1.0,
               letterSpacing: '-0.04em',
-              marginBottom: '20px',
+              marginBottom: '10px',
             }}
           >
             See it on you,<br />before you buy.
@@ -177,31 +178,11 @@ const Home = () => {
               fontSize: 'clamp(1rem, 2vw, 1.2rem)',
               color: 'rgba(255,255,255,0.50)',
               letterSpacing: '-0.01em',
-              marginBottom: '36px',
+              
             }}
           >
             Wear your Puso — before checkout.
           </p>
-
-          {/* Primary CTA — animated Philippine flag gradient */}
-          <Link
-            to={tryOnSettings.productUrl}
-            className="inline-flex items-center gap-2 font-bold active:scale-[0.97] transition-transform"
-            style={{
-              background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
-              backgroundSize: '200% 100%',
-              animation: 'pusoFlagSweep 6s linear infinite',
-              color: '#fff',
-              textShadow: '0 1px 3px rgba(0,0,0,0.35)',
-              borderRadius: '100px',
-              padding: '14px 32px',
-              fontSize: '15px',
-              textDecoration: 'none',
-            }}
-          >
-            Try On a Jersey Now
-            <ChevronRightIcon className="w-4 h-4" />
-          </Link>
         </div>
 
         {/* ── Browser mockup ── */}
@@ -325,7 +306,7 @@ const Home = () => {
           className="relative z-10 text-center px-6 pt-3 pb-6"
           style={{
             fontSize: '12px',
-            color: 'rgba(255,255,255,0.25)',
+             color: 'rgba(0,0,0,0.45)',
             maxWidth: '600px',
             margin: '0 auto',
             lineHeight: 1.7,
@@ -333,24 +314,6 @@ const Home = () => {
         >
           Authentic jerseys and gear for basketball, volleyball, football &amp; e-sports — Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and beyond.
         </p>
-
-        {/* Scroll hint */}
-        <div
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-          style={{
-            color: 'rgba(255,255,255,0.18)',
-            fontSize: '10px',
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            animation: 'heroScrollBob 2.2s ease-in-out infinite',
-            zIndex: 5,
-          }}
-        >
-          <span>Scroll</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12l7 7 7-7" />
-          </svg>
-        </div>
 
         {/* Platform — full-width stage with rounded top corners, flat into next section */}
         <div
@@ -360,7 +323,7 @@ const Home = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            height: '30%',
+            height: '35%',
             background: '#f5f5f7',
             borderRadius: 'clamp(20px, 4vw, 48px) clamp(20px, 4vw, 48px) 0 0',
             zIndex: 1,
