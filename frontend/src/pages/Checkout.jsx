@@ -288,61 +288,6 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Shipping Address — hidden when venue pickup is selected */}
-              {deliveryMethod !== 'pickup' && <div className="card p-6">
-                <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      {...register('fullName', { required: 'Full name is required' })}
-                      className="input-field"
-                    />
-                    {errors.fullName && (
-                      <p className="text-red-600 text-sm mt-1">{errors.fullName.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      {...register('phone', { required: 'Phone number is required' })}
-                      className="input-field"
-                    />
-                    {errors.phone && (
-                      <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
-                    )}
-                  </div>
-
-                  {/* Address Form Component */}
-                  <AddressForm
-                    register={register}
-                    errors={errors}
-                    setValue={setValue}
-                    watch={watch}
-                  />
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Order Notes (Optional)
-                    </label>
-                    <textarea
-                      {...register('notes')}
-                      rows={3}
-                      className="input-field"
-                      placeholder="Special instructions for your order..."
-                    />
-                  </div>
-                </div>
-              </div>}
-
               {/* Delivery Method */}
               <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Delivery Method</h2>
@@ -406,6 +351,61 @@ const Checkout = () => {
                   </p>
                 )}
               </div>
+
+              {/* Shipping Address — hidden when venue pickup is selected */}
+              {deliveryMethod !== 'pickup' && <div className="card p-6">
+                <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      {...register('fullName', { required: 'Full name is required' })}
+                      className="input-field"
+                    />
+                    {errors.fullName && (
+                      <p className="text-red-600 text-sm mt-1">{errors.fullName.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      {...register('phone', { required: 'Phone number is required' })}
+                      className="input-field"
+                    />
+                    {errors.phone && (
+                      <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
+                    )}
+                  </div>
+
+                  {/* Address Form Component */}
+                  <AddressForm
+                    register={register}
+                    errors={errors}
+                    setValue={setValue}
+                    watch={watch}
+                  />
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Order Notes (Optional)
+                    </label>
+                    <textarea
+                      {...register('notes')}
+                      rows={3}
+                      className="input-field"
+                      placeholder="Special instructions for your order..."
+                    />
+                  </div>
+                </div>
+              </div>}
 
               {/* Payment Method */}
               <div className="card p-6">
