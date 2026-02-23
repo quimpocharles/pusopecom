@@ -360,7 +360,7 @@ const Home = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            height: '52%',
+            height: '30%',
             background: '#f5f5f7',
             borderRadius: 'clamp(20px, 4vw, 48px) clamp(20px, 4vw, 48px) 0 0',
             zIndex: 1,
