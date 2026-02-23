@@ -146,9 +146,9 @@ const Checkout = () => {
       let shippingAddress;
 
       if (isPickup) {
-        // Pickup orders: use venue details from the selected slot option
+        // Pickup orders: use buyer's real name + venue details as address
         shippingAddress = {
-          fullName: '(Venue Pickup)',
+          fullName: data.fullName,
           phone: data.phone,
           country: 'Philippines',
           address: effectiveOption?.venueAddress || effectiveOption?.venueName || 'Venue Pickup',
@@ -297,6 +297,20 @@ const Checkout = () => {
                       <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>
                     )}
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      {...register('fullName', { required: 'Full name is required' })}
+                      className="input-field"
+                    />
+                    {errors.fullName && (
+                      <p className="text-red-600 text-sm mt-1">{errors.fullName.message}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -371,20 +385,6 @@ const Checkout = () => {
                 <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      {...register('fullName', { required: 'Full name is required' })}
-                      className="input-field"
-                    />
-                    {errors.fullName && (
-                      <p className="text-red-600 text-sm mt-1">{errors.fullName.message}</p>
-                    )}
-                  </div>
-
                   {/* Address Form Component */}
                   <AddressForm
                     register={register}
