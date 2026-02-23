@@ -1,5 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import Logo from '../../assets/images/puso.png';
+import LogoColor from '../../assets/images/puso.png';
+import LogoWhite from '../../assets/images/puso-white.png';
 import {
   ShoppingBagIcon,
   UserIcon,
@@ -176,7 +177,7 @@ const Header = () => {
 
           {/* Logo — allowed to overflow the navbar height */}
           <Link to="/" className="flex-shrink-0 relative z-10">
-            <img src={Logo} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto" />
+            <img src={isExpanded ? LogoColor : LogoWhite} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto transition-opacity duration-[450ms]" />
           </Link>
 
           {/* Desktop nav — absolutely centred so it doesn't push the logo/actions */}
@@ -387,7 +388,7 @@ const Header = () => {
             aria-label="Navigation menu"
           >
             <div className="flex items-center justify-between p-5 border-b border-white/10">
-              <img src={Logo} alt="Puso Pilipinas" className="h-7 w-auto" />
+              <img src={LogoWhite} alt="Puso Pilipinas" className="h-7 w-auto" />
               <button onClick={() => setShowMobileMenu(false)} className="p-2 hover:bg-white/10 rounded-full" aria-label="Close menu">
                 <XMarkIcon className="w-5 h-5 text-white" />
               </button>
