@@ -57,8 +57,14 @@ const getEmailTemplate = (content) => `
           <!-- Header -->
           <tr>
             <td align="center" style="background:${BLACK};padding:32px 40px 24px;border-bottom:1px solid ${BORDER};">
-              <img src="${LOGO_URL}" alt="Puso Pilipinas" width="120" height="auto"
-                   style="display:block;margin:0 auto 16px;" />
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
+                <tr>
+                  <td style="background:#ffffff;border-radius:10px;padding:10px 18px;line-height:0;">
+                    <img src="${LOGO_URL}" alt="Puso Pilipinas" width="120" height="auto"
+                         style="display:block;" />
+                  </td>
+                </tr>
+              </table>
               <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
                          color:rgba(255,255,255,0.35);">Sports Merchandise Store</p>
             </td>
