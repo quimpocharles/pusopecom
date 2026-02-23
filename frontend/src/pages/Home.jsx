@@ -367,7 +367,7 @@ const Home = () => {
               left: '-2%',
               width: '104%',
               height: 'clamp(160px, 28vw, 270px)',
-              background: '#1a1a1a',
+              background: '#f5f5f7',
               borderRadius: '50% 50% 0 0 / 50px 50px 0 0',
               zIndex: 1,
               pointerEvents: 'none',
@@ -500,23 +500,23 @@ const Home = () => {
       </section>
 
       {/* Shop by Sport - Tabbed Carousel */}
-      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#1a1a1a' }}>
+      <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
         <div className="container-custom">
           <div className="text-center mb-8 md:mb-10">
             <h2
               className="text-xl md:text-display-sm mb-2 md:mb-4 font-semibold"
-              style={{ color: '#fff' }}
+              style={{ color: '#0a0a0a' }}
             >
               Shop by Sport
             </h2>
-            <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(255,255,255,0.38)' }}>
+            <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(0,0,0,0.45)' }}>
               Find gear for your favorite league
             </p>
 
             {/* Category Tabs */}
             <div
               className="inline-flex rounded-xl p-1 md:p-1.5"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)' }}
             >
               {categories.map((cat) => (
                 <button
@@ -526,8 +526,8 @@ const Home = () => {
                   className="px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2"
                   style={
                     activeCategory === cat.id
-                      ? { background: '#fff', color: '#0a0a0a' }
-                      : { color: 'rgba(255,255,255,0.38)' }
+                      ? { background: '#0a0a0a', color: '#fff' }
+                      : { color: 'rgba(0,0,0,0.45)' }
                   }
                 >
                   <span>{cat.icon}</span>
@@ -543,10 +543,10 @@ const Home = () => {
             <button
               onClick={() => scrollCarousel('right')}
               className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all hidden md:flex"
-              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
+              style={{ background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.12)' }}
               aria-label="Scroll products"
             >
-              <ChevronRightIcon className="w-6 h-6" style={{ color: '#fff' }} />
+              <ChevronRightIcon className="w-6 h-6" style={{ color: '#0a0a0a' }} />
             </button>
 
             {/* Carousel Container */}
@@ -565,18 +565,18 @@ const Home = () => {
                     key={product._id}
                     className="flex-shrink-0 w-[220px] md:w-[280px] snap-start"
                   >
-                    <ProductCard product={product} onBuyNow={handleBuyNow} dark={true} />
+                    <ProductCard product={product} onBuyNow={handleBuyNow} />
                   </div>
                 ))
               ) : (
                 <div className="w-full text-center py-12">
-                  <p style={{ color: 'rgba(255,255,255,0.38)' }}>No {activeCategory} products available yet</p>
+                  <p style={{ color: 'rgba(0,0,0,0.45)' }}>No {activeCategory} products available yet</p>
                   <Link
                     to="/products"
                     className="mt-4 inline-flex items-center gap-2 font-semibold active:scale-[0.97] transition-transform"
                     style={{
-                      background: '#fff',
-                      color: '#0a0a0a',
+                      background: '#0a0a0a',
+                      color: '#fff',
                       borderRadius: '100px',
                       padding: '12px 28px',
                       fontSize: '14px',
@@ -595,7 +595,7 @@ const Home = () => {
             <Link
               to={`/products?sport=${activeCategory}`}
               className="inline-flex items-center gap-2 font-semibold transition-opacity hover:opacity-70"
-              style={{ color: 'rgba(255,255,255,0.6)', textDecoration: 'none' }}
+              style={{ color: 'rgba(0,0,0,0.55)', textDecoration: 'none' }}
             >
               View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Products
               <ChevronRightIcon className="w-5 h-5" />
