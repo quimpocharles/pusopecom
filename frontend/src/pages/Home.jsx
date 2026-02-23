@@ -352,17 +352,17 @@ const Home = () => {
           </svg>
         </div>
 
-        {/* Dome platform — large ellipse in next-section color, rises behind the mockup */}
+        {/* Platform — full-width stage with rounded top corners, flat into next section */}
         <div
           aria-hidden="true"
           className="absolute pointer-events-none"
           style={{
             bottom: 0,
-            left: '-20%',
-            right: '-20%',
-            height: '500px',
+            left: 0,
+            right: 0,
+            height: '52%',
             background: '#f5f5f7',
-            borderRadius: '50% 50% 0 0 / 100% 100% 0 0',
+            borderRadius: 'clamp(20px, 4vw, 48px) clamp(20px, 4vw, 48px) 0 0',
             zIndex: 1,
           }}
         />
