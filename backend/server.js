@@ -18,6 +18,8 @@ import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/upload.js';
 import settingsRoutes from './routes/settings.js';
 import activityRoutes from './routes/activity.js';
+import shippingRoutes from './routes/shipping.js';
+import pickupRoutes from './routes/pickup.js';
 
 // Create Express app
 const app = express();
@@ -135,6 +137,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/shipping', shippingRoutes);
+app.use('/api/admin/pickup', pickupRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { XMarkIcon, MinusIcon, PlusIcon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
 import CartUpsell from './CartUpsell';
+import FreeShippingBar from './FreeShippingBar';
 import { toTitleCase } from '../../utils/text';
 
 const CartDrawer = () => {
@@ -286,7 +287,9 @@ const CartDrawer = () => {
 
         {/* Footer — Checkout */}
         {items.length > 0 && (
-          <div className="border-t border-gray-100 px-6 py-4 space-y-3">
+          <div className="border-t border-gray-100 space-y-0">
+            <FreeShippingBar cartTotal={cartTotal} country="Philippines" />
+            <div className="px-6 py-4 space-y-3">
             <button
               onClick={handleCheckout}
               className="btn-primary w-full text-center"
@@ -294,6 +297,7 @@ const CartDrawer = () => {
               Checkout &middot; ₱{cartTotal.toLocaleString()}
             </button>
             <p className="text-xs text-gray-400 text-center">Shipping & taxes calculated at checkout</p>
+            </div>
           </div>
         )}
       </div>

@@ -61,8 +61,9 @@ const Header = () => {
   // ── Shell style (outer full-width positioner) ────────────────────
   // Padding shrinks inward to create the pill float effect
   const shellStyle = {
+    top: 'var(--header-top, 0px)',
     padding: isTransparent ? '0' : '14px 7%',
-    transition: `padding 0.48s ${SPRING}`,
+    transition: `padding 0.48s ${SPRING}, top 0.2s ease`,
   };
 
   // ── Nav inner style (the morphing pill) ─────────────────────────
@@ -152,7 +153,7 @@ const Header = () => {
     <>
       {/* ── Shell: fixed full-width positioner ─────────────────── */}
       <div
-        className="fixed top-0 left-0 right-0 z-50 flex flex-col pointer-events-none"
+        className="fixed left-0 right-0 z-50 flex flex-col pointer-events-none"
         style={shellStyle}
       >
         {/* ── Pill nav ─────────────────────────────────────────── */}

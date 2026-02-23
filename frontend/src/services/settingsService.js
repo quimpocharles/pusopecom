@@ -10,6 +10,11 @@ const settingsService = {
     const response = await api.put('/settings', data);
     return response.data;
   },
+
+  getVenuePickup: async () => {
+    const response = await api.get('/settings/venue-pickup');
+    return response.data;
+  },
 };
 
 export default settingsService;

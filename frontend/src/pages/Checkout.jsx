@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
@@ -11,8 +11,42 @@ import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import api from '../services/api';
 import { toTitleCase } from '../utils/text';
 import SEO from '../components/common/SEO';
+
+// ─── Delivery option card ────────────────────────────────────────────────────
+const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`w-full text-left border rounded-xl p-4 flex items-start gap-3 transition-all ${
+      selected ? 'border-[#0a0a0a] bg-gray-50' : 'border-gray-200 hover:border-gray-400'
+    }`}
+  >
+    <span className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+      selected ? 'border-[#0a0a0a]' : 'border-gray-300'
+    }`}>
+      {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#0a0a0a]" />}
+    </span>
+    <div className="flex-1 min-w-0">
+      <p className="font-semibold text-sm text-gray-900">{label}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+      {note && <p className="text-xs text-gray-400 italic mt-1">{note}</p>}
+    </div>
+    <div className="flex-shrink-0 text-right">
+      {isFree
+        ? <span className="text-sm font-semibold text-green-600">FREE</span>
+        : <span className="text-sm font-semibold text-gray-900">₱{Number(fee).toFixed(2)}</span>
+      }
+    </div>
+  </button>
+);
+
+const formatPickupDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -23,8 +57,10 @@ const Checkout = () => {
   const [redirecting, setRedirecting] = useState(false);
   const redirectingRef = useRef(false);
   const [error, setError] = useState('');
-
-  const paymentCancelled = searchParams.get('payment') === 'cancelled';
+  const [deliveryMethod, setDeliveryMethod] = useState('standard'); // 'standard' | 'pickup'
+  const [shippingOptions, setShippingOptions] = useState([]);
+  const [venuePickup, setVenuePickup] = useState(null);
+  const [optionsLoading, setOptionsLoading] = useState(true);
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
 
@@ -44,6 +80,34 @@ const Checkout = () => {
     }
   });
 
+  const country = watch('country') || 'Philippines';
+  const region  = watch('region')  || '';
+  const subtotal = getCartTotal(); // hoisted above effects so it can be a dependency
+
+  // Fetch shipping options from the server whenever country, region, or cart total changes.
+  // Server auto-disables venue pickup if the pickup date has passed.
+  useEffect(() => {
+    setOptionsLoading(true);
+    api.post('/shipping/options', { cartTotal: subtotal, country, region })
+      .then(res => {
+        if (res.data.success) {
+          setShippingOptions(res.data.data.shippingOptions);
+          setVenuePickup(res.data.data.venuePickup);
+          // Drop pickup selection if it's no longer available
+          if (deliveryMethod === 'pickup' && !res.data.data.venuePickup) {
+            setDeliveryMethod('standard');
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setOptionsLoading(false));
+  }, [country, region, subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset to standard delivery whenever the country changes
+  useEffect(() => { setDeliveryMethod('standard'); }, [country]);
+
+  const paymentCancelled = searchParams.get('payment') === 'cancelled';
+
   if (items.length === 0 && !paymentCancelled && !redirectingRef.current) {
     navigate('/products', { replace: true });
     return null;
@@ -59,32 +123,69 @@ const Checkout = () => {
     );
   }
 
-  const subtotal = getCartTotal();
-  const shippingFee = 150;
-  const total = subtotal + shippingFee;
+  // Derive the currently-selected shipping option from the API response
+  const standardOption = shippingOptions.find(o => o.method !== 'venue_pickup') ?? null;
+  const pickupOption   = shippingOptions.find(o => o.method === 'venue_pickup') ?? null;
+  const effectiveOption = deliveryMethod === 'pickup' ? pickupOption : standardOption;
+  const shippingFee = effectiveOption?.fee ?? null; // null → contact_us or still loading
+  const total = shippingFee != null ? subtotal + shippingFee : null;
 
   const dismissCancelledAlert = () => {
     setSearchParams({}, { replace: true });
   };
 
   const onSubmit = async (data) => {
+    if (effectiveOption?.method === 'contact_us') {
+      setError('Please contact us to arrange shipping for your location before placing an order.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
+      const isPickup = deliveryMethod === 'pickup';
       const isPH = data.country === 'Philippines';
-      let regionText = data.region;
-      let provinceText = data.province;
-      let cityText = data.city;
+      let shippingAddress;
 
-      // Resolve PSGC codes to text names for PH addresses
-      if (isPH && data.region) {
-        const regionList = await regions();
-        const provinceList = await provinces(data.region);
-        const cityList = await cities(data.province);
-        regionText = regionList.find(r => r.region_code === data.region)?.region_name || data.region;
-        provinceText = provinceList.find(p => p.province_code === data.province)?.province_name || data.province;
-        cityText = cityList.find(c => c.city_code === data.city)?.city_name || data.city;
+      if (isPickup) {
+        // Pickup orders: use venue details as the address record
+        shippingAddress = {
+          fullName: '(Venue Pickup)',
+          phone: '',
+          country: 'Philippines',
+          address: venuePickup?.venueAddress || venuePickup?.venueName || 'Venue Pickup',
+          city: venuePickup?.venueName || 'Venue',
+          province: 'Metro Manila',
+          region: 'National Capital Region (NCR)',
+          zipCode: '0000',
+        };
+      } else {
+        let regionText = data.region;
+        let provinceText = data.province;
+        let cityText = data.city;
+
+        // Resolve PSGC codes to text names for PH addresses
+        if (isPH && data.region) {
+          const regionList = await regions();
+          const provinceList = await provinces(data.region);
+          const cityList = await cities(data.province);
+          regionText = regionList.find(r => r.region_code === data.region)?.region_name || data.region;
+          provinceText = provinceList.find(p => p.province_code === data.province)?.province_name || data.province;
+          cityText = cityList.find(c => c.city_code === data.city)?.city_name || data.city;
+        }
+
+        shippingAddress = {
+          fullName: data.fullName,
+          phone: data.phone,
+          country: data.country,
+          address: data.address,
+          city: cityText,
+          province: provinceText,
+          region: regionText,
+          barangay: isPH ? data.barangay : undefined,
+          zipCode: data.zipCode,
+        };
       }
 
       const orderData = {
@@ -97,18 +198,15 @@ const Checkout = () => {
           size: item.size,
           ...(item.color && { color: item.color })
         })),
-        shippingAddress: {
-          fullName: data.fullName,
-          phone: data.phone,
-          country: data.country,
-          address: data.address,
-          city: cityText,
-          province: provinceText,
-          region: regionText,
-          barangay: isPH ? data.barangay : undefined,
-          zipCode: data.zipCode
-        },
-        notes: data.notes
+        shippingAddress,
+        shippingFee: shippingFee ?? 0,
+        shippingMethod: effectiveOption?.method ?? null,
+        shippingRegion: isPickup ? null
+          : data.country === 'Philippines' ? (data.region || null)
+          : (standardOption?.region || null),
+        notes: isPickup
+          ? `VENUE PICKUP${data.notes ? ` — ${data.notes}` : ''}`
+          : data.notes,
       };
 
       const response = await orderService.createOrder(orderData);
@@ -190,8 +288,8 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Shipping Address */}
-              <div className="card p-6">
+              {/* Shipping Address — hidden when venue pickup is selected */}
+              {deliveryMethod !== 'pickup' && <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
 
                 <div className="space-y-4">
@@ -243,6 +341,70 @@ const Checkout = () => {
                     />
                   </div>
                 </div>
+              </div>}
+
+              {/* Delivery Method */}
+              <div className="card p-6">
+                <h2 className="text-xl font-bold mb-4">Delivery Method</h2>
+
+                {optionsLoading ? (
+                  /* Subtle skeleton while fetching — doesn't affect other sections */
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-16 bg-gray-100 rounded-xl" />
+                    <div className="h-16 bg-gray-100 rounded-xl" />
+                  </div>
+                ) : standardOption?.method === 'contact_us' ? (
+                  /* Country exists in dropdown but has no shipping coverage */
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Shipping quote required</p>
+                    <p>
+                      We currently ship to selected regions. For your location, please{' '}
+                      <a
+                        href="https://www.facebook.com/pusopilipinas"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline font-medium"
+                      >
+                        message us on Facebook
+                      </a>{' '}
+                      or email us and we will arrange a custom shipping quote.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Standard Delivery / International — always the first option */}
+                    {standardOption && (
+                      <DeliveryCard
+                        selected={deliveryMethod === 'standard'}
+                        onClick={() => setDeliveryMethod('standard')}
+                        label={standardOption.label}
+                        description={standardOption.description}
+                        isFree={standardOption.isFree}
+                        fee={standardOption.fee}
+                      />
+                    )}
+
+                    {/* Venue Pickup — only present when admin enables it and date hasn't passed */}
+                    {pickupOption && (
+                      <DeliveryCard
+                        selected={deliveryMethod === 'pickup'}
+                        onClick={() => setDeliveryMethod('pickup')}
+                        label={pickupOption.label}
+                        description={pickupOption.description}
+                        isFree={pickupOption.isFree}
+                        fee={pickupOption.fee}
+                        note={pickupOption.note}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* International disclaimer */}
+                {!optionsLoading && country !== 'Philippines' && standardOption?.method === 'international' && (
+                  <p className="text-xs text-gray-400 mt-3">
+                    International orders may be subject to import duties and customs fees charged by the destination country. These are the buyer's responsibility.
+                  </p>
+                )}
               </div>
 
               {/* Payment Method */}
@@ -316,12 +478,21 @@ const Checkout = () => {
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Shipping</span>
-                  <span>₱{shippingFee.toFixed(2)}</span>
+                  {optionsLoading
+                    ? <span className="text-gray-300 animate-pulse">···</span>
+                    : shippingFee === 0
+                      ? <span className="text-green-600 font-semibold">FREE</span>
+                      : shippingFee != null
+                        ? <span>₱{shippingFee.toFixed(2)}</span>
+                        : <span className="text-gray-400 text-sm">Contact us</span>
+                  }
                 </div>
-                <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                  <span>Total</span>
-                  <span className="text-primary-600">₱{total.toFixed(2)}</span>
-                </div>
+                {total != null && (
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                    <span>Total</span>
+                    <span className="text-primary-600">₱{total.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

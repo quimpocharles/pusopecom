@@ -133,6 +133,12 @@ const orderSchema = new mongoose.Schema({
   trackingNumber: {
     type: String
   },
+  shippingMethod: {
+    type: String
+  },
+  shippingRegion: {
+    type: String
+  },
   notes: {
     type: String
   }

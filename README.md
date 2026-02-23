@@ -59,6 +59,14 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - Viewport zoom disabled via `user-scalable=no, maximum-scale=1.0` in the HTML meta tag
 - Font filenames and CSS family names obfuscated (`puso-display`, `puso-body`) to prevent font identification from network requests
 
+### Shipping & Fulfillment
+- Dynamic shipping options calculated at checkout via `POST /api/shipping/options`
+- **Domestic (Philippines)**: flat-rate per PSGC region (₱99–₱200); free for orders ₱2,000+
+- **International**: flat rate ₱2,100 for mapped zones (SEA, Middle East, North America, Europe); "Contact Us" for unmapped countries
+- **Venue Pick-Up**: free option shown only when a future event is configured and the buyer is in Philippines
+- Free shipping progress bar in the cart drawer + dismissible announcement bar at the top of every page
+- Shipping method and region stored on every order for analytics
+
 ### Admin
 - Product management (CRUD with color variant support, try-on toggle)
 - Soft delete for all admins; hard (permanent) delete restricted to `quimpo.charles@gmail.com`
@@ -66,6 +74,8 @@ A full-stack MERN ecommerce platform for Philippine sports merchandise, featurin
 - User management with pagination, search, and role filter
 - Site settings management (try-on feature configuration)
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
+- **Shipping Analytics** — donut chart + breakdown table by shipping method (domestic standard/free, international by zone, venue pick-up); 4 summary cards; date range filter; CSV export
+- **Venue Pick-Up settings** — enable/disable toggle, venue name/address, pick-up date/hours, special instructions; live preview mirrors the checkout card; automatically hidden when date passes
 - Daily sales summary email (sent at 11:59 PM PHT via node-cron)
 - League and team management
 - **Inventory CSV export** — downloads all products with size breakdown, remaining stock per size, total QTY, and unit price; filename: `YYMMDD - Inventory Report.csv`
@@ -222,31 +232,40 @@ The application will be available at:
 ```
 puso-shop/
 ├── backend/
-│   ├── models/          # Mongoose models (User, Product, Order, Review, League, SiteSettings, TryOnLog, UserActivity)
-│   ├── routes/          # Express routes (auth, products, orders, reviews, reports, leagues, tryon, upload, settings, activity)
+│   ├── models/          # Mongoose models (User, Product, Order, Review, League, SiteSettings,
+│   │                    #   TryOnLog, UserActivity, VenuePickupConfig, ShippingEvent)
+│   ├── routes/          # Express routes (auth, products, orders, reviews, reports, leagues,
+│   │                    #   tryon, upload, settings, activity, shipping, pickup)
+│   ├── lib/
+│   │   ├── config/      # shipping.js — thresholds, DOMESTIC_RATES, COUNTRY_REGION_MAP, SHIPPING_METHODS
+│   │   └── shipping/    # calculateShipping.js — getDomesticRate, getInternationalRate, getVenuePickupRate
+│   ├── __tests__/       # Vitest unit tests (calculateShipping)
 │   ├── services/        # Business logic (email, Maya payment, Replicate, daily sales)
 │   ├── middleware/      # auth.js — authenticate, isAdmin, optionalAuth
-│   ├── config/          # Configuration files
 │   ├── server.js        # Express app, middleware, cron job
 │   └── package.json
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── common/      # SEO, LoadingSpinner
-│   │   │   ├── layout/      # Header (search autocomplete), Footer, Layout
+│   │   │   ├── common/      # SEO, LoadingSpinner, AnnouncementBar
+│   │   │   ├── layout/      # Header (search autocomplete, CSS-var top offset), Footer, Layout
 │   │   │   ├── products/    # ProductCard (hover swap, color swatches), VirtualTryOn
 │   │   │   ├── address/     # AddressForm (PSGC resolution)
-│   │   │   ├── admin/       # Admin report chart components
+│   │   │   ├── admin/       # AdminLayout, AdminRoute, report section components, DateRangeSelector
 │   │   │   ├── auth/        # OAuth components
-│   │   │   └── cart/        # CartDrawer, CartUpsell
-│   │   ├── pages/       # Page components (Home, Products, ProductDetail, Account, admin/*)
-│   │   ├── services/    # API service layer (product, auth, order, league, report, activity)
+│   │   │   └── cart/        # CartDrawer, CartUpsell, FreeShippingBar
+│   │   ├── pages/
+│   │   │   ├── admin/       # AdminDashboard, AdminProducts, AdminOrders, AdminUsers,
+│   │   │   │                #   AdminReports, AdminSettings, AdminPickup, AdminShippingReports
+│   │   │   └── ...          # Home, Products, ProductDetail, Checkout, Account, etc.
+│   │   ├── services/    # API service layer (product, auth, order, league, report, activity, pickup)
 │   │   ├── store/       # Zustand stores (cart, auth)
-│   │   ├── utils/       # Utility functions
-│   │   ├── index.css    # Global styles (button fill-up effects, Dharma Gothic E + Pro Sans @font-face, h1/h2/h3 base rules)
+│   │   ├── utils/       # shipping.js (frontend mirror), text.js
+│   │   ├── index.css    # Global styles
 │   │   ├── App.jsx      # Routes (lazy-loaded)
 │   │   └── main.jsx     # Entry point (HelmetProvider)
+│   ├── middleware.js    # Vercel Edge Middleware (OG tag injection for social crawlers)
 │   ├── public/          # robots.txt, static assets
 │   ├── index.html
 │   └── package.json
@@ -308,6 +327,14 @@ puso-shop/
 - `GET /orders` - Order analytics (Admin)
 - `GET /customers` - Customer insights (Admin)
 - `GET /tryon` - Virtual try-on analytics (Admin)
+- `GET /shipping` - Shipping method breakdown with date range filter; returns `methodBreakdown` (aggregated by method + region), `rawEvents` (for CSV export), `totalOrders` (Admin)
+
+### Shipping (`/api/shipping`)
+- `POST /options` - Calculate shipping options for a cart; body: `{ cartTotal, country, region? }`; returns `{ shippingOptions, venuePickup }`
+
+### Venue Pick-Up (`/api/admin/pickup`)
+- `GET /` - Get current venue pick-up configuration (Admin)
+- `PUT /` - Update venue pick-up configuration; validates required fields when `enabled: true` (Admin)
 
 ### Leagues (`/api/leagues`)
 - `GET /` - Get all active leagues (public)
@@ -364,6 +391,8 @@ puso-shop/
 - Items array (name, price, quantity, size, color, image)
 - Shipping address (PSGC fields: address, city, province, region, barangay, zip)
 - Subtotal, shipping fee, total
+- `shippingMethod` — one of `domestic_flat_rate`, `domestic_free`, `international`, `venue_pickup`, `contact_us`
+- `shippingRegion` — PSGC region code for domestic orders; zone name (SEA / Middle East / North America / Europe) for international; null for pick-up
 - Payment method, payment status (pending / paid / failed / refunded)
 - Maya payment ID and checkout URL
 - Order status (processing / confirmed / shipped / delivered / cancelled)
@@ -395,17 +424,27 @@ puso-shop/
 - Type (view / search), product reference, search query
 - Auto-expires after 90 days (TTL index)
 
+### VenuePickupConfig
+- Singleton document (one document per collection)
+- `enabled` flag, venue name, venue address
+- Pick-up date, pick-up hours, special instructions
+- Auto-disabled at checkout when `pickupDate` is in the past
+
+### ShippingEvent
+- Written on every successfully paid order (both `verify-payment` and `webhooks/maya` paths)
+- `orderId` (order number), `shippingMethod`, `orderTotal`, `region` (PSGC code or zone name)
+- Powers the Shipping Analytics report (`GET /api/reports/shipping`)
+
 ## Payment Flow
 
-1. User completes checkout form
-2. Backend creates order in database with `paymentStatus: pending`
-3. Backend initiates Maya checkout session
-4. User is redirected to Maya payment page
-5. User completes payment
-6. Maya sends webhook to backend → order updated to `paymentStatus: paid`
-7. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment`
-8. User receives order confirmation email
-9. User is redirected to order confirmation page
+1. User selects delivery method at checkout (domestic standard/free, international, or venue pick-up)
+2. Backend creates order with `paymentStatus: pending`, `shippingMethod`, and `shippingRegion`
+3. Backend initiates Maya checkout session and redirects user to payment page
+4. User completes payment on Maya
+5. Maya sends webhook to backend → order updated to `paymentStatus: paid`; `ShippingEvent` written for analytics
+6. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment` (also writes `ShippingEvent`)
+7. User receives order confirmation email
+8. User is redirected to order confirmation page
 
 ## Email Templates
 

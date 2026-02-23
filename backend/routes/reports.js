@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
 import TryOnLog from '../models/TryOnLog.js';
+import ShippingEvent from '../models/ShippingEvent.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -608,6 +609,35 @@ router.get('/tryon', async (req, res) => {
   } catch (error) {
     console.error('Try-on report error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate try-on report' });
+  }
+});
+
+// GET /api/reports/shipping
+router.get('/shipping', async (req, res) => {
+  try {
+    const dateFilter = getDateFilter(req.query);
+
+    const [methodBreakdown, rawEvents] = await Promise.all([
+      ShippingEvent.aggregate([
+        { $match: dateFilter },
+        {
+          $group: {
+            _id: { method: '$shippingMethod', region: '$region' },
+            count: { $sum: 1 },
+            totalRevenue: { $sum: '$orderTotal' },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]),
+      ShippingEvent.find(dateFilter).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    const totalOrders = rawEvents.length;
+
+    res.json({ success: true, data: { methodBreakdown, rawEvents, totalOrders } });
+  } catch (error) {
+    console.error('Shipping report error:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate shipping report' });
   }
 });
 

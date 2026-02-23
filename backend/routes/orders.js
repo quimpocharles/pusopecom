@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import ShippingEvent from '../models/ShippingEvent.js';
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import { createCheckout, getCheckoutStatus } from '../services/mayaService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
@@ -36,7 +37,7 @@ router.post('/',
         });
       }
 
-      const { email, items, shippingAddress, notes } = req.body;
+      const { email, items, shippingAddress, notes, shippingFee: clientShippingFee, shippingMethod, shippingRegion } = req.body;
 
       // Validate items and calculate totals
       let subtotal = 0;
@@ -96,7 +97,7 @@ router.post('/',
         await product.save();
       }
 
-      const shippingFee = 150;
+      const shippingFee = Math.max(0, Number(clientShippingFee) || 0);
       const total = subtotal + shippingFee;
 
       // Create order
@@ -108,6 +109,8 @@ router.post('/',
         subtotal,
         shippingFee,
         total,
+        shippingMethod: shippingMethod || undefined,
+        shippingRegion: shippingRegion || undefined,
         notes
       });
 
@@ -360,6 +363,18 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
       order.orderStatus = 'confirmed';
       await order.save();
 
+      // Record shipping event for analytics
+      try {
+        await ShippingEvent.create({
+          orderId: order.orderNumber,
+          shippingMethod: order.shippingMethod || 'unknown',
+          orderTotal: order.total,
+          region: order.shippingRegion || null,
+        });
+      } catch (shippingEventError) {
+        console.error('Failed to record shipping event:', shippingEventError);
+      }
+
       // Send confirmation email
       try {
         await sendOrderConfirmationEmail(order.email, order);
@@ -457,6 +472,18 @@ router.post('/webhooks/maya', async (req, res) => {
         order.paymentStatus = 'paid';
         order.orderStatus = 'confirmed';
         await order.save();
+
+        // Record shipping event for analytics
+        try {
+          await ShippingEvent.create({
+            orderId: order.orderNumber,
+            shippingMethod: order.shippingMethod || 'unknown',
+            orderTotal: order.total,
+            region: order.shippingRegion || null,
+          });
+        } catch (shippingEventError) {
+          console.error('Failed to record shipping event:', shippingEventError);
+        }
 
         // Send confirmation email
         try {

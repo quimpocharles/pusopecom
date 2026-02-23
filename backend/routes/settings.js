@@ -1,5 +1,6 @@
 import express from 'express';
 import SiteSettings from '../models/SiteSettings.js';
+import VenuePickupConfig from '../models/VenuePickupConfig.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -26,6 +27,17 @@ router.put('/', authenticate, isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Update settings error:', error);
     res.status(500).json({ success: false, message: 'Failed to update settings' });
+  }
+});
+
+// GET /api/settings/venue-pickup — public
+router.get('/venue-pickup', async (req, res) => {
+  try {
+    const config = await VenuePickupConfig.findOne().lean();
+    res.json({ success: true, data: config || { enabled: false } });
+  } catch (error) {
+    console.error('Get venue pickup error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch venue pickup config' });
   }
 });
 

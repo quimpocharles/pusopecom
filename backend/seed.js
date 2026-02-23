@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import Product from './models/Product.js';
+import VenuePickupConfig from './models/VenuePickupConfig.js';
 
 dotenv.config();
 
@@ -128,6 +129,22 @@ const seedDatabase = async () => {
         await product.save();
         console.log(`Created: ${productData.name}`);
       }
+    }
+
+    // Seed default VenuePickupConfig (only if none exists)
+    const existingConfig = await VenuePickupConfig.findOne();
+    if (existingConfig) {
+      console.log('VenuePickupConfig already exists — skipping');
+    } else {
+      await VenuePickupConfig.create({
+        enabled:             false,
+        venueName:           'Venue Name Here',
+        venueAddress:        'Full venue address here',
+        pickupDate:          null,
+        pickupHours:         'e.g. 10:00 AM – 5:00 PM',
+        specialInstructions: 'Any special pickup instructions here',
+      });
+      console.log('Created: default VenuePickupConfig');
     }
 
     console.log('\nSeeding completed successfully!');
