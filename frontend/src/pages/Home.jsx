@@ -164,7 +164,7 @@ const Home = () => {
             style={{
               fontSize: 'clamp(3.5rem, 9vw, 7rem)',
               lineHeight: 1.0,
-              letterSpacing: '-0.04em',
+              letterSpacing: '-0.0075em',
               marginBottom: '20px',
             }}
           >
