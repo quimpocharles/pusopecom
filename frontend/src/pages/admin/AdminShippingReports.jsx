@@ -6,18 +6,20 @@ import api from '../../services/api';
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const CHART_COLORS = [
-  '#3b82f6', // blue   – domestic standard
-  '#10b981', // green  – domestic free
-  '#f59e0b', // amber  – intl SEA
-  '#ef4444', // red    – intl ME
-  '#8b5cf6', // purple – intl NA
-  '#06b6d4', // cyan   – intl EU
-  '#84cc16', // lime   – intl RoW
-  '#ec4899', // pink   – venue pickup
-  '#6b7280', // gray   – contact us / unknown
+  '#3b82f6', // blue    – domestic standard
+  '#10b981', // green   – domestic free
+  '#f59e0b', // amber   – intl SEA
+  '#ef4444', // red     – intl Middle East
+  '#8b5cf6', // purple  – intl North America
+  '#f97316', // orange  – intl East Asia
+  '#06b6d4', // cyan    – intl Europe
+  '#84cc16', // lime    – intl Rest of World
+  '#ec4899', // pink    – venue pickup
+  '#6b7280', // gray    – contact us / unknown
 ];
 
-// Ordered rows for the breakdown table + chart
+// Ordered rows for the breakdown table + chart.
+// Region values match COUNTRY_REGION_MAP in backend/lib/config/shipping.js exactly.
 const ALL_ROWS = [
   {
     key:    'domestic_standard',
@@ -37,24 +39,29 @@ const ALL_ROWS = [
   {
     key:    'intl_me',
     label:  'International — Middle East',
-    match:  (m) => m._id.method === 'international' && m._id.region === 'Middle East',
+    match:  (m) => m._id.method === 'international' && m._id.region === 'MIDDLE_EAST',
   },
   {
     key:    'intl_na',
     label:  'International — North America',
-    match:  (m) => m._id.method === 'international' && m._id.region === 'North America',
+    match:  (m) => m._id.method === 'international' && m._id.region === 'NORTH_AMERICA',
+  },
+  {
+    key:    'intl_ea',
+    label:  'International — East Asia',
+    match:  (m) => m._id.method === 'international' && m._id.region === 'EAST_ASIA',
   },
   {
     key:    'intl_eu',
     label:  'International — Europe',
-    match:  (m) => m._id.method === 'international' && m._id.region === 'Europe',
+    match:  (m) => m._id.method === 'international' && m._id.region === 'EUROPE',
   },
   {
     key:    'intl_row',
     label:  'International — Rest of World',
     match:  (m) =>
       m._id.method === 'international' &&
-      !['SEA', 'Middle East', 'North America', 'Europe'].includes(m._id.region),
+      !['SEA', 'MIDDLE_EAST', 'NORTH_AMERICA', 'EAST_ASIA', 'EUROPE'].includes(m._id.region),
   },
   {
     key:    'venue_pickup',
@@ -128,9 +135,10 @@ const AdminShippingReports = () => {
     methodBreakdown.filter(row.match).reduce((s, m) => s + m.count, 0)
   );
 
+  // ALL_ROWS order: [0] std, [1] free, [2] SEA, [3] ME, [4] NA, [5] EA, [6] EU, [7] RoW, [8] pickup, [9] contact_us, [10] unknown
   const domesticCount  = rowCounts[0] + rowCounts[1];
-  const intlCount      = rowCounts[2] + rowCounts[3] + rowCounts[4] + rowCounts[5] + rowCounts[6];
-  const pickupCount    = rowCounts[7];
+  const intlCount      = rowCounts[2] + rowCounts[3] + rowCounts[4] + rowCounts[5] + rowCounts[6] + rowCounts[7];
+  const pickupCount    = rowCounts[8];
 
   const chartData = ALL_ROWS
     .map((row, i) => ({ name: row.label, value: rowCounts[i], color: CHART_COLORS[i] }))
