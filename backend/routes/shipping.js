@@ -54,7 +54,7 @@ router.post('/options', async (req, res) => {
             shippingOptions.push({
               method: 'venue_pickup',
               slotId: slot._id.toString(),
-              label: 'Pick Up at Venue',
+              label: slot.venueName ? `Pick Up at ${slot.venueName}` : 'Pick Up at Venue',
               description: [
                 slot.venueName,
                 formatSlotDate(slot.pickupDate),
