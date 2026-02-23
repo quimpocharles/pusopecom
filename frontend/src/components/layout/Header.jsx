@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import Logo from '../../assets/images/Logo.png';
+import Logo from '../../assets/images/puso.png';
 import {
   ShoppingBagIcon,
   UserIcon,
