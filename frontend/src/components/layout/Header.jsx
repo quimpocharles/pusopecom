@@ -162,7 +162,7 @@ const Header = () => {
       >
         {/* ── Pill nav ─────────────────────────────────────────── */}
         <header
-          className="pointer-events-auto w-full flex items-center justify-between"
+          className="pointer-events-auto w-full flex items-center justify-between overflow-visible"
           style={navStyle}
         >
           {/* Mobile hamburger */}
@@ -174,9 +174,9 @@ const Header = () => {
             <Bars3Icon className={`w-5 h-5 transition-colors duration-[450ms] ${iconCls}`} />
           </button>
 
-          {/* Logo */}
-          <Link to="/" className="flex-shrink-0">
-            <img src={Logo} alt="Puso Pilipinas" className="h-7 md:h-8 w-auto" />
+          {/* Logo — allowed to overflow the navbar height */}
+          <Link to="/" className="flex-shrink-0 relative z-10">
+            <img src={Logo} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto" />
           </Link>
 
           {/* Desktop nav — absolutely centred so it doesn't push the logo/actions */}
