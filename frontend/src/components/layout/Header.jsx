@@ -71,7 +71,7 @@ const Header = () => {
 
   // ── Nav inner style (the morphing pill) ─────────────────────────
   const navStyle = {
-    height:               isExpanded ? '80px'        : '52px',
+    height:               isExpanded ? '88px'        : '64px',
     padding:              isExpanded ? '0 40px'      : '0 20px',
     background:           isExpanded ? 'transparent' : 'rgba(10, 10, 10, 0.82)',
     borderRadius:         isExpanded ? '0px'         : '100px',
