@@ -44,10 +44,8 @@ const Header = () => {
   const searchContainerRef = useRef(null);
   const debounceRef        = useRef(null);
 
-  // isExpanded: full-width bar at top of ANY page (drives layout/shape)
-  // isTransparent: hero bg is now light (#f5f5f7) so the nav is never transparent
-  const isExpanded    = !scrolled;
-  const isTransparent = false;
+  // isExpanded: full-width transparent bar at top; collapses to dark pill on scroll
+  const isExpanded = !scrolled;
 
   // ── Scroll listener ──────────────────────────────────────────────
   useEffect(() => {
@@ -59,8 +57,11 @@ const Header = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // ── Color tokens (dark text at top, white text in pill) ─────────
+  const iconCls   = isExpanded ? 'text-gray-700'          : 'text-white/80';
+  const hoverBtn  = isExpanded ? 'hover:bg-black/[0.06]'  : 'hover:bg-white/10';
+
   // ── Shell style (outer full-width positioner) ────────────────────
-  // Padding shrinks inward to create the pill float effect
   const shellStyle = {
     top: 'var(--header-top, 0px)',
     padding: isExpanded ? '0' : '14px 7%',
@@ -69,14 +70,14 @@ const Header = () => {
 
   // ── Nav inner style (the morphing pill) ─────────────────────────
   const navStyle = {
-    height:               isExpanded    ? '80px'        : '52px',
-    padding:              isExpanded    ? '0 40px'      : '0 20px',
-    background:           isTransparent ? 'transparent' : 'rgba(10, 10, 10, 0.82)',
-    borderRadius:         isExpanded    ? '0px'         : '100px',
-    border:               isTransparent ? '1px solid transparent' : '1px solid rgba(255,255,255,0.10)',
-    boxShadow:            isExpanded    ? 'none' : '0 4px 6px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
-    backdropFilter:       isExpanded    ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
-    WebkitBackdropFilter: isExpanded    ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
+    height:               isExpanded ? '80px'        : '52px',
+    padding:              isExpanded ? '0 40px'      : '0 20px',
+    background:           isExpanded ? 'transparent' : 'rgba(10, 10, 10, 0.82)',
+    borderRadius:         isExpanded ? '0px'         : '100px',
+    border:               isExpanded ? '1px solid transparent' : '1px solid rgba(255,255,255,0.10)',
+    boxShadow:            isExpanded ? 'none' : '0 4px 6px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+    backdropFilter:       isExpanded ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
+    WebkitBackdropFilter: isExpanded ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
     transition: [
       `height           0.48s ${SPRING}`,
       `padding          0.48s ${SPRING}`,
@@ -148,7 +149,9 @@ const Header = () => {
     { label: 'Football',   href: '/products?sport=football' },
   ];
 
-  const linkCls = 'text-white/70 hover:text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white/[0.08] transition-colors whitespace-nowrap';
+  const linkCls = isExpanded
+    ? 'text-gray-600 hover:text-gray-900 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-black/[0.06] transition-colors whitespace-nowrap'
+    : 'text-white/70 hover:text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white/[0.08] transition-colors whitespace-nowrap';
 
   return (
     <>
@@ -165,10 +168,10 @@ const Header = () => {
           {/* Mobile hamburger */}
           <button
             onClick={() => setShowMobileMenu(true)}
-            className="md:hidden p-2 -ml-1 hover:bg-white/10 rounded-lg"
+            className={`md:hidden p-2 -ml-1 ${hoverBtn} rounded-lg`}
             aria-label="Open menu"
           >
-            <Bars3Icon className="w-5 h-5 text-white" />
+            <Bars3Icon className={`w-5 h-5 transition-colors duration-[450ms] ${iconCls}`} />
           </button>
 
           {/* Logo */}
@@ -183,7 +186,7 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link to="/products?sale=true" className="text-white/90 hover:text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-white/[0.08] transition-colors">
+            <Link to="/products?sale=true" className={`${isExpanded ? 'text-gray-800 hover:text-gray-900 hover:bg-black/[0.06]' : 'text-white/90 hover:text-white hover:bg-white/[0.08]'} text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors`}>
               Sale
             </Link>
           </nav>
@@ -193,17 +196,17 @@ const Header = () => {
             {/* Search */}
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              className={`p-2 ${hoverBtn} rounded-full transition-colors`}
               aria-label="Search"
             >
-              <MagnifyingGlassIcon className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
+              <MagnifyingGlassIcon className={`w-4 h-4 md:w-5 md:h-5 transition-colors duration-[450ms] ${iconCls}`} />
             </button>
 
             {/* User menu */}
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`${isAuthenticated ? 'p-0.5' : 'p-2'} hover:bg-white/10 rounded-full transition-colors`}
+                className={`${isAuthenticated ? 'p-0.5' : 'p-2'} ${hoverBtn} rounded-full transition-colors`}
                 aria-label="Account menu"
               >
                 {isAuthenticated ? (
@@ -221,7 +224,7 @@ const Header = () => {
                     </div>
                   )
                 ) : (
-                  <UserIcon className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
+                  <UserIcon className={`w-4 h-4 md:w-5 md:h-5 transition-colors duration-[450ms] ${iconCls}`} />
                 )}
               </button>
 
@@ -269,12 +272,12 @@ const Header = () => {
             {/* Cart */}
             <button
               onClick={() => useCartStore.getState().openCart()}
-              className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
+              className={`relative p-2 ${hoverBtn} rounded-full transition-colors`}
               aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} item${cartCount !== 1 ? 's' : ''}` : ''}`}
             >
-              <ShoppingBagIcon className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
+              <ShoppingBagIcon className={`w-4 h-4 md:w-5 md:h-5 transition-colors duration-[450ms] ${iconCls}`} />
               {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-white text-black text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                <span className={`absolute -top-0.5 -right-0.5 text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold transition-colors duration-[450ms] ${isExpanded ? 'bg-gray-900 text-white' : 'bg-white text-black'}`}>
                   {cartCount > 9 ? '9+' : cartCount}
                 </span>
               )}
@@ -283,7 +286,7 @@ const Header = () => {
             {/* Shop Now CTA — desktop only */}
             <Link
               to="/products"
-              className="hidden md:inline-flex items-center bg-white text-gray-900 text-sm font-bold px-4 py-2 rounded-full hover:bg-white/88 transition-all whitespace-nowrap ml-1 active:scale-[0.97]"
+              className={`hidden md:inline-flex items-center text-sm font-bold px-4 py-2 rounded-full transition-all whitespace-nowrap ml-1 active:scale-[0.97] ${isExpanded ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-gray-900 hover:bg-white/88'}`}
             >
               Shop Now
             </Link>
