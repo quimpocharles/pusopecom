@@ -1,5 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import LogoWhite from '../../assets/images/puso-white.png';
+import LogoColor from '../../assets/images/puso.png';
 import {
   ShoppingBagIcon,
   UserIcon,
@@ -50,6 +51,8 @@ const Header = () => {
   const isHome      = location.pathname === '/';
   const isExpanded  = !scrolled;
   const useDarkText = isExpanded && !isHome;
+  // Non-home pages at top → color logo (light bg); everywhere else → white logo
+  const logoSrc = (!isHome && isExpanded) ? LogoColor : LogoWhite;
 
   // ── Scroll listener ──────────────────────────────────────────────
   useEffect(() => {
@@ -180,7 +183,7 @@ const Header = () => {
 
           {/* Logo — allowed to overflow the navbar height */}
           <Link to="/" className="flex-shrink-0 relative z-10">
-            <img src={LogoWhite} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto" />
+            <img src={logoSrc} alt="Puso Pilipinas" className="h-14 md:h-16 w-auto" />
           </Link>
 
           {/* Desktop nav — absolutely centred so it doesn't push the logo/actions */}
