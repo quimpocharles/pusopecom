@@ -165,7 +165,7 @@ const Home = () => {
               fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
               lineHeight: 1.0,
               letterSpacing: '-0.04em',
-              marginBottom: '10px',
+              marginBottom: '20px',
             }}
           >
             See it on you,<br />before you buy.
@@ -178,11 +178,31 @@ const Home = () => {
               fontSize: 'clamp(1rem, 2vw, 1.2rem)',
               color: 'rgba(255,255,255,0.50)',
               letterSpacing: '-0.01em',
-              
+              marginBottom: '36px',
             }}
           >
             Wear your Puso — before checkout.
           </p>
+
+          {/* Primary CTA — animated Philippine flag gradient */}
+          <Link
+            to={tryOnSettings.productUrl}
+            className="inline-flex items-center gap-2 font-bold active:scale-[0.97] transition-transform"
+            style={{
+              background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'pusoFlagSweep 6s linear infinite',
+              color: '#fff',
+              textShadow: '0 1px 3px rgba(0,0,0,0.35)',
+              borderRadius: '100px',
+              padding: '14px 32px',
+              fontSize: '15px',
+              textDecoration: 'none',
+            }}
+          >
+            Try On a Jersey Now
+            <ChevronRightIcon className="w-4 h-4" />
+          </Link>
         </div>
 
         {/* ── Browser mockup ── */}
@@ -306,7 +326,7 @@ const Home = () => {
           className="relative z-10 text-center px-6 pt-3 pb-6"
           style={{
             fontSize: '12px',
-             color: 'rgba(0,0,0,0.45)',
+            color: 'rgba(255,255,255,0.25)',
             maxWidth: '600px',
             margin: '0 auto',
             lineHeight: 1.7,
