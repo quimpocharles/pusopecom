@@ -343,11 +343,19 @@ const Home = () => {
             letterSpacing: '0.14em',
             textTransform: 'uppercase',
             animation: 'heroScrollBob 2.2s ease-in-out infinite',
+            zIndex: 5,
           }}
         >
           <span>Scroll</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+        </div>
+
+        {/* Curve → next section (#f5f5f7) */}
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ zIndex: 2 }}>
+          <svg viewBox="0 0 1440 100" preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100px' }}>
+            <path d="M0,100 C400,5 1040,5 1440,100 L1440,100 L0,100 Z" fill="#f5f5f7" />
           </svg>
         </div>
 
@@ -372,40 +380,6 @@ const Home = () => {
           .partners-track-r { animation: partnersMarqueeR 76s linear infinite; }
         `}</style>
       </section>
-
-      {/* ── Marquee bar ──────────────────────────────────────────── */}
-      <div
-        className="overflow-x-hidden text-xs md:text-sm"
-        style={{
-          background: '#1a1a1a',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          padding: '10px 0',
-          color: 'rgba(255,255,255,0.35)',
-        }}
-      >
-        <div className="animate-marquee whitespace-nowrap flex">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="flex items-center gap-8 md:gap-14 px-6 md:px-8">
-              <span className="flex items-center gap-2">
-                <SparklesIcon className="w-3 h-3 opacity-50" />
-                <span>Try jerseys virtually before you buy</span>
-              </span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
-              <span className="flex items-center gap-2">
-                <TruckIcon className="w-3 h-3 opacity-50" />
-                <span>Free shipping on orders over ₱2,000</span>
-              </span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
-              <span>Authentic licensed merchandise</span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
-              <span>Support Philippine Sports 🇵🇭</span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
 
       {/* Shop by Sport - Tabbed Carousel */}
       <section className="py-10 md:py-16 lg:py-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
@@ -511,6 +485,39 @@ const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* ── Marquee bar ──────────────────────────────────────────── */}
+      <div
+        className="overflow-x-hidden text-xs md:text-sm"
+        style={{
+          background: '#1a1a1a',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: '10px 0',
+          color: 'rgba(255,255,255,0.35)',
+        }}
+      >
+        <div className="animate-marquee whitespace-nowrap flex">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="flex items-center gap-8 md:gap-14 px-6 md:px-8">
+              <span className="flex items-center gap-2">
+                <SparklesIcon className="w-3 h-3 opacity-50" />
+                <span>Try jerseys virtually before you buy</span>
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span className="flex items-center gap-2">
+                <TruckIcon className="w-3 h-3 opacity-50" />
+                <span>Free shipping on orders over ₱2,000</span>
+              </span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span>Authentic licensed merchandise</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span>Support Philippine Sports 🇵🇭</span>
+              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Latest Collection — image left, text right */}
       <section className="py-12 md:py-28" style={{ background: '#0a0a0a' }}>
