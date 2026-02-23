@@ -263,16 +263,6 @@ const Home = () => {
                     gap: '20px',
                   }}
                 >
-                  <p style={{
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 'clamp(0.95rem, 2.4vw, 1.625rem)',
-                    letterSpacing: '-0.02em',
-                    textShadow: '0 2px 16px rgba(0,0,0,0.7)',
-                    maxWidth: '560px',
-                  }}>
-                    ✦ {tryOnSettings.title}
-                  </p>
                   <Link
                     to={tryOnSettings.productUrl}
                     style={{
@@ -292,7 +282,7 @@ const Home = () => {
                     onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
-                    Try It Now
+                    ✦ {tryOnSettings.title}
                     <ChevronRightIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
                   </Link>
                 </div>
@@ -306,7 +296,7 @@ const Home = () => {
           className="relative z-10 text-center px-6 pt-3 pb-6"
           style={{
             fontSize: '12px',
-            color: 'rgba(255,255,255,0.25)',
+            color: 'rgba(0,0,0,0.45)',
             maxWidth: '600px',
             margin: '0 auto',
             lineHeight: 1.7,
