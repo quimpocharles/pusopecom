@@ -72,13 +72,16 @@ const AdminOrders = () => {
   const handleStatusUpdate = async (orderId, order) => {
     const data = editStatus[orderId] || {};
     const orderStatus = data.orderStatus || order.orderStatus;
+    const isPickup = order.shippingMethod === 'venue_pickup';
 
     setUpdating(orderId);
     try {
       await orderService.updateOrderStatus(orderId, {
         orderStatus,
-        courier: data.courier ?? order.courier,
-        trackingNumber: data.trackingNumber ?? order.trackingNumber,
+        ...(isPickup ? {} : {
+          courier: data.courier ?? order.courier,
+          trackingNumber: data.trackingNumber ?? order.trackingNumber,
+        }),
       });
       setEditStatus((prev) => {
         const next = { ...prev };
@@ -193,7 +196,8 @@ const AdminOrders = () => {
                 orders.map((order) => {
                   const edit = editStatus[order._id] || {};
                   const isEditingShipping = edit.editingShipping;
-                  const hasSavedShipping = order.courier || order.trackingNumber;
+                  const isPickup = order.shippingMethod === 'venue_pickup';
+                  const hasSavedShipping = !isPickup && (order.courier || order.trackingNumber);
 
                   return (
                     <tr key={order._id} className="hover:bg-gray-50">
@@ -220,9 +224,18 @@ const AdminOrders = () => {
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
 
-                      {/* Shipping column — courier + tracking */}
+                      {/* Shipping column — courier + tracking (hidden for pick-up orders) */}
                       <td className="px-6 py-4">
-                        {hasSavedShipping && !isEditingShipping ? (
+                        {isPickup ? (
+                          <div>
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              Venue Pick-Up
+                            </span>
+                            {order.shippingAddress?.city && (
+                              <p className="text-xs text-gray-500 mt-1">{order.shippingAddress.city}</p>
+                            )}
+                          </div>
+                        ) : hasSavedShipping && !isEditingShipping ? (
                           <div className="flex items-center gap-1.5">
                             <div className="text-xs text-gray-700">
                               <span className="font-medium">{order.courier}</span>
