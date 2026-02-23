@@ -45,8 +45,10 @@ const Header = () => {
   const debounceRef        = useRef(null);
 
   const isHome        = location.pathname === '/';
-  // Only show the transparent full-width state on the home page before scrolling
-  const isTransparent = isHome && !scrolled;
+  // isExpanded: full-width bar at top of ANY page (drives layout/shape)
+  // isTransparent: fully transparent bg — only on home hero before scrolling
+  const isExpanded    = !scrolled;
+  const isTransparent = isHome && isExpanded;
 
   // ── Scroll listener ──────────────────────────────────────────────
   useEffect(() => {
@@ -62,20 +64,20 @@ const Header = () => {
   // Padding shrinks inward to create the pill float effect
   const shellStyle = {
     top: 'var(--header-top, 0px)',
-    padding: isTransparent ? '0' : '14px 7%',
+    padding: isExpanded ? '0' : '14px 7%',
     transition: `padding 0.48s ${SPRING}, top 0.2s ease`,
   };
 
   // ── Nav inner style (the morphing pill) ─────────────────────────
   const navStyle = {
-    height:               isTransparent ? '80px' : '52px',
-    padding:              isTransparent ? '0 40px' : '0 20px',
+    height:               isExpanded    ? '80px'        : '52px',
+    padding:              isExpanded    ? '0 40px'      : '0 20px',
     background:           isTransparent ? 'transparent' : 'rgba(10, 10, 10, 0.82)',
-    borderRadius:         isTransparent ? '0px' : '100px',
+    borderRadius:         isExpanded    ? '0px'         : '100px',
     border:               isTransparent ? '1px solid transparent' : '1px solid rgba(255,255,255,0.10)',
-    boxShadow:            isTransparent ? 'none' : '0 4px 6px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
-    backdropFilter:       isTransparent ? 'blur(0px)' : 'blur(24px) saturate(180%)',
-    WebkitBackdropFilter: isTransparent ? 'blur(0px)' : 'blur(24px) saturate(180%)',
+    boxShadow:            isExpanded    ? 'none' : '0 4px 6px rgba(0,0,0,0.12), 0 12px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.06)',
+    backdropFilter:       isExpanded    ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
+    WebkitBackdropFilter: isExpanded    ? 'blur(0px)'   : 'blur(24px) saturate(180%)',
     transition: [
       `height           0.48s ${SPRING}`,
       `padding          0.48s ${SPRING}`,
