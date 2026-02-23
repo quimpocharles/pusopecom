@@ -290,7 +290,7 @@ const Header = () => {
             {/* Shop Now CTA — desktop only */}
             <Link
               to="/products"
-              className={`hidden md:inline-flex items-center text-sm font-bold px-4 py-2 rounded-full transition-all whitespace-nowrap ml-1 active:scale-[0.97] ${useDarkText ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-gray-900 hover:bg-white/88'}`}
+              className={`hidden md:inline-flex items-center text-sm font-bold px-4 py-2 rounded-xl transition-all whitespace-nowrap ml-1 active:scale-[0.97] ${useDarkText ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-white text-gray-900 hover:bg-white/88'}`}
             >
               Shop Now
             </Link>
@@ -463,8 +463,8 @@ const Header = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Link to="/login"    onClick={() => setShowMobileMenu(false)} className="block w-full text-center text-sm font-bold bg-white text-black rounded-full py-3 hover:bg-white/90 transition-colors">Sign In</Link>
-                  <Link to="/register" onClick={() => setShowMobileMenu(false)} className="block w-full text-center text-sm font-medium text-white/70 border border-white/20 rounded-full py-3 hover:bg-white/08 transition-colors">Create Account</Link>
+                  <Link to="/login"    onClick={() => setShowMobileMenu(false)} className="block w-full text-center text-sm font-bold bg-white text-black rounded-xl py-3 hover:bg-white/90 transition-colors">Sign In</Link>
+                  <Link to="/register" onClick={() => setShowMobileMenu(false)} className="block w-full text-center text-sm font-medium text-white/70 border border-white/20 rounded-xl py-3 hover:bg-white/08 transition-colors">Create Account</Link>
                 </div>
               )}
             </div>

@@ -173,7 +173,7 @@ const CartUpsell = ({ cartProductIds }) => {
               <button
                 onClick={() => handleAdd(product)}
                 disabled={!canAdd}
-                className={`w-full text-xs font-semibold py-2 rounded-lg transition-colors ${
+                className={`w-full text-xs font-semibold py-2 rounded-xl transition-colors ${
                   canAdd
                     ? 'bg-primary-600 text-white hover:bg-primary-700'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'

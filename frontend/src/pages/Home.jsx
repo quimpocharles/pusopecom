@@ -154,7 +154,7 @@ const Home = () => {
           >
             <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.85)' }} />
             <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-              ✦ AI-Powered Feature
+               AI-Powered Virtual Try-On
             </span>
           </div>
 
@@ -164,7 +164,7 @@ const Home = () => {
             style={{
               fontSize: 'clamp(2.8rem, 7vw, 5.5rem)',
               lineHeight: 1.0,
-              letterSpacing: '-0.04em',
+              letterSpacing: '-0.01em',
               marginBottom: '20px',
             }}
           >
@@ -180,7 +180,7 @@ const Home = () => {
               letterSpacing: '-0.01em',
             }}
           >
-            Wear your Puso — before checkout.
+            Virtually wear your favorite Pilipinas apparel — before checkout.
           </p>
 
         </div>
@@ -284,7 +284,7 @@ const Home = () => {
                       fontWeight: 700,
                       fontSize: 'clamp(12px, 1.4vw, 15px)',
                       padding: 'clamp(10px, 1.2vw, 14px) clamp(20px, 2.5vw, 32px)',
-                      borderRadius: '100px',
+                      borderRadius: '12px',
                       textDecoration: 'none',
                       boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
                       transition: 'opacity 0.18s, transform 0.15s',
@@ -430,7 +430,7 @@ const Home = () => {
                     style={{
                       background: '#0a0a0a',
                       color: '#fff',
-                      borderRadius: '100px',
+                      borderRadius: '12px',
                       padding: '12px 28px',
                       fontSize: '14px',
                       textDecoration: 'none',
@@ -543,7 +543,7 @@ const Home = () => {
                 style={{
                   border: '1px solid rgba(255,255,255,0.18)',
                   color: 'rgba(255,255,255,0.7)',
-                  borderRadius: '100px',
+                  borderRadius: '12px',
                   padding: '13px 30px',
                   textDecoration: 'none',
                 }}
@@ -611,7 +611,7 @@ const Home = () => {
                   style={{
                     background: '#fff',
                     color: '#0a0a0a',
-                    borderRadius: '100px',
+                    borderRadius: '12px',
                     padding: '13px 30px',
                     textDecoration: 'none',
                   }}
@@ -999,7 +999,7 @@ const Home = () => {
               style={{
                 background: '#fff',
                 color: '#0a0a0a',
-                borderRadius: '100px',
+                borderRadius: '12px',
                 padding: '12px 28px',
               }}
             >
