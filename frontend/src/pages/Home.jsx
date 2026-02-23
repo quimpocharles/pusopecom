@@ -841,15 +841,15 @@ const Home = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-12 md:py-24" style={{ background: '#f5f5f7' }}>
+      <section className="py-12 md:py-24" style={{ background: '#1a1a1a' }}>
         <div className="container-custom max-w-3xl">
           <h2
             className="font-bold text-center mb-3 md:mb-4"
-            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#0a0a0a' }}
+            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#fff' }}
           >
             Frequently Asked Questions
           </h2>
-          <p className="text-sm md:text-base text-center mb-8 md:mb-12" style={{ color: 'rgba(0,0,0,0.45)' }}>
+          <p className="text-sm md:text-base text-center mb-8 md:mb-12" style={{ color: 'rgba(255,255,255,0.38)' }}>
             Everything you need to know about Puso Pilipinas
           </p>
 
@@ -880,7 +880,7 @@ const Home = () => {
                 a: 'Yes! We ship worldwide so our kababayans abroad can rep Philippine sports no matter where they are. International shipping rates and delivery times vary by destination and will be calculated at checkout.',
               },
             ].map((faq, index) => (
-              <div key={index} style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+              <div key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <button
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                   className="w-full flex items-center justify-between py-5 md:py-6 text-left"
@@ -888,13 +888,13 @@ const Home = () => {
                 >
                   <span
                     className="font-medium text-sm md:text-base pr-4 transition-colors"
-                    style={{ color: openFaq === index ? '#0a0a0a' : 'rgba(0,0,0,0.65)' }}
+                    style={{ color: openFaq === index ? '#fff' : 'rgba(255,255,255,0.7)' }}
                   >
                     {faq.q}
                   </span>
                   <span
                     className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center"
-                    style={{ color: 'rgba(0,0,0,0.35)' }}
+                    style={{ color: 'rgba(255,255,255,0.38)' }}
                   >
                     <svg
                       className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${openFaq === index ? 'rotate-45' : ''}`}
@@ -916,7 +916,7 @@ const Home = () => {
                 >
                   <p
                     className="text-sm md:text-base pb-5 md:pb-6"
-                    style={{ color: 'rgba(0,0,0,0.50)', lineHeight: 1.72 }}
+                    style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
                   >
                     {faq.a}
                   </p>
