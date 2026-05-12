@@ -2,7 +2,8 @@ import express from 'express';
 import multer from 'multer';
 import axios from 'axios';
 import mongoose from 'mongoose';
-import { generateTryOn } from '../services/replicateService.js';
+import { generateTryOn as replicateGenerateTryOn } from '../services/replicateService.js';
+import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedService.js';
 import TryOnLog from '../models/TryOnLog.js';
 import Product from '../models/Product.js';
 
@@ -42,29 +43,39 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       });
     }
 
-    // Convert user image to base64
-    const userImageBase64 = req.file.buffer.toString('base64');
+    let result;
 
-    // Fetch product image and convert to base64
-    let productImageBase64;
-    try {
-      const productImageResponse = await axios.get(productImageUrl, {
-        responseType: 'arraybuffer'
-      });
-      productImageBase64 = Buffer.from(productImageResponse.data).toString('base64');
-    } catch (fetchError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to fetch product image'
-      });
+    if (process.env.WAVESPEED_API_KEY) {
+      // WaveSpeed path — passes buffer + public URL directly (no base64 conversion)
+      result = await wavespeedGenerateTryOn(
+        req.file.buffer,
+        req.file.mimetype,
+        productImageUrl,
+        productName || 'clothing item'
+      );
+    } else {
+      // Replicate path — existing flow (SeedDream 4.5)
+      const userImageBase64 = req.file.buffer.toString('base64');
+
+      let productImageBase64;
+      try {
+        const productImageResponse = await axios.get(productImageUrl, {
+          responseType: 'arraybuffer'
+        });
+        productImageBase64 = Buffer.from(productImageResponse.data).toString('base64');
+      } catch (fetchError) {
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to fetch product image'
+        });
+      }
+
+      result = await replicateGenerateTryOn(
+        userImageBase64,
+        productImageBase64,
+        productName || 'clothing item'
+      );
     }
-
-    // Generate try-on image using Replicate (Seedream 4.5)
-    const result = await generateTryOn(
-      userImageBase64,
-      productImageBase64,
-      productName || 'clothing item'
-    );
 
     // Fire-and-forget: log try-on attempt
     const logProductId = productId && mongoose.Types.ObjectId.isValid(productId)
