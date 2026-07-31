@@ -124,10 +124,7 @@ const Header = () => {
           ) : (
             <>
               <Link to="/login" onClick={() => setNavOpen(false)} className={itemCls}>
-                Sign In
-              </Link>
-              <Link to="/register" onClick={() => setNavOpen(false)} className={itemCls}>
-                Create Account
+                Login
               </Link>
             </>
           )}
