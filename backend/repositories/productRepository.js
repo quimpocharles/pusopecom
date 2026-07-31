@@ -276,18 +276,34 @@ export async function create({ sizes = [], colors = [], ...data }, { client = pr
  * that path, so this replaces them wholesale too (delete + recreate,
  * cascade removes any color's nested sizes automatically).
  *
- * totalStock is deliberately NOT recomputed here, even though sizes/colors
- * changed — this reproduces a real, pre-existing quirk rather than fixing
- * it: `findByIdAndUpdate` never ran the `pre('save')` hook that computed
- * totalStock, and the admin form never sends `totalStock` itself, so an
- * admin stock edit has always left totalStock stale in production. That's
- * a genuine Commerce Engine correctness gap (worth flagging separately),
- * not something to silently change as part of a persistence migration.
+ * totalStock IS recomputed here whenever sizes or colors change — this
+ * used to reproduce a real Mongoose-era quirk (`findByIdAndUpdate` never
+ * ran the `pre('save')` hook that computed totalStock, and the admin form
+ * never sends `totalStock` itself, so an admin stock edit always left
+ * totalStock stale in production — a genuine Commerce Engine correctness
+ * gap: a product edited down to zero stock everywhere never actually
+ * showed as sold out). Fixed rather than preserved, since nothing
+ * downstream depends on totalStock being wrong. Only whichever of
+ * sizes/colors is actually being replaced is read from the new payload;
+ * the other is read fresh from the database inside the same transaction,
+ * so an update touching only one of the two doesn't silently drop the
+ * other's contribution to the total.
  */
 export async function updateById(id, { sizes, colors, ...data } = {}, { client = prisma } = {}) {
   const hasNestedWrite = sizes !== undefined || colors !== undefined;
 
   const run = async (tx) => {
+    let totalStockUpdate = {};
+    if (hasNestedWrite) {
+      const finalSizes =
+        sizes !== undefined ? sizes : await tx.productSize.findMany({ where: { productId: id } });
+      const finalColors =
+        colors !== undefined
+          ? colors
+          : await tx.productColor.findMany({ where: { productId: id }, include: { sizes: true } });
+      totalStockUpdate = { totalStock: calculateTotalStock(finalSizes, finalColors) };
+    }
+
     if (sizes !== undefined) await tx.productSize.deleteMany({ where: { productId: id } });
     if (colors !== undefined) await tx.productColor.deleteMany({ where: { productId: id } });
 
@@ -295,6 +311,7 @@ export async function updateById(id, { sizes, colors, ...data } = {}, { client =
       where: { id },
       data: {
         ...data,
+        ...totalStockUpdate,
         ...(sizes !== undefined && {
           sizes: { create: sizes.map(({ size, stock }) => ({ size, stock })) },
         }),

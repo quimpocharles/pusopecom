@@ -211,7 +211,7 @@ describe('Product — nested create computes totalStock like the old pre(\'save\
       ).rejects.toThrow();
     }));
 
-  it('updateById replaces sizes/colors wholesale (matching findByIdAndUpdate\'s actual behavior on the admin edit form) without touching totalStock', () =>
+  it('updateById replaces sizes/colors wholesale (matching findByIdAndUpdate\'s actual behavior on the admin edit form) and recomputes totalStock', () =>
     withRollback(async (tx) => {
       const product = await productRepo.create(
         {
@@ -240,8 +240,64 @@ describe('Product — nested create computes totalStock like the old pre(\'save\
       expect(updated.colors[0].sizes[0].stock).toBe(7);
       // the old 'M' size is gone, not merged — a wholesale replace
       expect(updated.sizes.find((s) => s.size === 'M')).toBeUndefined();
-      // totalStock is untouched by this path — reproduces the existing quirk, not a new bug
-      expect(updated.totalStock).toBe(10);
+      // totalStock now reflects the new sizes/colors — 99 (plain) + 7 (color-scoped),
+      // fixing the real correctness gap where an admin stock edit never
+      // actually changed the number that decided whether a product could
+      // still be sold or showed as sold out
+      expect(updated.totalStock).toBe(106);
+    }, { timeout: 15000 }), 15000);
+
+  it('updateById recomputes totalStock down to zero when an admin zeroes out every size — the actual sold-out bug this fixes', () =>
+    withRollback(async (tx) => {
+      const product = await productRepo.create(
+        {
+          name: `Sold Out Update Test ${Date.now()}`,
+          description: 'x',
+          price: 500,
+          category: 'jersey',
+          sport: 'basketball',
+          images: [],
+          colors: [{ color: 'Maroon', sizes: [{ size: 'M', stock: 5 }, { size: 'L', stock: 5 }] }],
+        },
+        { client: tx }
+      );
+      expect(product.totalStock).toBe(10);
+
+      const updated = await productRepo.updateById(
+        product._id,
+        { colors: [{ color: 'Maroon', sizes: [{ size: 'M', stock: 0 }, { size: 'L', stock: 0 }] }] },
+        { client: tx }
+      );
+
+      expect(updated.totalStock).toBe(0);
+    }, { timeout: 15000 }), 15000);
+
+  it('updateById recomputing totalStock when only sizes are sent still counts the product\'s existing, untouched colors', () =>
+    withRollback(async (tx) => {
+      const product = await productRepo.create(
+        {
+          name: `Partial Update Test ${Date.now()}`,
+          description: 'x',
+          price: 500,
+          category: 'jersey',
+          sport: 'basketball',
+          images: [],
+          sizes: [{ size: 'M', stock: 3 }],
+          colors: [{ color: 'Navy', sizes: [{ size: 'S', stock: 4 }] }],
+        },
+        { client: tx }
+      );
+      expect(product.totalStock).toBe(7);
+
+      // Only `sizes` is sent — `colors` is absent from the payload entirely,
+      // not an empty array — so its existing 4 units must still count.
+      const updated = await productRepo.updateById(
+        product._id,
+        { sizes: [{ size: 'M', stock: 9 }] },
+        { client: tx }
+      );
+
+      expect(updated.totalStock).toBe(13); // 9 (new sizes) + 4 (untouched colors)
     }, { timeout: 15000 }), 15000);
 
   it('updateById leaves sizes/colors alone entirely when neither key is in the update payload', () =>
