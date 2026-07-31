@@ -4,10 +4,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import cron from 'node-cron';
 import pinoHttp from 'pino-http';
 import logger from './lib/logger.js';
 import prisma from './lib/prisma.js';
+import redis from './lib/redis.js';
 import * as productRepository from './repositories/productRepository.js';
 import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
 
@@ -62,11 +64,21 @@ app.use('/images', express.static('public/images'));
 // Rate limiting (disabled in development)
 const isDev = process.env.NODE_ENV === 'development';
 
+// Without Redis, each limiter's counts live in the process's own memory —
+// reset on every restart/deploy and not shared across multiple instances,
+// so a client can quietly get a fresh quota just by outlasting a deploy.
+// With REDIS_URL set, limits persist and stay consistent across the fleet.
+// Falls back to express-rate-limit's default in-memory store when Redis
+// isn't configured, same as before this change.
+const redisStore = (prefix) =>
+  redis ? new RedisStore({ sendCommand: (...args) => redis.call(...args), prefix }) : undefined;
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: 'Too many requests from this IP, please try again later.',
-  skip: () => isDev
+  skip: () => isDev,
+  store: redisStore('rl:general:')
 });
 
 app.use('/api/', limiter);
@@ -76,7 +88,8 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: 'Too many authentication attempts, please try again later.',
-  skip: () => isDev
+  skip: () => isDev,
+  store: redisStore('rl:auth:')
 });
 
 app.use('/api/auth/', authLimiter);
@@ -86,7 +99,8 @@ const tryonUserLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // per user (IP)
   message: "You've reached the try-on limit. Please try again in an hour.",
-  skip: () => isDev
+  skip: () => isDev,
+  store: redisStore('rl:tryon-user:')
 });
 
 const tryonGlobalLimiter = rateLimit({
@@ -94,7 +108,8 @@ const tryonGlobalLimiter = rateLimit({
   max: 500, // across all users
   keyGenerator: () => 'global_tryon',
   message: 'Virtual try-on is temporarily unavailable due to high demand. Please try again later.',
-  skip: () => isDev
+  skip: () => isDev,
+  store: redisStore('rl:tryon-global:')
 });
 
 app.use('/api/tryon', tryonGlobalLimiter, tryonUserLimiter);
@@ -225,12 +240,14 @@ process.on('unhandledRejection', async (reason) => {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
   await prisma.$disconnect();
+  if (redis) redis.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT signal received: closing HTTP server');
   await prisma.$disconnect();
+  if (redis) redis.disconnect();
   process.exit(0);
 });
 
