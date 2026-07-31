@@ -22,8 +22,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "@gradio/client": "^2.0.4",
     "@prisma/client": "^5.20.0",
     "@sentry/node": "^10.69.0",
     "axios": "^1.6.2",
