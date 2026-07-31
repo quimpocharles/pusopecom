@@ -216,7 +216,10 @@ const CartDrawer = () => {
           {items.length === 0 && !pendingProduct ? (
             <div className="text-center py-16">
               <p className="text-gray-400 text-lg mb-2">Your cart is empty</p>
-              <p className="text-gray-400 text-sm">Add items to get started</p>
+              <p className="text-gray-400 text-sm mb-6">Add items to get started</p>
+              <Link to="/products" onClick={closeCart} className="btn-primary inline-flex">
+                View Products
+              </Link>
             </div>
           ) : (
             <div className="space-y-4">
