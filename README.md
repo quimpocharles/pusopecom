@@ -1,18 +1,21 @@
 # Puso Pilipinas - Sports Merchandise Store
 
-A full-stack MERN ecommerce platform for Philippine sports merchandise, featuring a MoreLabs-inspired storefront design, Maya payment integration, and email notifications.
+A full-stack ecommerce platform for Philippine sports merchandise, featuring a MoreLabs-inspired storefront design, Maya payment integration, and email notifications.
 
 ## Tech Stack
 
 ### Backend
 - Node.js + Express
-- MongoDB + Mongoose
+- PostgreSQL (Railway) + Prisma ORM
 - JWT Authentication (local + Google OAuth)
 - Nodemailer (SMTP)
 - Maya Checkout API
 - Cloudinary (Image hosting)
-- Replicate API (Virtual try-on via Seedream 4.5)
+- WaveSpeed AI (Virtual try-on, default — nano-banana-2/seedream, configurable via `WAVESPEED_MODEL`) with Replicate (Seedream 4.5) as fallback when `WAVESPEED_API_KEY` is unset
+- Redis (rate limiting persistence; optional — falls back to in-memory when unset)
+- Pino (structured JSON logging) + Sentry (error tracking, optional)
 - node-cron (Scheduled tasks)
+- GitHub Actions CI, gating Railway deploys on the test suite passing
 
 ### Frontend
 - React 18 + Vite
@@ -114,12 +117,15 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alter
 
 ## Prerequisites
 
-- Node.js (v18 or higher)
-- MongoDB (local or Atlas)
+- Node.js (v20 recommended — matches CI)
+- PostgreSQL (Railway or local)
 - SMTP email account
 - Maya Checkout API account (https://developers.maya.ph/)
-- Replicate account (https://replicate.com/) — for virtual try-on
+- WaveSpeed account (https://wavespeed.ai/) — for virtual try-on (default provider)
+- Replicate account (https://replicate.com/) — optional, fallback virtual try-on provider
 - Cloudinary account (optional, for image hosting)
+- Redis (optional — local: `brew install redis && brew services start redis`; production: Railway's Redis plugin)
+- Sentry account (optional — for error tracking; https://sentry.io)
 
 ## Installation
 
@@ -137,11 +143,11 @@ cd backend
 npm install
 ```
 
-Create a `.env` file in the `backend` directory:
+Create a `.env` file in the `backend` directory (see `backend/.env.example` for the authoritative, always-current list):
 
 ```env
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017/puso-pilipinas
+# PostgreSQL (Railway) — see backend/prisma/schema.prisma
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
@@ -157,7 +163,12 @@ MAYA_PUBLIC_KEY=pk-test-your-maya-public-key
 MAYA_SECRET_KEY=sk-test-your-maya-secret-key
 MAYA_SANDBOX=true
 
-# Replicate (Virtual Try-On)
+# WaveSpeed AI (Virtual Try-On) — default provider when set.
+# WAVESPEED_MODEL: seedream | nano-banana-2 | nano-banana-pro
+WAVESPEED_API_KEY=your-wavespeed-api-key
+WAVESPEED_MODEL=nano-banana-2
+
+# Replicate (Virtual Try-On) — fallback used only when WAVESPEED_API_KEY is unset
 REPLICATE_API_TOKEN=your-replicate-api-token
 
 # Frontend URL
@@ -175,8 +186,18 @@ GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ADMIN_EMAIL=admin@example.com
 
 # Server
-PORT=5000
+PORT=5001
 NODE_ENV=development
+
+# Sentry (error tracking) — optional, leave unset to disable; app runs fine without it
+SENTRY_DSN=your-sentry-dsn
+
+# Logging
+# LOG_LEVEL=info
+
+# Redis (rate limiting persistence; later: caching, job queue) — optional,
+# leave unset to disable; falls back to in-memory rate limiting.
+REDIS_URL=redis://localhost:6379
 ```
 
 ### 3. Frontend Setup
@@ -189,7 +210,7 @@ npm install
 Create a `.env` file in the `frontend` directory:
 
 ```env
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:5001/api
 ```
 
 ### 4. Maya Payment Setup
@@ -199,11 +220,27 @@ VITE_API_URL=http://localhost:5000/api
 3. Add the keys to your `.env` file
 4. Set `MAYA_SANDBOX=false` for production
 
-### 5. Replicate (Virtual Try-On) Setup
+### 5. WaveSpeed (Virtual Try-On) Setup
 
-1. Sign up at https://replicate.com/
-2. Get your API token from the dashboard
-3. Add it as `REPLICATE_API_TOKEN` in your `.env`
+1. Sign up at https://wavespeed.ai/
+2. Get your API key from the dashboard
+3. Add it as `WAVESPEED_API_KEY` in your `.env`, and pick a model via `WAVESPEED_MODEL` (`seedream`, `nano-banana-2`, or `nano-banana-pro`)
+4. If `WAVESPEED_API_KEY` is left unset, the app falls back to Replicate — sign up at https://replicate.com/ and set `REPLICATE_API_TOKEN` instead
+
+### 6. Redis Setup (optional)
+
+Powers persistent rate limiting (falls back to in-memory when unset — the app runs fine without it).
+
+- **Local**: `brew install redis && brew services start redis`, then set `REDIS_URL=redis://localhost:6379`
+- **Production (Railway)**: add the Redis plugin to your project, then set `REDIS_URL` on the backend service and redeploy
+
+### 7. Sentry Setup (optional)
+
+Real error tracking — without it, errors are still logged (structured, via Pino) but not aggregated or alerted on.
+
+1. Sign up at https://sentry.io/ (free tier: 5k errors/month)
+2. Create a Node.js/Express project, copy its DSN
+3. Add it as `SENTRY_DSN` in your `.env`
 
 ## Running the Application
 
@@ -225,23 +262,34 @@ npm run dev
 
 The application will be available at:
 - Frontend: http://localhost:5173
-- Backend API: http://localhost:5000
+- Backend API: http://localhost:5001
 
 ## Project Structure
 
 ```
 puso-shop/
+├── .github/
+│   └── workflows/       # ci.yml — backend + frontend tests/build, gates Railway deploys via "Wait for CI"
 ├── backend/
-│   ├── models/          # Mongoose models (User, Product, Order, Review, League, SiteSettings,
-│   │                    #   TryOnLog, UserActivity, VenuePickupConfig, ShippingEvent)
+│   ├── prisma/
+│   │   ├── schema.prisma  # Postgres schema — User, Product (+variants), Order, Review, League,
+│   │   │                  #   SiteSettings, TryOnLog, UserActivity, VenuePickupConfig, ShippingEvent,
+│   │   │                  #   Organization, Team, OrganizationParticipation, AthleteAffiliation
+│   │   └── migrations/
+│   ├── repositories/    # DB access layer — one module per Prisma model, thin wrapper over prisma client
 │   ├── routes/          # Express routes (auth, products, orders, reviews, reports, leagues,
 │   │                    #   tryon, upload, settings, activity, shipping, pickup)
 │   ├── lib/
+│   │   ├── prisma.js    # Singleton PrismaClient
+│   │   ├── logger.js    # Singleton Pino logger
+│   │   ├── sentry.js    # Sentry.init (no-ops without SENTRY_DSN)
+│   │   ├── redis.js     # Singleton ioredis client (null without REDIS_URL)
 │   │   ├── config/      # shipping.js — thresholds, DOMESTIC_RATES, COUNTRY_REGION_MAP, SHIPPING_METHODS
 │   │   └── shipping/    # calculateShipping.js — getDomesticRate, getInternationalRate, getVenuePickupRate, isSlotActive
-│   ├── __tests__/       # Vitest unit tests (calculateShipping)
-│   ├── services/        # Business logic (email, Maya payment, Replicate, daily sales)
+│   ├── __tests__/       # Vitest unit tests (calculateShipping, prisma singleton)
+│   ├── services/        # Business logic (email, Maya payment, WaveSpeed/Replicate try-on, daily sales)
 │   ├── middleware/      # auth.js — authenticate, isAdmin, optionalAuth
+│   ├── scripts/         # One-off/CLI scripts (data imports, migration pilots)
 │   ├── server.js        # Express app, middleware, cron job
 │   └── package.json
 │
@@ -352,7 +400,7 @@ puso-shop/
 - `PUT /` - Update site settings (Admin)
 
 ### Virtual Try-On (`/api/tryon`)
-- `POST /` - Generate virtual try-on image via Replicate Seedream 4.5 (rate limited: 10/user/hr, 500/hr global; rate limiting disabled in dev)
+- `POST /` - Generate virtual try-on image via WaveSpeed AI (default; model set by `WAVESPEED_MODEL`) or Replicate Seedream 4.5 (fallback when `WAVESPEED_API_KEY` is unset); rate limited: 10/user/hr, 500/hr global; rate limiting disabled in dev; provider + duration recorded on every attempt, surfaced via `GET /api/reports/tryon`'s `byProvider` breakdown
 
 ### Upload (`/api/upload`)
 - `POST /` - Upload single image to Cloudinary (Admin)
@@ -364,32 +412,36 @@ puso-shop/
 
 ## Database Models
 
+Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.prisma` for the authoritative, always-current schema and the reasoning behind every non-obvious choice (it's heavily commented). Summary below; field-by-field Mongoose→Postgres migration rationale lives in `docs/decisions/0000-decision-log.md` (ADR-007).
+
 ### User
 - Email (unique, verified), password (hashed with bcrypt)
 - First name, last name, phone
 - Avatar, auth provider (local / google / facebook)
 - Email verification token, password reset token + expiry
-- Saved shipping addresses with default flag
+- `Address[]` — real table (was an embedded array), each with its own default flag
 - Failed login attempts counter, account locked flag
 - Role (customer / admin)
 
 ### Product
 - Name, slug, description
-- Price, sale price, discount percentage (virtual)
-- Category, sport, team, player, league, gender
+- Price, sale price
+- Category, sport, gender enums; `league` / `team` / `player` free-text (legacy, still the only fields any route reads)
+- `organizationId` / `teamId` — nullable FKs added by the Organization-first pilot migration (see Organization below); populated for exactly one pilot Organization (Far Eastern University) so far, `null` for every other product
 - Images (Cloudinary URLs)
-- Sizes with stock levels (simple mode)
-- Color variants with per-color sizes, stock, hex code, and image (variant mode)
+- `ProductSize[]` — real table (simple mode: size + stock)
+- `ProductColor[]` → `ProductColorSize[]` — real tables (variant mode: per-color sizes, stock, hex, image)
 - `totalStock` — auto-calculated from sizes/colors
 - `totalSold` — incremented on every paid order, used for "Most Bought" sort
 - `totalViews` — incremented on every product page view, used for "Trending" sort
+- `searchVector` — Postgres `tsvector`, populated by a DB trigger (not app code), backing full-text search
 - Try-on enabled flag, featured flag, active flag
 
 ### Order
 - Order number (unique, auto-generated `PP-XXXXX-XXXX` format)
 - User reference (optional, null for guest orders), email
-- Items array (name, price, quantity, size, color, image)
-- Shipping address (PSGC fields: address, city, province, region, barangay, zip)
+- `OrderItem[]` — real table; name/price/image are a snapshot at order time, not a live reference
+- Shipping address fields (`shipTo*`, PSGC: address, city, province, region, barangay, zip)
 - Subtotal, shipping fee, total
 - `shippingMethod` — one of `domestic_flat_rate`, `domestic_free`, `international`, `venue_pickup`, `contact_us`
 - `shippingRegion` — PSGC region code for domestic orders; zone name (SEA / Middle East / North America / Europe) for international; null for pick-up
@@ -397,6 +449,14 @@ puso-shop/
 - Maya payment ID and checkout URL
 - Order status (processing / confirmed / shipped / delivered / cancelled)
 - Courier, tracking number, notes
+- Stock is reserved atomically at order creation (real DB transaction), not at payment confirmation — closes the overselling race the pre-migration platform audit flagged as Critical
+
+### Organization / Team / OrganizationParticipation / AthleteAffiliation
+- Added by the Organization-first pilot migration (ADR-001/002) — the anchor entity CLAUDE.md's Domain Model treats as foundational, introduced without disturbing anything existing
+- A League (UAAP, PBA, PVL) and an Athlete are not separate tables — each is an `Organization` row, distinguished by `kind` (`institution` / `league` / `athlete`) and by which relationship edges point at it
+- **Ownership** (`Organization` → `Team`, e.g. FEU owns FEU Tamaraws) is a real FK; **participation** (e.g. FEU participates in UAAP without being owned by it) is a separate join table, `OrganizationParticipation`
+- `AthleteAffiliation` is time-bounded (`startDate`/`endDate`) — zero rows exist yet, no athlete data has been migrated
+- Single-pilot scope: only Far Eastern University + UAAP exist as real rows; every other Organization is still represented by the flat `Product.league`/`team`/`player` strings and the pre-existing `League` model until the full cutover
 
 ### Review
 - Product reference, author name, email
@@ -406,28 +466,29 @@ puso-shop/
 
 ### League
 - Name, sports (array — basketball / volleyball / football / general; a league can belong to multiple sports e.g. UAAP covers basketball and volleyball)
-- Teams array
-- Active flag
-- Unique constraint: name
+- Teams array (free-text; not yet joined to the real `Team` table above except for the pilot)
+- `organizationId` — nullable bridge FK to `Organization`, populated only for the pilot
+- Active flag; unique constraint: name
 
 ### SiteSettings
-- Singleton document (fetched via static `get()` method)
+- Singleton row
 - Try-on configuration: title, promotional image, product URL
 
 ### TryOnLog
-- Product reference (ObjectId), product name, product image (denormalized)
+- Product reference (optional FK), product name, product image (denormalized)
 - Success flag
-- Auto-expires after 90 days (TTL index)
+- `provider` (e.g. `wavespeed:nano-banana-2`, `replicate`) and `durationMs` — recorded on every attempt, surfaced via `GET /api/reports/tryon`'s `byProvider` breakdown
+- **No automatic expiry currently runs** — Mongo's 90-day TTL index wasn't ported to a replacement cleanup job; the table grows unbounded until one is added (see `UserActivity` below, same gap)
 
 ### UserActivity
 - User reference (optional, null for guests), session ID
 - Type (view / search), product reference, search query
-- Auto-expires after 90 days (TTL index)
+- **No automatic expiry currently runs** — same TTL-index gap as `TryOnLog` above; a schema comment claims a daily cleanup cron replaced it, but no such job exists in `server.js`
 
 ### VenuePickupConfig
-- Singleton document (one document per collection)
+- Singleton row
 - Root-level: `enabled` flag, `deadlineHours` (default 6)
-- `slots[]` array — each slot carries its own `venueName`, `venueAddress`, `pickupDate` (YYYY-MM-DD string), `pickupHours` (display string), `pickupStartTime` (HH:MM 24h PHT, for deadline), `specialInstructions`, `enabled`; multiple venues at different locations/dates are supported simultaneously
+- `PickupSlot[]` — real table; each slot carries its own `venueName`, `venueAddress`, `pickupDate` (YYYY-MM-DD string), `pickupHours` (display string), `pickupStartTime` (HH:MM 24h PHT, for deadline), `specialInstructions`, `enabled`; multiple venues at different locations/dates are supported simultaneously
 - A slot is hidden from buyers once `now ≥ slotStartPHT − deadlineHours`; deadline is computed by `isSlotActive()` in `calculateShipping.js` using `Date.UTC` PHT→UTC arithmetic
 
 ### ShippingEvent
@@ -461,13 +522,17 @@ The application sends HTML-formatted, mobile-responsive emails for:
 
 ## Deployment
 
-### Backend Deployment (Railway / Render / Heroku)
+Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and frontend test suites on every push to `main`, and Railway's **Wait for CI** setting holds the deploy until that check passes — a failing/pending run blocks the deploy, it doesn't just get logged.
 
-1. Set all environment variables in the hosting platform
-2. Ensure `MONGODB_URI` points to MongoDB Atlas
+### Backend Deployment (Railway)
+
+1. Set all environment variables in the hosting platform, including `DATABASE_URL` (Postgres) — as a **secret**, not a plain-text **variable** (Railway UI has both; a secret is encrypted, a variable is shown in cleartext)
+2. Add the Redis plugin if you want persistent rate limiting (optional); Railway usually wires `REDIS_URL` automatically
 3. Update `FRONTEND_URL` to your production domain
 4. Set `MAYA_SANDBOX=false` and swap in production Maya keys
 5. Set `NODE_ENV=production`
+6. Add `DATABASE_URL` as a GitHub Actions secret too (repo Settings → Secrets and variables → Actions → Secrets tab → Repository secrets) so CI can run the backend suite
+7. **After changing any environment variable, redeploy — a restart alone does not pick up the new value**
 
 ### Frontend Deployment (Vercel / Netlify)
 
@@ -480,12 +545,14 @@ The application sends HTML-formatted, mobile-responsive emails for:
 - JWT tokens expire after 7 days
 - Passwords hashed with bcrypt (salt rounds: 10)
 - Account locked after 5 consecutive failed login attempts
-- Rate limiting on all API routes (100 req / 15 min); stricter on auth routes (20 req / 15 min); rate limiting disabled in development
-- Dedicated try-on rate limits: 10 requests/user/hr, 500 requests/hr global (Replicate API cost protection)
+- Rate limiting on all API routes (100 req / 15 min); stricter on auth routes (20 req / 15 min); rate limiting disabled in development; counts persist in Redis when `REDIS_URL` is set (falls back to in-memory otherwise — resets on every restart/deploy)
+- Dedicated try-on rate limits: 10 requests/user/hr, 500 requests/hr global (WaveSpeed/Replicate API cost protection)
 - Helmet.js for security headers
 - CORS restricted to `FRONTEND_URL`
 - `trust proxy` enabled for Railway/Vercel reverse proxy compatibility
 - Superadmin-only hard-delete restricted by email check
+- Maya webhook payload is never trusted directly (Maya doesn't offer a documented signing scheme) — the POST is treated only as a trigger to re-confirm status via an authenticated pull against Maya's own API, the same mechanism the manual `/verify-payment` path already uses
+- Structured logging (Pino) + optional Sentry error tracking (`SENTRY_DSN`) — off by default to avoid cost, on by adding the DSN
 
 ## Design System
 
