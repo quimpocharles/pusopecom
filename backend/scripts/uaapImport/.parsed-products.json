@@ -1,0 +1,2746 @@
+[
+  {
+    "sourceRow": 2,
+    "name": "Adamson University Classic Tee",
+    "description": "Classic Tee in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467092/puso-shop/products/x6qsl2ja0powrlmyocyz.jpg"
+    ]
+  },
+  {
+    "sourceRow": 3,
+    "name": "Ateneo de Manila University Classic Tee",
+    "description": "Classic Tee in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467093/puso-shop/products/xjrngp418rjcroptg9jj.jpg"
+    ]
+  },
+  {
+    "sourceRow": 4,
+    "name": "De La Salle University Classic Tee",
+    "description": "Classic Tee in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 3
+      },
+      {
+        "size": "S",
+        "stock": 3
+      },
+      {
+        "size": "M",
+        "stock": 3
+      },
+      {
+        "size": "L",
+        "stock": 3
+      },
+      {
+        "size": "XL",
+        "stock": 3
+      },
+      {
+        "size": "2XL",
+        "stock": 3
+      },
+      {
+        "size": "3XL",
+        "stock": 3
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467095/puso-shop/products/woizi5khdkhovcokl4dd.jpg"
+    ]
+  },
+  {
+    "sourceRow": 5,
+    "name": "Far Eastern University Classic Tee",
+    "description": "Classic Tee in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467096/puso-shop/products/lb26jpb6rimqomgevuxy.jpg"
+    ]
+  },
+  {
+    "sourceRow": 6,
+    "name": "National University Classic Tee",
+    "description": "Classic Tee in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467097/puso-shop/products/wwrxtmnr8llfnmplxg9g.jpg"
+    ]
+  },
+  {
+    "sourceRow": 7,
+    "name": "University of the East Classic Tee",
+    "description": "Classic Tee in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467098/puso-shop/products/f3yyhdqjdwwxh7ud3oay.jpg"
+    ]
+  },
+  {
+    "sourceRow": 8,
+    "name": "University of the Philippines Classic Tee",
+    "description": "Classic Tee in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467099/puso-shop/products/fqgwplbwccxgc8x6spiv.jpg"
+    ]
+  },
+  {
+    "sourceRow": 9,
+    "name": "University of Santo Tomas Classic Tee",
+    "description": "Classic Tee in Yellow/Green, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467100/puso-shop/products/v3ms9603q4v02ekvhtof.jpg"
+    ]
+  },
+  {
+    "sourceRow": 11,
+    "name": "Adamson University Emblem Tee",
+    "description": "Emblem Tee in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467101/puso-shop/products/ybrdxqqbyiaotuimjfeu.jpg"
+    ]
+  },
+  {
+    "sourceRow": 12,
+    "name": "De La Salle University Emblem Tee",
+    "description": "Emblem Tee in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467102/puso-shop/products/ac0hdjjn2nkksbhsnyp2.jpg"
+    ]
+  },
+  {
+    "sourceRow": 13,
+    "name": "Far Eastern University Emblem Tee",
+    "description": "Emblem Tee in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467104/puso-shop/products/g5fysx8cbljfvhtwq7tq.jpg"
+    ]
+  },
+  {
+    "sourceRow": 14,
+    "name": "National University Emblem Tee",
+    "description": "Emblem Tee in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467105/puso-shop/products/e9jlrersvurjinh2v85p.jpg"
+    ]
+  },
+  {
+    "sourceRow": 15,
+    "name": "University of the East Emblem Tee",
+    "description": "Emblem Tee in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467106/puso-shop/products/i5rdgzhkluctfqr16pv5.jpg"
+    ]
+  },
+  {
+    "sourceRow": 17,
+    "name": "Far Eastern University Volleyball Jersey",
+    "description": "Volleyball Jersey in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 800,
+    "category": "jersey",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "S",
+        "stock": 1
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467107/puso-shop/products/swomzzwrqy2pzwf0gfdo.jpg"
+    ]
+  },
+  {
+    "sourceRow": 18,
+    "name": "University of the East Volleyball Jersey",
+    "description": "Volleyball Jersey in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 800,
+    "category": "jersey",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467108/puso-shop/products/vdnf1gfzxc9bgkmydmea.jpg"
+    ]
+  },
+  {
+    "sourceRow": 19,
+    "name": "University of Santo Tomas Volleyball Jersey",
+    "description": "Volleyball Jersey in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 800,
+    "category": "jersey",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467109/puso-shop/products/axloye3m89fiamaf92wj.jpg"
+    ]
+  },
+  {
+    "sourceRow": 21,
+    "name": "De La Salle University Volleyball Jersey (Black v.2)",
+    "description": "Volleyball Jersey (Black v.2) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 800,
+    "category": "jersey",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "S",
+        "stock": 1
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467110/puso-shop/products/m5rqwgzie6yzvbqbdabe.jpg"
+    ]
+  },
+  {
+    "sourceRow": 22,
+    "name": "University of Santo Tomas Volleyball Jersey (Black v.2)",
+    "description": "Volleyball Jersey (Black v.2) in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 800,
+    "category": "jersey",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467111/puso-shop/products/gsdo1flw9iqjzdxiprtw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 24,
+    "name": "National University Retro Tee",
+    "description": "Retro Tee in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467112/puso-shop/products/yvy9ts9bbhifwylb17dw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 25,
+    "name": "University of the East Retro Tee",
+    "description": "Retro Tee in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467114/puso-shop/products/wtdlfqlvcqgflnoudep9.jpg"
+    ]
+  },
+  {
+    "sourceRow": 26,
+    "name": "University of Santo Tomas Retro Tee",
+    "description": "Retro Tee in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467115/puso-shop/products/pv15jjakmmkmn6hf6i7j.jpg"
+    ]
+  },
+  {
+    "sourceRow": 28,
+    "name": "Adamson University Athletic Tee",
+    "description": "Athletic Tee in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 1
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 1
+      },
+      {
+        "size": "XL",
+        "stock": 1
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467116/puso-shop/products/xpkewgydjlpialljzgqe.jpg"
+    ]
+  },
+  {
+    "sourceRow": 29,
+    "name": "Ateneo de Manila University Athletic Tee",
+    "description": "Athletic Tee in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467117/puso-shop/products/cm43pgal4rhrq2hgkh2k.jpg"
+    ]
+  },
+  {
+    "sourceRow": 30,
+    "name": "Far Eastern University Athletic Tee",
+    "description": "Athletic Tee in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467118/puso-shop/products/ppsmiwqtmuqvaoxaxnfh.jpg"
+    ]
+  },
+  {
+    "sourceRow": 31,
+    "name": "University of the East Athletic Tee",
+    "description": "Athletic Tee in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467119/puso-shop/products/d4afn6jl2zqnjv2mlgnu.jpg"
+    ]
+  },
+  {
+    "sourceRow": 32,
+    "name": "University of the Philippines Athletic Tee",
+    "description": "Athletic Tee in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467120/puso-shop/products/cukfkwwmzb16i8k1fd9t.jpg"
+    ]
+  },
+  {
+    "sourceRow": 33,
+    "name": "University of Santo Tomas Athletic Tee",
+    "description": "Athletic Tee in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 800,
+    "category": "tshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467121/puso-shop/products/auw00hb68hxxf3onpaw6.jpg"
+    ]
+  },
+  {
+    "sourceRow": 35,
+    "name": "Adamson University Varsity Jacket",
+    "description": "Varsity Jacket in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 2250,
+    "category": "jacket",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467122/puso-shop/products/zhkbxr1395voqlkiisap.jpg"
+    ]
+  },
+  {
+    "sourceRow": 36,
+    "name": "De La Salle University Varsity Jacket",
+    "description": "Varsity Jacket in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 2250,
+    "category": "jacket",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "S",
+        "stock": 1
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467123/puso-shop/products/toqfkmfg1zwncmu0i6zi.jpg"
+    ]
+  },
+  {
+    "sourceRow": 37,
+    "name": "Far Eastern University Varsity Jacket",
+    "description": "Varsity Jacket in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 2250,
+    "category": "jacket",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 1
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467123/puso-shop/products/rp3qzy1yvxywaqczpekf.jpg"
+    ]
+  },
+  {
+    "sourceRow": 38,
+    "name": "National University Varsity Jacket",
+    "description": "Varsity Jacket in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 2250,
+    "category": "jacket",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467124/puso-shop/products/dcgwzjx9fxafr4virbkk.jpg"
+    ]
+  },
+  {
+    "sourceRow": 39,
+    "name": "University of the East Varsity Jacket",
+    "description": "Varsity Jacket in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 2250,
+    "category": "jacket",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 1
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467125/puso-shop/products/zdod6bcagz3nlcfvndk8.jpg"
+    ]
+  },
+  {
+    "sourceRow": 41,
+    "name": "De La Salle University Sweatshirt",
+    "description": "Sweatshirt in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 1500,
+    "category": "sweatshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467126/puso-shop/products/bu2i0pxsb2ntadjvnydo.jpg"
+    ]
+  },
+  {
+    "sourceRow": 42,
+    "name": "Far Eastern University Sweatshirt",
+    "description": "Sweatshirt in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 1500,
+    "category": "sweatshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467127/puso-shop/products/so1qawjfqdl5dgsmy7ct.jpg"
+    ]
+  },
+  {
+    "sourceRow": 43,
+    "name": "University of the Philippines Sweatshirt",
+    "description": "Sweatshirt in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 1500,
+    "category": "sweatshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467128/puso-shop/products/uexh9acptlqpovmqsp2i.jpg"
+    ]
+  },
+  {
+    "sourceRow": 44,
+    "name": "University of Santo Tomas Sweatshirt",
+    "description": "Sweatshirt in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 1500,
+    "category": "sweatshirt",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467129/puso-shop/products/nahj4ixprddz9g5f6b8m.jpg"
+    ]
+  },
+  {
+    "sourceRow": 46,
+    "name": "Ateneo de Manila University Hoodie",
+    "description": "Hoodie in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 1750,
+    "category": "hoodie",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 1
+      },
+      {
+        "size": "L",
+        "stock": 1
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467130/puso-shop/products/nzdmp4qu0ombtr6ougcf.jpg"
+    ]
+  },
+  {
+    "sourceRow": 47,
+    "name": "De La Salle University Hoodie",
+    "description": "Hoodie in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 1750,
+    "category": "hoodie",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 1
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467131/puso-shop/products/szkx8pazzbbehwezf71t.jpg"
+    ]
+  },
+  {
+    "sourceRow": 48,
+    "name": "Far Eastern University Hoodie",
+    "description": "Hoodie in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 1750,
+    "category": "hoodie",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467132/puso-shop/products/fzyfvoeswzfojwbouiej.jpg"
+    ]
+  },
+  {
+    "sourceRow": 49,
+    "name": "University of the Philippines Hoodie",
+    "description": "Hoodie in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 1750,
+    "category": "hoodie",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "M",
+        "stock": 1
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467133/puso-shop/products/obwllmawed4pivv7tgn2.jpg"
+    ]
+  },
+  {
+    "sourceRow": 50,
+    "name": "University of Santo Tomas Hoodie",
+    "description": "Hoodie in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 1750,
+    "category": "hoodie",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "XS",
+        "stock": 2
+      },
+      {
+        "size": "S",
+        "stock": 2
+      },
+      {
+        "size": "M",
+        "stock": 2
+      },
+      {
+        "size": "L",
+        "stock": 2
+      },
+      {
+        "size": "XL",
+        "stock": 2
+      },
+      {
+        "size": "2XL",
+        "stock": 2
+      },
+      {
+        "size": "3XL",
+        "stock": 2
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467134/puso-shop/products/ecvlhlgv8fwsuxws1ilw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 52,
+    "name": "Far Eastern University Cap",
+    "description": "Cap in Green/Yellow, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 950,
+    "category": "cap",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Green/Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467135/puso-shop/products/zedyrtlnf6ckkktgynil.jpg"
+    ]
+  },
+  {
+    "sourceRow": 54,
+    "name": "Adamson University Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467136/puso-shop/products/eiife2iv5eudp4abb7am.jpg"
+    ]
+  },
+  {
+    "sourceRow": 55,
+    "name": "Ateneo de Manila University Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467137/puso-shop/products/otphgfccpxfngfrhddsd.jpg"
+    ]
+  },
+  {
+    "sourceRow": 56,
+    "name": "De La Salle University Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467138/puso-shop/products/s4f1sp2brvyfdfmt7ymz.jpg"
+    ]
+  },
+  {
+    "sourceRow": 57,
+    "name": "Far Eastern University Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467139/puso-shop/products/zbyjovmkrdxvyyzj8zgv.jpg"
+    ]
+  },
+  {
+    "sourceRow": 58,
+    "name": "University of the East Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467140/puso-shop/products/vftfgjxqx7s236fpqh9w.jpg"
+    ]
+  },
+  {
+    "sourceRow": 59,
+    "name": "University of the Philippines Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467141/puso-shop/products/uvm1pqb2kfpvovv5mxrc.jpg"
+    ]
+  },
+  {
+    "sourceRow": 60,
+    "name": "University of Santo Tomas Basketball Sticker Pack (v.2)",
+    "description": "Basketball Sticker Pack (v.2) in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "basketball",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467142/puso-shop/products/fo0wwoxzxc88cakulgjz.jpg"
+    ]
+  },
+  {
+    "sourceRow": 62,
+    "name": "Adamson University Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467143/puso-shop/products/jxvkjlpthqhdk2ypwlgw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 63,
+    "name": "Ateneo de Manila University Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467145/puso-shop/products/n9dw85p95jwfmtpli0fa.jpg"
+    ]
+  },
+  {
+    "sourceRow": 64,
+    "name": "De La Salle University Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467146/puso-shop/products/yfzxdys9gjbifafrcrtr.jpg"
+    ]
+  },
+  {
+    "sourceRow": 65,
+    "name": "Far Eastern University Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467147/puso-shop/products/k0htrrvhfsxx6hlsuaen.jpg"
+    ]
+  },
+  {
+    "sourceRow": 66,
+    "name": "National University Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467148/puso-shop/products/us0sp8upkxtxustylgyg.jpg"
+    ]
+  },
+  {
+    "sourceRow": 67,
+    "name": "University of the East Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467149/puso-shop/products/lyhg75vqr0kutn1xy6dt.jpg"
+    ]
+  },
+  {
+    "sourceRow": 68,
+    "name": "University of the Philippines Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467150/puso-shop/products/sajgfoer8ifeajoehhp4.jpg"
+    ]
+  },
+  {
+    "sourceRow": 69,
+    "name": "University of Santo Tomas Volleyball Sticker Pack",
+    "description": "Volleyball Sticker Pack in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "volleyball",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467151/puso-shop/products/oq99likslu61n9lxjwir.jpg"
+    ]
+  },
+  {
+    "sourceRow": 71,
+    "name": "Adamson University Long Sticker",
+    "description": "Long Sticker in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467152/puso-shop/products/hmfofxacutscdamlxiup.jpg"
+    ]
+  },
+  {
+    "sourceRow": 72,
+    "name": "Ateneo de Manila University Long Sticker",
+    "description": "Long Sticker in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467153/puso-shop/products/l2krsds5x4mbbbstufrw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 73,
+    "name": "De La Salle University Long Sticker",
+    "description": "Long Sticker in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467153/puso-shop/products/h1rdipljeshurlxf7tfm.jpg"
+    ]
+  },
+  {
+    "sourceRow": 74,
+    "name": "Far Eastern University Long Sticker",
+    "description": "Long Sticker in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467154/puso-shop/products/pshs7yi7vc2o1byuquut.jpg"
+    ]
+  },
+  {
+    "sourceRow": 75,
+    "name": "National University Long Sticker",
+    "description": "Long Sticker in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467155/puso-shop/products/xzkc23fgt9chgcbqpnca.jpg"
+    ]
+  },
+  {
+    "sourceRow": 76,
+    "name": "University of the East Long Sticker",
+    "description": "Long Sticker in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467156/puso-shop/products/kvgcsex7qqo69sudwl1e.jpg"
+    ]
+  },
+  {
+    "sourceRow": 78,
+    "name": "Adamson University Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467157/puso-shop/products/xjcgmeosjetx00tahfo5.jpg"
+    ]
+  },
+  {
+    "sourceRow": 79,
+    "name": "Ateneo de Manila University Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467158/puso-shop/products/cw3v9qw1cpmdpwgjl8hl.jpg"
+    ]
+  },
+  {
+    "sourceRow": 80,
+    "name": "De La Salle University Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467159/puso-shop/products/ca1uaztj1mqowhpkxy08.jpg"
+    ]
+  },
+  {
+    "sourceRow": 81,
+    "name": "Far Eastern University Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467160/puso-shop/products/igqyxcpjnk3jk73xppy4.jpg"
+    ]
+  },
+  {
+    "sourceRow": 82,
+    "name": "National University Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467161/puso-shop/products/a9vbicdvq6k1udblf175.jpg"
+    ]
+  },
+  {
+    "sourceRow": 83,
+    "name": "University of the Philippines Baller Bracelet (v.1)",
+    "description": "Baller Bracelet (v.1) in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467162/puso-shop/products/fwiri1swqh5wjoi6lhft.jpg"
+    ]
+  },
+  {
+    "sourceRow": 85,
+    "name": "Adamson University Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467163/puso-shop/products/y9ah0cytoj1x33kjfxp1.jpg"
+    ]
+  },
+  {
+    "sourceRow": 86,
+    "name": "Ateneo de Manila University Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467164/puso-shop/products/ptvtdafkogqfbbvvfgvy.jpg"
+    ]
+  },
+  {
+    "sourceRow": 87,
+    "name": "De La Salle University Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467165/puso-shop/products/ajpfo7sgikgduyegxmsr.jpg"
+    ]
+  },
+  {
+    "sourceRow": 88,
+    "name": "Far Eastern University Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467166/puso-shop/products/s3gnxyrfpdt9jmqp9hqk.jpg"
+    ]
+  },
+  {
+    "sourceRow": 89,
+    "name": "National University Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467167/puso-shop/products/g3y61hsjjmj8ei2mzk8f.jpg"
+    ]
+  },
+  {
+    "sourceRow": 90,
+    "name": "University of the East Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467168/puso-shop/products/eydbsguvztm1qodhpt5a.jpg"
+    ]
+  },
+  {
+    "sourceRow": 91,
+    "name": "University of the Philippines Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467168/puso-shop/products/bkksxgr42jka2rtqwoca.jpg"
+    ]
+  },
+  {
+    "sourceRow": 92,
+    "name": "University of Santo Tomas Baller Bracelet (v.2)",
+    "description": "Baller Bracelet (v.2) in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 100,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467170/puso-shop/products/hyf92zrcrwcajwrwhhes.jpg"
+    ]
+  },
+  {
+    "sourceRow": 94,
+    "name": "Adamson University Lanyard",
+    "description": "Lanyard in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467171/puso-shop/products/jrjcpttejjbwmjxfkz5s.jpg"
+    ]
+  },
+  {
+    "sourceRow": 95,
+    "name": "Ateneo de Manila University Lanyard",
+    "description": "Lanyard in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467172/puso-shop/products/ecl6j7joz5dhkem2oyg4.jpg"
+    ]
+  },
+  {
+    "sourceRow": 96,
+    "name": "De La Salle University Lanyard",
+    "description": "Lanyard in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467173/puso-shop/products/vaezqdhbbcslo5xrz31w.jpg"
+    ]
+  },
+  {
+    "sourceRow": 97,
+    "name": "Far Eastern University Lanyard",
+    "description": "Lanyard in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 19
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467174/puso-shop/products/dxvf96to0u0kfsmag8fn.jpg"
+    ]
+  },
+  {
+    "sourceRow": 98,
+    "name": "University of the East Lanyard",
+    "description": "Lanyard in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467175/puso-shop/products/hubfm00yzfspgbdr5nhh.jpg"
+    ]
+  },
+  {
+    "sourceRow": 99,
+    "name": "University of Santo Tomas Lanyard",
+    "description": "Lanyard in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 250,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467176/puso-shop/products/z38jq8gbzerwvpn1kc97.jpg"
+    ]
+  },
+  {
+    "sourceRow": 101,
+    "name": "Adamson University Scarf (v.1)",
+    "description": "Scarf (v.1) in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467177/puso-shop/products/wiqw49luhnfqefpvxpdd.jpg"
+    ]
+  },
+  {
+    "sourceRow": 102,
+    "name": "Ateneo de Manila University Scarf (v.1)",
+    "description": "Scarf (v.1) in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467178/puso-shop/products/iur6gqtq5mdahfyaq8zp.jpg"
+    ]
+  },
+  {
+    "sourceRow": 103,
+    "name": "De La Salle University Scarf (v.1)",
+    "description": "Scarf (v.1) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467179/puso-shop/products/a60mclvpj30146zvlmsq.jpg"
+    ]
+  },
+  {
+    "sourceRow": 104,
+    "name": "Far Eastern University Scarf (v.1)",
+    "description": "Scarf (v.1) in Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467180/puso-shop/products/q464qfs5pkd9ttr5arfi.jpg"
+    ]
+  },
+  {
+    "sourceRow": 105,
+    "name": "University of the East Scarf (v.1)",
+    "description": "Scarf (v.1) in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467181/puso-shop/products/bho5ym41ewljco0si80a.jpg"
+    ]
+  },
+  {
+    "sourceRow": 106,
+    "name": "University of the Philippines Scarf (v.1)",
+    "description": "Scarf (v.1) in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467182/puso-shop/products/ecdnuhvh2pllbggdnmqg.jpg"
+    ]
+  },
+  {
+    "sourceRow": 108,
+    "name": "Ateneo de Manila University Scarf (v.2)",
+    "description": "Scarf (v.2) in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467183/puso-shop/products/fdhgfzwfqpqdsdpu8ws2.jpg"
+    ]
+  },
+  {
+    "sourceRow": 109,
+    "name": "De La Salle University Scarf (v.2)",
+    "description": "Scarf (v.2) in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467184/puso-shop/products/i6hyzhs9exzemmzkhjgx.jpg"
+    ]
+  },
+  {
+    "sourceRow": 110,
+    "name": "University of the Philippines Scarf (v.2)",
+    "description": "Scarf (v.2) in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 400,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 10
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467185/puso-shop/products/ofkfpttbwmyaewdotodk.jpg"
+    ]
+  },
+  {
+    "sourceRow": 112,
+    "name": "Adamson University Keychain",
+    "description": "Keychain in Blue, officially licensed Adamson University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Adamson University",
+    "league": "UAAP",
+    "color": "Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467186/puso-shop/products/gpviijqtja5uj6ba04vp.jpg"
+    ]
+  },
+  {
+    "sourceRow": 113,
+    "name": "Ateneo de Manila University Keychain",
+    "description": "Keychain in Royal Blue, officially licensed Ateneo de Manila University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Ateneo de Manila University",
+    "league": "UAAP",
+    "color": "Royal Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467187/puso-shop/products/bbv7vpppxedd9crisiqn.jpg"
+    ]
+  },
+  {
+    "sourceRow": 114,
+    "name": "De La Salle University Keychain",
+    "description": "Keychain in Green, officially licensed De La Salle University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "De La Salle University",
+    "league": "UAAP",
+    "color": "Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467188/puso-shop/products/agzmdkm2javboji3ose9.jpg"
+    ]
+  },
+  {
+    "sourceRow": 115,
+    "name": "Far Eastern University Keychain",
+    "description": "Keychain in Yellow/Green, officially licensed Far Eastern University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "Far Eastern University",
+    "league": "UAAP",
+    "color": "Yellow/Green",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467189/puso-shop/products/fi49gph4odjfbinojy3b.jpg"
+    ]
+  },
+  {
+    "sourceRow": 116,
+    "name": "National University Keychain",
+    "description": "Keychain in Navy Blue, officially licensed National University UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "National University",
+    "league": "UAAP",
+    "color": "Navy Blue",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467190/puso-shop/products/i2wjrwt3q3kcrw9xwzwf.jpg"
+    ]
+  },
+  {
+    "sourceRow": 117,
+    "name": "University of the East Keychain",
+    "description": "Keychain in Red, officially licensed University of the East UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the East",
+    "league": "UAAP",
+    "color": "Red",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467191/puso-shop/products/bisvwsrryjcfkdzihynw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 118,
+    "name": "University of the Philippines Keychain",
+    "description": "Keychain in Maroon, officially licensed University of the Philippines UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of the Philippines",
+    "league": "UAAP",
+    "color": "Maroon",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467192/puso-shop/products/npccmdu8wzv4oacsvtzw.jpg"
+    ]
+  },
+  {
+    "sourceRow": 119,
+    "name": "University of Santo Tomas Keychain",
+    "description": "Keychain in Yellow, officially licensed University of Santo Tomas UAAP merchandise.",
+    "price": 150,
+    "category": "accessories",
+    "sport": "general",
+    "gender": "unisex",
+    "team": "University of Santo Tomas",
+    "league": "UAAP",
+    "color": "Yellow",
+    "sizes": [
+      {
+        "size": "One Size",
+        "stock": 20
+      }
+    ],
+    "images": [
+      "https://res.cloudinary.com/dzps2jbk3/image/upload/v1785467193/puso-shop/products/qh7wqxwcm1mm5anx1kbl.jpg"
+    ]
+  }
+]

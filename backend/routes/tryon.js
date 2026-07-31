@@ -1,13 +1,14 @@
 import express from 'express';
 import multer from 'multer';
 import axios from 'axios';
-import mongoose from 'mongoose';
 import { generateTryOn as replicateGenerateTryOn } from '../services/replicateService.js';
 import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedService.js';
-import TryOnLog from '../models/TryOnLog.js';
-import Product from '../models/Product.js';
+import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
+import * as productRepository from '../repositories/productRepository.js';
 
 const router = express.Router();
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Configure multer for memory storage
 const upload = multer({
@@ -78,17 +79,17 @@ router.post('/', upload.single('userImage'), async (req, res) => {
     }
 
     // Fire-and-forget: log try-on attempt
-    const logProductId = productId && mongoose.Types.ObjectId.isValid(productId)
+    const logProductId = productId && UUID_RE.test(productId)
       ? productId
       : null;
     const logPromise = (async () => {
       let resolvedProductId = logProductId;
       if (!resolvedProductId && productName) {
-        const found = await Product.findOne({ name: productName }).select('_id').lean();
+        const [found] = await productRepository.find({ where: { name: productName }, take: 1 });
         if (found) resolvedProductId = found._id;
       }
-      return TryOnLog.create({
-        product: resolvedProductId || undefined,
+      return tryOnLogRepository.create({
+        productId: resolvedProductId || undefined,
         productName: productName || 'Unknown',
         productImage: productImageUrl,
         success: result.success
@@ -111,7 +112,7 @@ router.post('/', upload.single('userImage'), async (req, res) => {
     console.error('Try-on error:', error);
 
     // Log failed attempt
-    TryOnLog.create({
+    tryOnLogRepository.create({
       productName: req.body?.productName || 'Unknown',
       productImage: req.body?.productImageUrl,
       success: false

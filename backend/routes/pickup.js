@@ -1,5 +1,5 @@
 import express from 'express';
-import VenuePickupConfig from '../models/VenuePickupConfig.js';
+import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -10,7 +10,7 @@ router.use(authenticate, isAdmin);
 // GET /api/admin/pickup
 router.get('/', async (req, res) => {
   try {
-    const config = await VenuePickupConfig.findOne().lean();
+    const config = await venuePickupConfigRepository.get();
     res.json({ success: true, data: config || { enabled: false, slots: [], deadlineHours: 6 } });
   } catch (error) {
     console.error('Get pickup config error:', error);
@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/admin/pickup — replaces the entire VenuePickupConfig document
+// PUT /api/admin/pickup — replaces the entire VenuePickupConfig, slots included
 router.put('/', async (req, res) => {
   try {
     const { enabled, deadlineHours, slots } = req.body;
@@ -45,18 +45,15 @@ router.put('/', async (req, res) => {
       enabled:             Boolean(s.enabled ?? true),
     }));
 
-    const config = await VenuePickupConfig.findOneAndUpdate(
-      {},
-      {
-        $set: {
-          enabled:       Boolean(enabled),
-          deadlineHours: Number(deadlineHours) || 6,
-          slots:         cleanSlots,
-          updatedAt:     new Date(),
-        },
-      },
-      { upsert: true, new: true }
-    );
+    // upsert() replaces slots wholesale (delete-then-recreate) — matches
+    // the original findOneAndUpdate($set) behavior, which also replaced
+    // the whole embedded array rather than merging it. updatedAt is set
+    // automatically by Prisma's @updatedAt now, not manually.
+    const config = await venuePickupConfigRepository.upsert({
+      enabled: Boolean(enabled),
+      deadlineHours: Number(deadlineHours) || 6,
+      slots: cleanSlots,
+    });
 
     res.json({ success: true, data: config });
   } catch (error) {

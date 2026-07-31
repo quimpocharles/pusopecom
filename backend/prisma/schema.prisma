@@ -1,0 +1,700 @@
+// PusoStore — Prisma schema
+//
+// Migrated from Mongoose (see docs/decisions/0000-decision-log.md, ADR-007).
+// Field-by-field mapping rationale lives in that ADR and in the migration
+// plan discussed before this file was written. Two deliberate compatibility
+// choices worth knowing before touching this file:
+//
+// 1. Money fields (price, salePrice, subtotal, shippingFee, total, orderTotal)
+//    use Float, not Decimal. Prisma's Decimal type returns a Prisma.Decimal
+//    object in JS, not a plain number — every existing arithmetic call site
+//    in routes/services expects a plain number, exactly as Mongoose's Number
+//    type already provided. Float preserves that without touching business
+//    logic. This is a known tradeoff, not an oversight.
+//
+// 2. Size labels (ProductSize.size, ProductColorSize.size) are plain String,
+//    not a Prisma enum. Two of the legal values ("2XL", "3XL", "One Size")
+//    are not valid Prisma enum identifiers, and mapping them would change
+//    what Prisma Client returns in JS (the identifier name, not the mapped
+//    value) — which would silently break every size string the frontend
+//    already depends on. Validity is enforced with a CHECK constraint added
+//    by raw SQL in the migration, matching Mongoose's enum validator without
+//    the JS-shape risk.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums — only for fields whose values are already valid identifiers, so the
+// Prisma-side name and the stored/returned value are identical.
+// ---------------------------------------------------------------------------
+
+enum AuthProvider {
+  local
+  google
+  facebook
+}
+
+enum UserRole {
+  customer
+  admin
+}
+
+enum ProductCategory {
+  jersey
+  tshirt
+  cap
+  shorts
+  accessories
+  jacket
+  sweatshirt
+  hoodie
+}
+
+enum Sport {
+  basketball
+  volleyball
+  football
+  general
+}
+
+enum Gender {
+  men
+  women
+  youth
+  unisex
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum OrderStatus {
+  processing
+  confirmed
+  shipped
+  delivered
+  cancelled
+}
+
+enum ActivityType {
+  view
+  search
+}
+
+// A discovery/presentation hint only — never a permission or capability
+// gate. What makes an Organization "a league" is that other Organizations
+// hold OrganizationParticipation edges pointing at it, not this field. See
+// docs/DOMAIN_MODEL.md (Athlete: "modeled as its own lightweight
+// Organization... rather than creating a second, inconsistent kind of
+// seller") and docs/INFORMATION_ARCHITECTURE.md ("A League ... is itself an
+// Organization — not a special category above Organization").
+enum OrganizationKind {
+  institution // school athletics dept, club, federation, barangay league
+  league // UAAP, PBA, PVL — an Organization others participate IN
+  athlete // an individual's personal brand
+}
+
+// Trust & Verification lifecycle per docs/DOMAIN_MODEL.md: Requested ->
+// Reviewed -> Granted -> Continuously Monitored -> (Reaffirmed | Flagged |
+// Revoked). "Continuously Monitored" is what `granted` means while it holds,
+// not a separate value; "Reaffirmed" is `granted` re-entered with a fresh
+// verifiedAt, not a distinct one either.
+enum VerificationStatus {
+  unverified // default — nothing requested yet
+  requested
+  reviewed
+  granted
+  flagged
+  revoked
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+
+model User {
+  id                   String       @id @default(uuid())
+  email                String       @unique
+  password             String?
+  firstName            String
+  lastName             String
+  phone                String?
+  ageVerified          Boolean      @default(false)
+  avatar               String?
+  googleId             String?      @unique
+  facebookId           String?      @unique
+  authProvider         AuthProvider @default(local)
+  emailVerified        Boolean      @default(false)
+  verificationToken    String?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  failedLoginAttempts  Int          @default(0)
+  accountLocked        Boolean      @default(false)
+  role                 UserRole     @default(customer)
+
+  addresses             Address[]
+  orders                Order[]
+  activities            UserActivity[]
+  // Trust & Verification decisions stay human (CLAUDE.md) — this is the
+  // accountability record of which admin granted/revoked/flagged a given
+  // Organization's status. No code path may set Organization.verifiedByUserId
+  // without a real admin id; see organizationRepository.recordVerificationDecision.
+  verifiedOrganizations Organization[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Was User.addresses[] — an embedded array where each entry already had its
+// own _id and independent isDefault/edit/delete lifecycle. Real identity,
+// real table.
+model Address {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String
+  phone     String
+  country   String  @default("Philippines")
+  address   String
+  city      String
+  province  String
+  region    String?
+  barangay  String?
+  zipCode   String
+  isDefault Boolean @default(false)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ---------------------------------------------------------------------------
+// Product
+// ---------------------------------------------------------------------------
+
+model Product {
+  id           String          @id @default(uuid())
+  name         String
+  slug         String          @unique
+  description  String
+  price        Float
+  salePrice    Float?
+  category     ProductCategory
+  sport        Sport
+  gender       Gender          @default(unisex)
+  league       String?
+  team         String?
+  player       String?
+  images       String[]
+  featured     Boolean         @default(false)
+  tryOnEnabled Boolean         @default(false)
+  active       Boolean         @default(true)
+  totalStock   Int             @default(0)
+  avgRating    Float           @default(0)
+  reviewCount  Int             @default(0)
+  totalSold    Int             @default(0)
+  totalViews   Int             @default(0)
+
+  sizes      ProductSize[]
+  colors     ProductColor[]
+  orderItems OrderItem[]
+  reviews    Review[]
+  tryOnLogs  TryOnLog[]
+  activities UserActivity[]
+
+  // Organization-first migration (ADR-001/002, single pilot Organization —
+  // see docs/decisions/0000-decision-log.md and the plan this shipped
+  // under). Deliberately nullable and additive: every existing product
+  // keeps working unchanged off `league`/`team`/`player` above, which stay
+  // the only fields any route reads until the full cutover (M3). Only the
+  // pilot Organization's products get these backfilled.
+  //
+  // The relation field is named `teamRef`, not `team` — that name is
+  // already the legacy free-text column above. Naming collision is
+  // intentional and must stay: `withRelationFallback` (repositories/
+  // serialize.js) collapses a relation object and its FK scalar into one
+  // field keyed by the relation field's name, so calling it `team` would
+  // silently overwrite the live string with the FK id the moment this
+  // relation was ever included. Never add `teamRef`/`organization` to any
+  // Product `include` this pass — the two new FKs surface as raw id
+  // scalars only.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  teamId         String?
+  teamRef        Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  // Populated by a BEFORE INSERT/UPDATE trigger added via raw SQL in the
+  // init migration (Postgres's replacement for Mongo's $text index) — the
+  // column itself is Unsupported to Prisma, so it's never written to
+  // directly from application code. The GIN index on it, however, IS
+  // declared below (@@index([searchVector], type: Gin)) rather than left
+  // as raw SQL: a first attempt left it undeclared, and the next
+  // `prisma migrate dev` silently generated a DROP INDEX for it, because
+  // Prisma's diffing had no way to know the index was intentional. Once
+  // declared, this can't happen again — but it's the reason every future
+  // schema change here should go through `migrate dev --create-only` and
+  // get its SQL read before being applied, not applied blind.
+  searchVector Unsupported("tsvector")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // New — closes platform-audit finding High #7 (missing indexes on the
+  // fields the main product listing filters by). Not present in the
+  // Mongoose schema; added now because this migration already touches
+  // every Product read/write path.
+  @@index([sport, league, team, category, gender, active])
+  @@index([totalSold])
+  @@index([totalViews])
+  @@index([searchVector], type: Gin)
+  @@index([organizationId, active])
+  @@index([teamId])
+  @@map("products")
+}
+
+// Was Product.sizes[] (sizeStockSchema, no independent _id in Mongoose, but
+// promoted to a real table regardless) because Inventory reservation needs
+// row-level locking — see Commerce Engine's Inventory rules and platform
+// audit Critical #3 (the stock-overselling race condition).
+model ProductSize {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String // XS | S | M | L | XL | 2XL | 3XL | One Size — CHECK constraint added via raw SQL
+  stock     Int     @default(0)
+
+  @@unique([productId, size])
+  @@map("product_sizes")
+}
+
+// Was Product.colors[] (colorVariantSchema, had its own _id — independent
+// identity, real table).
+model ProductColor {
+  id        String             @id @default(uuid())
+  productId String
+  product   Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color     String
+  hex       String?
+  image     String?
+  sizes     ProductColorSize[]
+
+  @@index([productId])
+  @@map("product_colors")
+}
+
+// Was the nested colorVariantSchema.sizes[] (colorSizeStockSchema) — two
+// levels of embedding flatten into two related tables.
+model ProductColorSize {
+  id      String       @id @default(uuid())
+  colorId String
+  color   ProductColor @relation(fields: [colorId], references: [id], onDelete: Cascade)
+  size    String // same CHECK constraint as ProductSize.size
+  stock   Int          @default(0)
+
+  @@unique([colorId, size])
+  @@map("product_color_sizes")
+}
+
+// ---------------------------------------------------------------------------
+// Order
+// ---------------------------------------------------------------------------
+
+model Order {
+  id          String  @id @default(uuid())
+  orderNumber String  @unique
+  userId      String?
+  user        User?   @relation(fields: [userId], references: [id])
+  email       String
+
+  items OrderItem[]
+
+  // Was the single embedded `shippingAddress` object. Flattened to columns
+  // (prefixed shipTo*, not shipping*, to avoid colliding with the
+  // pre-existing top-level Order.shippingMethod / Order.shippingRegion
+  // fields below, which are distinct from the embedded address's own
+  // `region` field in the original schema) — always exactly one per order,
+  // never independently queried, so a join table would only add overhead.
+  shipToFullName String
+  shipToPhone    String
+  shipToCountry  String  @default("Philippines")
+  shipToAddress  String
+  shipToCity     String
+  shipToProvince String
+  shipToRegion   String?
+  shipToBarangay String?
+  shipToZipCode  String
+
+  subtotal        Float
+  shippingFee     Float         @default(150)
+  total           Float
+  paymentMethod   String        @default("maya")
+  paymentStatus   PaymentStatus @default(pending)
+  mayaPaymentId   String?
+  mayaCheckoutUrl String?
+  orderStatus     OrderStatus   @default(processing)
+  courier         String?
+  trackingNumber  String?
+  shippingMethod  String?
+  shippingRegion  String?
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // New — closes platform-audit finding High #7 for Order's admin
+  // stats/listing/report queries.
+  @@index([paymentStatus, orderStatus, userId, createdAt])
+  @@map("orders")
+}
+
+// Was Order.items[] (orderItemSchema). name/price/image are intentionally a
+// snapshot taken at order time, not a live reference — preserved exactly as
+// Mongoose stored it, so order history keeps showing the price actually
+// paid rather than today's price.
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  name      String
+  price     Float
+  quantity  Int
+  size      String
+  color     String?
+  image     String
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Organization — the anchor everything institutional attaches to (ADR-001).
+// A League (UAAP, PBA, PVL) and an Athlete are NOT separate entities — each
+// is an Organization row, distinguished by `kind` and by which edges point
+// at it (OrganizationParticipation, AthleteAffiliation below), per
+// docs/DOMAIN_MODEL.md and docs/INFORMATION_ARCHITECTURE.md. This is a
+// single-pilot migration: only Far Eastern University and UAAP exist as
+// real rows here so far. Every other Organization continues to be
+// represented by the flat Product.league/team strings and the pre-existing
+// League model until the full cutover (M3) — see the League model below for
+// how the two coexist during transition.
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id          String           @id @default(uuid())
+  name        String
+  slug        String           @unique
+  shortName   String? // e.g. "FEU" — real values sourced from scripts/uaapImport
+  kind        OrganizationKind @default(institution)
+  description String?
+  logoUrl     String?
+  active      Boolean          @default(true)
+
+  // Trust & Verification. Default `unverified`; no seed, script, or backfill
+  // in this migration may write `granted`/`revoked`/`flagged` — enforced in
+  // organizationRepository.recordVerificationDecision, not left to
+  // discipline (CLAUDE.md: "Trust & Verification grant/revoke decisions
+  // stay human"). No admin UI surfaces this yet — Phase 2.
+  verificationStatus      VerificationStatus @default(unverified)
+  verificationRequestedAt DateTime?
+  verifiedAt              DateTime?
+  verifiedByUserId        String?
+  verifiedBy              User?              @relation(fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  verificationNote        String?
+
+  teams    Team[]
+  products Product[]
+  league   League? // the bridge back to the legacy League row, when kind = league
+
+  // Participation is a second relationship kind, distinct from the
+  // ownership Organization already has over Team below — a school
+  // participates in a league, it isn't owned by it (INFORMATION_ARCHITECTURE.md).
+  // Two named relations because this Organization can appear on either side
+  // of the edge (FEU is a member; UAAP is the body members participate in).
+  participations OrganizationParticipation[] @relation("ParticipationMember")
+  participants   OrganizationParticipation[] @relation("ParticipationBody")
+
+  // Same two-sided shape for Athlete affiliation: this Organization can be
+  // the athlete, or the team-owning Organization the athlete is affiliated
+  // with.
+  affiliations AthleteAffiliation[] @relation("AffiliationAthlete")
+  affiliates   AthleteAffiliation[] @relation("AffiliationOrganization")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, active])
+  @@map("organizations")
+}
+
+// Was League.teams[] (a flat, unowned string array — ADR-002 calls this out
+// directly as a content gap: "no ownership, branding, or independent
+// identity"). A Team is sport-scoped even where its parent Organization
+// spans multiple sports (ADR-002) — FEU the Organization fields both a
+// basketball and a volleyball Team.
+model Team {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String // unique per Organization, not globally — two Organizations may each field e.g. "mens-basketball"
+  sport          Sport
+  primaryColor   String?
+  secondaryColor String?
+  logoUrl        String?
+  active         Boolean      @default(true)
+
+  products Product[]
+
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  AthleteAffiliation AthleteAffiliation[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, sport])
+  @@map("teams")
+}
+
+// The *participation* relationship: a member Organization (e.g. FEU)
+// participates in a body Organization (e.g. UAAP). Deliberately a separate
+// join table, never a reused parent FK on Organization — a reused FK would
+// recreate exactly the rigid Sport -> League -> Team tree ADR-001 rejected
+// ("national teams don't sit under a 'league' the way a PBA club does").
+//
+// Unique on (member, in) rather than a partial-unique-where-endDate-is-null
+// index, which Prisma 5 can't express declaratively — an undeclared raw
+// index is exactly what got silently dropped by an unreviewed `migrate dev`
+// once already in this project (see the Product.searchVector comment
+// above). Trades "a school that leaves and rejoins a league can't be
+// represented as two rows" (zero real instances today) for immunity to
+// that failure mode. Revisit at the full cutover.
+model OrganizationParticipation {
+  id                   String       @id @default(uuid())
+  memberOrganizationId String
+  memberOrganization   Organization @relation("ParticipationMember", fields: [memberOrganizationId], references: [id], onDelete: Cascade)
+  inOrganizationId     String
+  inOrganization       Organization @relation("ParticipationBody", fields: [inOrganizationId], references: [id], onDelete: Cascade)
+  startDate            DateTime? // nullable — real join dates are unknown; never fabricated
+  endDate              DateTime? // null == currently participating
+
+  createdAt DateTime @default(now())
+
+  @@unique([memberOrganizationId, inOrganizationId])
+  @@index([inOrganizationId])
+  @@map("organization_participations")
+}
+
+// Time-bounded, because an athlete's affiliation to a Team-owning
+// Organization can end independently of the athlete's own Organization
+// staying active — a transfer, a retirement, a new call-up
+// (docs/DOMAIN_MODEL.md). Scoped exactly like Product: always to an
+// Organization, optionally narrowed to one Team within it — the same
+// scoping pattern used everywhere else in this schema. Zero rows exist
+// yet; no athlete data exists in production today. Proven by tests only.
+model AthleteAffiliation {
+  id                    String       @id @default(uuid())
+  athleteOrganizationId String
+  athleteOrganization   Organization @relation("AffiliationAthlete", fields: [athleteOrganizationId], references: [id], onDelete: Cascade)
+  organizationId        String
+  organization          Organization @relation("AffiliationOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  teamId                String?
+  team                  Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  startDate             DateTime     @default(now())
+  endDate               DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([athleteOrganizationId, organizationId, teamId, startDate])
+  @@index([organizationId])
+  @@index([teamId])
+  @@map("athlete_affiliations")
+}
+
+// ---------------------------------------------------------------------------
+// League
+// ---------------------------------------------------------------------------
+
+model League {
+  id     String   @id @default(uuid())
+  name   String   @unique
+  sports Sport[]
+  teams  String[]
+  active Boolean  @default(true)
+
+  // Bridge to the new Organization model, added by the same single-pilot
+  // migration that added Organization itself. Nullable and unique: a
+  // League row without this set hasn't been migrated yet, so "has this
+  // league been migrated?" is a queryable fact (`WHERE "organizationId" IS
+  // NOT NULL`) rather than fuzzy name-matching against Organization.name
+  // later. `teams[]` above is superseded, not deleted, by real Team rows —
+  // old and new coexist until the full cutover (M3).
+  organizationId String?       @unique
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("leagues")
+}
+
+// ---------------------------------------------------------------------------
+// Review
+// ---------------------------------------------------------------------------
+
+model Review {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  author    String
+  email     String?
+  rating    Int
+  title     String?
+  body      String?
+  verified  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Postgres allows multiple NULLs under a unique constraint by default,
+  // which already matches Mongoose's `sparse: true` behavior here — no
+  // partial index needed to replicate "one review per email per product,
+  // but reviews without an email don't collide."
+  @@unique([productId, email])
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ---------------------------------------------------------------------------
+// ShippingEvent — analytics log, not a business record
+// ---------------------------------------------------------------------------
+
+model ShippingEvent {
+  id             String   @id @default(uuid())
+  // Deliberately a plain string, not a foreign key — matches the existing
+  // Mongoose schema exactly (orderId: String, no ref). Tightening this to a
+  // real FK now would be inventing a new constraint the original model
+  // never had; left as a documented, intentional loose coupling.
+  orderId        String
+  shippingMethod String
+  orderTotal     Float
+  region         String?
+  createdAt      DateTime @default(now())
+
+  @@map("shipping_events")
+}
+
+// ---------------------------------------------------------------------------
+// SiteSettings — singleton, same soft convention as the Mongoose model
+// (application code finds-or-creates the first row; no DB-level singleton
+// constraint existed before, so none is added now).
+// ---------------------------------------------------------------------------
+
+model SiteSettings {
+  id                String @id @default(uuid())
+  tryOnTitle        String @default("Try on the Gilas Pilipinas shirt!")
+  tryOnImage        String @default("")
+  tryOnProductUrl   String @default("/products/gilas-pilipinas-t-shirt")
+  tryOnAdVideoUrl   String @default("")
+  tryOnAdButtonText String @default("Visit Playtime.ph")
+  tryOnAdButtonUrl  String @default("https://www.playtime.ph/")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ---------------------------------------------------------------------------
+// TryOnLog
+// ---------------------------------------------------------------------------
+
+model TryOnLog {
+  id           String   @id @default(uuid())
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id])
+  productName  String?
+  productImage String?
+  success      Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([createdAt(sort: Desc)])
+  @@map("try_on_logs")
+}
+
+// ---------------------------------------------------------------------------
+// UserActivity — Mongoose used a TTL index (expireAfterSeconds: 90 days) to
+// auto-expire rows. Postgres has no equivalent; replaced by a daily
+// node-cron cleanup job (see server.js), following the same pattern already
+// used there for the daily sales report. The @@index([timestamp]) below is
+// what that job's DELETE query relies on.
+// ---------------------------------------------------------------------------
+
+model UserActivity {
+  id        String       @id @default(uuid())
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id])
+  sessionId String?
+  type      ActivityType
+  productId String?
+  product   Product?     @relation(fields: [productId], references: [id])
+  query     String?
+  category  String?
+  sport     String?
+  timestamp DateTime     @default(now())
+
+  @@index([userId, type])
+  @@index([sessionId, type])
+  @@index([timestamp])
+  @@map("user_activities")
+}
+
+// ---------------------------------------------------------------------------
+// VenuePickupConfig
+// ---------------------------------------------------------------------------
+
+model VenuePickupConfig {
+  id            String       @id @default(uuid())
+  enabled       Boolean      @default(false)
+  deadlineHours Int          @default(6)
+  slots         PickupSlot[]
+
+  // Mongoose set this manually in a pre('save') hook; Prisma's @updatedAt
+  // does the same thing automatically — same behavior, less custom code.
+  updatedAt DateTime @updatedAt
+
+  @@map("venue_pickup_configs")
+}
+
+// Was VenuePickupConfig.slots[] (pickupSlotSchema, had its own _id — real
+// table, same reasoning as Address and ProductColor).
+model PickupSlot {
+  id                  String            @id @default(uuid())
+  configId            String
+  config              VenuePickupConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  venueName           String?
+  venueAddress        String?
+  pickupDate          String? // "YYYY-MM-DD", stored as string to avoid timezone shifts — preserved as-is
+  pickupHours         String?
+  pickupStartTime     String? // "HH:MM" 24h PHT
+  specialInstructions String?
+  enabled             Boolean           @default(true)
+
+  @@index([configId])
+  @@map("pickup_slots")
+}

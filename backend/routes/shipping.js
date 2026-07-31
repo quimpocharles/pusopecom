@@ -1,5 +1,5 @@
 import express from 'express';
-import VenuePickupConfig from '../models/VenuePickupConfig.js';
+import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import {
   getDomesticRate,
   getInternationalRate,
@@ -46,14 +46,14 @@ router.post('/options', async (req, res) => {
       });
 
       // Venue pickup — one card per active slot
-      const config = await VenuePickupConfig.findOne().lean();
+      const config = await venuePickupConfigRepository.get();
       if (config?.enabled && config.slots?.length) {
         const deadlineHours = config.deadlineHours ?? 6;
         for (const slot of config.slots) {
           if (isSlotActive(slot, deadlineHours)) {
             shippingOptions.push({
               method: 'venue_pickup',
-              slotId: slot._id.toString(),
+              slotId: slot._id,
               label: slot.venueName ? `Pick Up at ${slot.venueName}` : 'Pick Up at Venue',
               description: [
                 slot.venueName,

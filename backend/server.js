@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
+import prisma from './lib/prisma.js';
+import * as productRepository from './repositories/productRepository.js';
 import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
 
 // Import routes
@@ -91,32 +92,6 @@ const tryonGlobalLimiter = rateLimit({
 
 app.use('/api/tryon', tryonGlobalLimiter, tryonUserLimiter);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => {
-  console.log('Connected to MongoDB');
-})
-.catch((error) => {
-  console.error('MongoDB connection error:', error);
-  process.exit(1);
-});
-
-// Create text index for product search
-mongoose.connection.once('open', async () => {
-  try {
-    const Product = mongoose.model('Product');
-    await Product.collection.createIndex({
-      name: 'text',
-      description: 'text',
-      team: 'text',
-      player: 'text'
-    });
-    console.log('Product search index created');
-  } catch (error) {
-    console.error('Error creating search index:', error);
-  }
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -143,8 +118,7 @@ app.use('/api/admin/pickup', pickupRoutes);
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {
   try {
-    const Product = mongoose.model('Product');
-    const products = await Product.find({ active: true }).select('slug updatedAt').lean();
+    const products = await productRepository.find({ where: { active: true } });
     const baseUrl = process.env.FRONTEND_URL || 'https://pusostore.com';
 
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
@@ -180,21 +154,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
 
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation error',
-      errors: Object.values(err.errors).map(e => e.message)
-    });
-  }
-
-  if (err.name === 'CastError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid ID format'
-    });
-  }
-
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal server error'
@@ -210,24 +169,41 @@ cron.schedule('59 23 * * *', async () => {
   }
 }, { timezone: 'Asia/Manila' });
 
-// Start server
+// Start server — the database check runs first and blocks listen, so the
+// app fails fast on a bad DATABASE_URL instead of accepting traffic it
+// can't serve. (The original mongoose.connect() call didn't actually
+// block app.listen() either; blocking here is a deliberate hardening
+// while this exact bootstrap code is already being touched to drop
+// mongoose entirely.)
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+async function start() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Connected to PostgreSQL');
+  } catch (error) {
+    console.error('Database connection error:', error);
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+start();
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('SIGTERM signal received: closing HTTP server');
-  mongoose.connection.close();
+  await prisma.$disconnect();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('SIGINT signal received: closing HTTP server');
-  mongoose.connection.close();
+  await prisma.$disconnect();
   process.exit(0);
 });
 

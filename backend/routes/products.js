@@ -1,102 +1,48 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import Product from '../models/Product.js';
+import * as productRepository from '../repositories/productRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
+
+const sortMap = {
+  'alphabetical': 'name',
+  'newest': '-createdAt',
+  'most-bought': '-totalSold',
+  'trending': '-totalViews',
+};
 
 // Get all products with filters
 router.get('/', async (req, res) => {
   try {
     const {
-      sport,
-      team,
-      league,
-      category,
-      gender,
-      sale,
-      minPrice,
-      maxPrice,
-      search,
-      featured,
-      page = 1,
-      limit = 12,
-      sort = '-createdAt'
+      sport, team, league, category, gender, sale, minPrice, maxPrice,
+      search, featured, page = 1, limit = 12, sort = '-createdAt'
     } = req.query;
 
-    const sortMap = {
-      'alphabetical': 'name',
-      'newest': '-createdAt',
-      'most-bought': '-totalSold',
-      'trending': '-totalViews',
-    };
     const resolvedSort = sortMap[sort] || sort;
-
-    const filter = { active: true };
-
-    if (sport) {
-      const values = sport.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
-      const sportOrConditions = [
-        ...values.map(v => ({ sport: { $regex: v } })),
-        { sport: 'general' }
-      ];
-      if (!filter.$and) filter.$and = [];
-      filter.$and.push({ $or: sportOrConditions });
-    }
-    if (team) filter.team = { $regex: `^${team}$`, $options: 'i' };
-    if (league) filter.league = { $regex: `^${league}$`, $options: 'i' };
-    if (category) {
-      const values = category.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
-      filter.category = values.length === 1 ? { $regex: values[0] } : { $in: values };
-    }
-    if (gender) {
-      const values = gender.split(',').map(v => new RegExp(`^${v.trim()}$`, 'i'));
-      const genderOrConditions = [
-        ...values.map(v => ({ gender: { $regex: v } })),
-        { gender: { $regex: /^unisex$/i } }
-      ];
-      if (!filter.$and) filter.$and = [];
-      filter.$and.push({ $or: genderOrConditions });
-    }
-    if (sale === 'true') filter.salePrice = { $exists: true, $gt: 0 };
-    if (featured) filter.featured = featured === 'true';
-
-    if (minPrice || maxPrice) {
-      filter.$or = [
-        {
-          salePrice: {
-            ...(minPrice && { $gte: Number(minPrice) }),
-            ...(maxPrice && { $lte: Number(maxPrice) })
-          }
-        },
-        {
-          $and: [
-            { salePrice: { $exists: false } },
-            {
-              price: {
-                ...(minPrice && { $gte: Number(minPrice) }),
-                ...(maxPrice && { $lte: Number(maxPrice) })
-              }
-            }
-          ]
-        }
-      ];
-    }
-
-    if (search) {
-      filter.$text = { $search: search };
-    }
-
+    const { field, direction } = productRepository.parseSort(resolvedSort);
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [products, total] = await Promise.all([
-      Product.find(filter)
-        .sort(resolvedSort)
-        .skip(skip)
-        .limit(Number(limit))
-        .select('-__v'),
-      Product.countDocuments(filter)
-    ]);
+    let products;
+    let total;
+
+    if (search) {
+      const result = await productRepository.search({
+        query: search, active: true, sport, team, league, category, gender, sale, minPrice, maxPrice, featured,
+        sortField: field, sortDirection: direction, skip, take: Number(limit),
+      });
+      products = result.products;
+      total = result.total;
+    } else {
+      const where = productRepository.buildListingWhere({
+        active: true, sport, team, league, category, gender, sale, minPrice, maxPrice, featured,
+      });
+      [products, total] = await Promise.all([
+        productRepository.find({ where, orderBy: { [field]: direction }, skip, take: Number(limit) }),
+        productRepository.count({ where }),
+      ]);
+    }
 
     res.json({
       success: true,
@@ -123,10 +69,7 @@ router.get('/admin/export',
   isAdmin,
   async (req, res) => {
     try {
-      const products = await Product.find({})
-        .sort('name')
-        .select('name price salePrice sizes colors totalStock')
-        .lean();
+      const products = await productRepository.find({ where: {}, orderBy: { name: 'asc' } });
 
       const SIZE_COLS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
@@ -188,25 +131,21 @@ router.get('/admin/all',
         sport
       } = req.query;
 
-      const filter = {};
-      if (category) filter.category = category;
-      if (sport) filter.sport = sport;
+      const where = {};
+      if (category) where.category = category;
+      if (sport) where.sport = sport;
       if (search) {
-        filter.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { team: { $regex: search, $options: 'i' } }
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { team: { contains: search, mode: 'insensitive' } }
         ];
       }
 
       const skip = (Number(page) - 1) * Number(limit);
 
       const [products, total] = await Promise.all([
-        Product.find(filter)
-          .sort('-createdAt')
-          .skip(skip)
-          .limit(Number(limit))
-          .select('-__v'),
-        Product.countDocuments(filter)
+        productRepository.find({ where, orderBy: { createdAt: 'desc' }, skip, take: Number(limit) }),
+        productRepository.count({ where }),
       ]);
 
       res.json({
@@ -235,7 +174,7 @@ router.get('/admin/:id',
   isAdmin,
   async (req, res) => {
     try {
-      const product = await Product.findById(req.params.id);
+      const product = await productRepository.findById(req.params.id);
 
       if (!product) {
         return res.status(404).json({
@@ -281,9 +220,7 @@ router.get('/recommendations/cart', async (req, res) => {
     }
 
     // Load cart products to get their categories/sports
-    const cartProducts = await Product.find({ _id: { $in: ids } })
-      .select('category sport')
-      .lean();
+    const cartProducts = await productRepository.find({ where: { id: { in: ids } } });
 
     if (cartProducts.length === 0) {
       return res.json({ success: true, data: [] });
@@ -308,31 +245,31 @@ router.get('/recommendations/cart', async (req, res) => {
 
     // Try complementary categories in the same sport(s)
     if (complementaryCategories.size > 0) {
-      recommendations = await Product.find({
-        active: true,
-        _id: { $nin: ids },
-        category: { $in: [...complementaryCategories] },
-        sport: { $in: [...sports] },
-        totalStock: { $gt: 0 }
-      })
-        .select('name slug images price salePrice category sport sizes colors totalStock')
-        .limit(Number(limit))
-        .lean();
+      recommendations = await productRepository.find({
+        where: {
+          active: true,
+          id: { notIn: ids },
+          category: { in: [...complementaryCategories] },
+          sport: { in: [...sports] },
+          totalStock: { gt: 0 }
+        },
+        take: Number(limit),
+      });
     }
 
     // Fall back to popular products in the same sport if not enough
     if (recommendations.length < Number(limit)) {
-      const existing = new Set([...ids, ...recommendations.map(r => r._id.toString())]);
-      const fallback = await Product.find({
-        active: true,
-        _id: { $nin: [...existing] },
-        sport: { $in: [...sports] },
-        totalStock: { $gt: 0 }
-      })
-        .select('name slug images price salePrice category sport sizes colors totalStock')
-        .sort('-featured -reviewCount')
-        .limit(Number(limit) - recommendations.length)
-        .lean();
+      const existing = new Set([...ids, ...recommendations.map(r => r._id)]);
+      const fallback = await productRepository.find({
+        where: {
+          active: true,
+          id: { notIn: [...existing] },
+          sport: { in: [...sports] },
+          totalStock: { gt: 0 }
+        },
+        orderBy: [{ featured: 'desc' }, { reviewCount: 'desc' }],
+        take: Number(limit) - recommendations.length,
+      });
 
       recommendations = [...recommendations, ...fallback];
     }
@@ -352,14 +289,12 @@ router.get('/search/suggestions', async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const products = await Product.find({
-      active: true,
-      name: { $regex: escaped, $options: 'i' }
-    })
-      .select('name slug images price salePrice')
-      .limit(6)
-      .lean();
+    // Prisma's `contains` is a plain string match, not a regex — unlike the
+    // old Mongo $regex path, there's no need to escape user input here.
+    const products = await productRepository.find({
+      where: { active: true, name: { contains: q, mode: 'insensitive' } },
+      take: 6,
+    });
 
     res.json({
       success: true,
@@ -380,12 +315,9 @@ router.get('/search/suggestions', async (req, res) => {
 // Get single product by slug
 router.get('/:slug', async (req, res) => {
   try {
-    const product = await Product.findOne({
-      slug: req.params.slug,
-      active: true
-    });
+    const product = await productRepository.findBySlug(req.params.slug);
 
-    if (!product) {
+    if (!product || !product.active) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
@@ -413,7 +345,7 @@ router.post('/',
     body('name').trim().notEmpty(),
     body('description').trim().notEmpty(),
     body('price').isFloat({ min: 0 }),
-    body('category').isIn(['jersey', 'tshirt', 'cap', 'shorts', 'accessories']),
+    body('category').isIn(['jersey', 'tshirt', 'cap', 'shorts', 'accessories', 'jacket', 'sweatshirt', 'hoodie']),
     body('sport').isIn(['basketball', 'volleyball', 'football', 'general']),
     body('images').isArray({ min: 1 })
   ],
@@ -428,8 +360,7 @@ router.post('/',
         });
       }
 
-      const product = new Product(req.body);
-      await product.save();
+      const product = await productRepository.create(req.body);
 
       res.status(201).json({
         success: true,
@@ -438,7 +369,7 @@ router.post('/',
       });
     } catch (error) {
       console.error('Create product error:', error);
-      if (error.code === 11000) {
+      if (error.code === 'P2002') {
         return res.status(400).json({
           success: false,
           message: 'Product slug already exists'
@@ -458,18 +389,7 @@ router.put('/:id',
   isAdmin,
   async (req, res) => {
     try {
-      const product = await Product.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true, runValidators: true }
-      );
-
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
-      }
+      const product = await productRepository.updateById(req.params.id, req.body);
 
       res.json({
         success: true,
@@ -477,6 +397,12 @@ router.put('/:id',
         data: product
       });
     } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
       console.error('Update product error:', error);
       res.status(500).json({
         success: false,
@@ -498,20 +424,19 @@ router.delete('/:id/permanent',
       });
     }
     try {
-      const product = await Product.findByIdAndDelete(req.params.id);
-
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
-      }
+      await productRepository.deleteById(req.params.id);
 
       res.json({
         success: true,
         message: 'Product permanently deleted'
       });
     } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
       console.error('Hard delete product error:', error);
       res.status(500).json({
         success: false,
@@ -527,24 +452,19 @@ router.delete('/:id',
   isAdmin,
   async (req, res) => {
     try {
-      const product = await Product.findByIdAndUpdate(
-        req.params.id,
-        { active: false },
-        { new: true }
-      );
-
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: 'Product not found'
-        });
-      }
+      await productRepository.updateById(req.params.id, { active: false });
 
       res.json({
         success: true,
         message: 'Product deleted successfully'
       });
     } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found'
+        });
+      }
       console.error('Delete product error:', error);
       res.status(500).json({
         success: false,
@@ -560,31 +480,11 @@ router.get('/admin/stats',
   isAdmin,
   async (req, res) => {
     try {
-      const [total, active, featured, byCategory, bySport, byGender] = await Promise.all([
-        Product.countDocuments(),
-        Product.countDocuments({ active: true }),
-        Product.countDocuments({ featured: true }),
-        Product.aggregate([
-          { $group: { _id: '$category', count: { $sum: 1 } } }
-        ]),
-        Product.aggregate([
-          { $group: { _id: '$sport', count: { $sum: 1 } } }
-        ]),
-        Product.aggregate([
-          { $group: { _id: '$gender', count: { $sum: 1 } } }
-        ])
-      ]);
+      const stats = await productRepository.getAdminStats();
 
       res.json({
         success: true,
-        data: {
-          total,
-          active,
-          featured,
-          byCategory,
-          bySport,
-          byGender
-        }
+        data: stats
       });
     } catch (error) {
       console.error('Get stats error:', error);

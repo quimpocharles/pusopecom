@@ -129,3 +129,26 @@ It resolves the tension between acquisition (a discovery surface for fans who ha
 
 **Future implications**
 Information architecture and routing need two distinct patterns from the start: homepage-as-hub (search, trending, cross-organization merchandising, editorial surfacing) and storefront-as-destination (per-organization theming, bookmarkable and shareable URLs, its own navigation). Success metrics should be tracked separately for each surface — homepage optimized for routing and click-through, storefront optimized for conversion and return visits — rather than judged by one blended conversion number, which would quietly pull the platform back toward the single-storefront compromise this decision explicitly rejected.
+
+---
+
+## ADR-007 — Persistence moves from MongoDB/Mongoose to PostgreSQL/Prisma on Railway
+
+**Supersedes:** the Database decision in `TECHNICAL_ARCHITECTURE.md`, which explicitly recommended keeping MongoDB ("there's no architectural pressure here to migrate to a relational system, and doing so anyway would violate 'evolve the foundation, don't replace it' for no real gain").
+
+**Context**
+The production MongoDB database was permanently removed. There is no backup or export to migrate from — this is a fresh start at the data layer, not a live migration of existing records. The organization has standardized hosting on Railway, and Railway's native, well-supported offering is PostgreSQL, not MongoDB Atlas. TECHNICAL_ARCHITECTURE.md's original reasoning for keeping MongoDB — that the Organization/Team/League hierarchy fits a document database well, and that the real bug (Critical #3 in the platform audit, the stock-overselling race condition) was an absent-transactions problem rather than a wrong-database problem — was sound *at the time*, but it assumed continuity with an existing MongoDB deployment that no longer exists. That assumption is gone.
+
+**Decision**
+Adopt PostgreSQL, hosted on Railway, with Prisma as the ORM, replacing MongoDB and Mongoose across the backend. This is a persistence-layer migration only: existing API contracts, route paths, request/response payload shapes, business logic, and authentication are preserved deliberately and are explicitly not being redesigned as part of this change.
+
+**Alternatives considered**
+- *Provision a fresh MongoDB Atlas cluster and continue with Mongoose.* Rejected — it would keep the platform on a second hosting relationship (Atlas) alongside Railway rather than consolidating on Railway's native database offering, for no offsetting benefit now that there's no existing Mongo deployment or data continuity to preserve.
+- *Migrate to Postgres without an ORM (raw SQL / a query builder).* Rejected — Prisma's schema-first workflow and generated client most closely replicate the ergonomics Mongoose already provided (model-shaped objects, migrations, type-safe queries), minimizing how much route and service code has to change to satisfy this decision's own preservation requirement.
+- *Supabase instead of Railway-hosted Postgres.* Explicitly rejected — Railway is the standardized hosting target; introducing a second platform vendor for the database alone would contradict the reason for choosing Railway in the first place.
+
+**Why the chosen approach won**
+With the original MongoDB deployment gone and no data to preserve, the switching cost this decision previously weighed against no longer exists — the "don't migrate for no real gain" reasoning in TECHNICAL_ARCHITECTURE.md was conditioned entirely on there being a working MongoDB deployment worth not disturbing. Consolidating on Railway's native Postgres, rather than reconstituting a MongoDB Atlas dependency from scratch, is the lower-total-cost path forward given that constraint no longer holds.
+
+**Future implications**
+Every embedded Mongoose subdocument array with independent identity (`User.addresses`, `Product.colors`/`sizes`, `VenuePickupConfig.slots`) becomes a proper relational table with a foreign key, rather than a nested document — this is a net improvement for exactly the workflows the Commerce Engine and the original platform audit already flagged as needing real atomicity (stock reservation, checkout). MongoDB's TTL index behavior (used today for `UserActivity`'s 90-day auto-expiry) has no Postgres equivalent and needs an explicit scheduled job, following the same `node-cron` pattern the daily sales report already uses. MongoDB's `$text` search index needs a Postgres full-text search (`tsvector` + GIN index) replacement. All Mongoose ObjectId-keyed relationships (`_id`, `ref`) become Postgres UUID foreign keys — API responses must continue serializing these as `_id` to avoid a frontend payload change, which means Prisma's `id` field needs an explicit mapping step at the response boundary, not a database-level rename.

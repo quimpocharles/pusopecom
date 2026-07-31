@@ -1,9 +1,7 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import Product from './models/Product.js';
-import Review from './models/Review.js';
-
-dotenv.config();
+import 'dotenv/config';
+import prisma from './lib/prisma.js';
+import * as productRepository from './repositories/productRepository.js';
+import * as reviewRepository from './repositories/reviewRepository.js';
 
 const firstNames = [
   'Juan', 'Maria', 'Jose', 'Ana', 'Carlos', 'Rosa', 'Miguel', 'Carmen',
@@ -98,7 +96,7 @@ function generateReview(productId, index) {
   const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
 
   return {
-    product: productId,
+    productId,
     author: `${firstName} ${lastName.charAt(0)}.`,
     email: `${firstName.toLowerCase()}${index}@example.com`,
     rating,
@@ -112,14 +110,24 @@ function generateReview(productId, index) {
 
 async function seedReviews() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Connected to PostgreSQL');
+
+    // This deletes EVERY existing review — real reviews on real products
+    // included. Never destructive-by-default; requires an explicit flag.
+    if (!process.argv.includes('--yes-delete-all-reviews')) {
+      console.error(
+        '\nRefusing to run: this script deletes ALL existing reviews before seeding.\n' +
+        'Re-run with --yes-delete-all-reviews if you are certain DATABASE_URL points at a disposable/dev database.\n'
+      );
+      process.exit(1);
+    }
 
     // Clear existing reviews
-    await Review.deleteMany({});
+    await prisma.review.deleteMany({});
     console.log('Cleared existing reviews');
 
-    const products = await Product.find({ active: true });
+    const products = await productRepository.find({ where: { active: true } });
     console.log(`Found ${products.length} products`);
 
     let totalReviews = 0;
@@ -133,19 +141,12 @@ async function seedReviews() {
         reviews.push(generateReview(product._id, totalReviews + i));
       }
 
-      await Review.insertMany(reviews);
+      await prisma.review.createMany({ data: reviews });
 
       // Calculate and update product avg rating
-      const stats = await Review.aggregate([
-        { $match: { product: product._id } },
-        { $group: { _id: null, avgRating: { $avg: '$rating' }, reviewCount: { $sum: 1 } } },
-      ]);
-
-      if (stats.length > 0) {
-        await Product.findByIdAndUpdate(product._id, {
-          avgRating: Math.round(stats[0].avgRating * 10) / 10,
-          reviewCount: stats[0].reviewCount,
-        });
+      const { avgRating, reviewCount } = await reviewRepository.getStats(product._id);
+      if (reviewCount > 0) {
+        await productRepository.updateById(product._id, { avgRating, reviewCount });
       }
 
       totalReviews += numReviews;
@@ -156,6 +157,8 @@ async function seedReviews() {
   } catch (error) {
     console.error('Error seeding reviews:', error);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

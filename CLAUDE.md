@@ -23,12 +23,14 @@ Six inversions govern every decision on this platform. Get these wrong and every
 
 ## Architecture
 
-Evolving the existing stack, not replacing it — React + Vite, Node.js + Express, MongoDB, Cloudinary, Maya, Replicate/WaveSpeed all stay. *(Technical Architecture)*
+Evolving the existing stack, not replacing it — React + Vite, Node.js + Express, PostgreSQL, Cloudinary, Maya, Replicate/WaveSpeed all stay. *(Technical Architecture, Decision Log ADR-007)*
+
+> **Database changed since Technical Architecture v1.0 was written.** The original MongoDB deployment was permanently removed with no data to preserve; persistence now runs on PostgreSQL (Railway) via Prisma. See ADR-007 for why this doesn't contradict "evolve the foundation, don't replace it" — the foundation itself changed underneath the principle, the principle didn't get abandoned.
 
 | Layer | Decision | Why |
 |---|---|---|
 | Backend | Modular monolith — one deployed service, internally organized around the 17 Capability Model boundaries | Microservices solve a scale problem this platform doesn't have yet |
-| Database | Keep MongoDB, but use its multi-document transactions for real | Audit found zero transaction usage anywhere — the direct cause of the stock-overselling bug |
+| Database | PostgreSQL (Railway) via Prisma, with real transactions used for every Commerce Engine "atomic" operation | Same requirement as before (fix the stock-overselling bug) — MongoDB is simply no longer the deployment satisfying it |
 | Frontend | React components, mirroring the IA's Organization→Team→Collection→Product hierarchy | Contextual Commerce needs the same Product component embeddable anywhere |
 | Caching | Redis — never for Inventory | Inventory must always be read live, per Commerce Engine's anti-overselling rule |
 | Queue | Redis-backed — AI generation and Notifications run async | Audit found Virtual Try-On blocking a request for up to 75 seconds |

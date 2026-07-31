@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import * as userRepository from '../repositories/userRepository.js';
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -13,7 +13,7 @@ export const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const user = await userRepository.findById(decoded.userId);
 
     if (!user) {
       return res.status(401).json({
@@ -22,7 +22,10 @@ export const authenticate = async (req, res, next) => {
       });
     }
 
-    req.user = user;
+    // Mongoose's toJSON() stripped these implicitly on every res.json() call;
+    // Prisma has no such hook, so it must happen explicitly here instead —
+    // once, on every authenticated request, rather than at each route.
+    req.user = userRepository.sanitize(user);
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
@@ -67,9 +70,9 @@ export const optionalAuth = async (req, res, next) => {
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId);
+      const user = await userRepository.findById(decoded.userId);
       if (user) {
-        req.user = user;
+        req.user = userRepository.sanitize(user);
       }
     }
     next();

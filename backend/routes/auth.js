@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { body, validationResult } from 'express-validator';
-import User from '../models/User.js';
+import * as userRepository from '../repositories/userRepository.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
@@ -55,7 +55,7 @@ router.post('/register',
 
       const { email, password, firstName, lastName, phone } = req.body;
 
-      const existingUser = await User.findOne({ email });
+      const existingUser = await userRepository.findByEmail(email);
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -65,7 +65,7 @@ router.post('/register',
 
       const verificationToken = crypto.randomBytes(32).toString('hex');
 
-      const user = new User({
+      const user = await userRepository.create({
         email,
         password,
         firstName,
@@ -73,8 +73,6 @@ router.post('/register',
         phone,
         verificationToken
       });
-
-      await user.save();
 
       await sendVerificationEmail(email, firstName, verificationToken);
 
@@ -110,7 +108,7 @@ router.get('/verify-email', async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ verificationToken: token });
+    const user = await userRepository.findByVerificationToken(token);
 
     if (!user) {
       return res.status(400).json({
@@ -119,9 +117,10 @@ router.get('/verify-email', async (req, res) => {
       });
     }
 
-    user.emailVerified = true;
-    user.verificationToken = undefined;
-    await user.save();
+    await userRepository.updateById(user._id, {
+      emailVerified: true,
+      verificationToken: null
+    });
 
     res.json({
       success: true,
@@ -154,7 +153,7 @@ router.post('/login',
 
       const { email, password } = req.body;
 
-      const user = await User.findOne({ email });
+      let user = await userRepository.findByEmail(email);
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -170,24 +169,21 @@ router.post('/login',
         });
       }
 
-      const isPasswordValid = await user.comparePassword(password);
+      const isPasswordValid = await userRepository.comparePassword(user, password);
       if (!isPasswordValid) {
-        user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-        if (user.failedLoginAttempts >= 5) {
-          user.accountLocked = true;
-        }
-        await user.save();
+        const failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+        const accountLocked = failedLoginAttempts >= 5;
+        await userRepository.updateById(user._id, { failedLoginAttempts, accountLocked });
 
         return res.status(401).json({
           success: false,
           message: 'Invalid email or password',
-          ...(user.accountLocked && { accountLocked: true })
+          ...(accountLocked && { accountLocked: true })
         });
       }
 
       if (user.failedLoginAttempts > 0) {
-        user.failedLoginAttempts = 0;
-        await user.save();
+        user = await userRepository.updateById(user._id, { failedLoginAttempts: 0 });
       }
 
       if (!user.emailVerified) {
@@ -230,7 +226,7 @@ router.post('/resend-verification',
 
       const { email } = req.body;
 
-      const user = await User.findOne({ email });
+      const user = await userRepository.findByEmail(email);
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -246,8 +242,7 @@ router.post('/resend-verification',
       }
 
       const verificationToken = crypto.randomBytes(32).toString('hex');
-      user.verificationToken = verificationToken;
-      await user.save();
+      await userRepository.updateById(user._id, { verificationToken });
 
       await sendVerificationEmail(email, user.firstName, verificationToken);
 
@@ -280,7 +275,7 @@ router.post('/forgot-password',
 
       const { email } = req.body;
 
-      const user = await User.findOne({ email });
+      const user = await userRepository.findByEmail(email);
       if (!user) {
         return res.json({
           success: true,
@@ -289,9 +284,10 @@ router.post('/forgot-password',
       }
 
       const resetToken = crypto.randomBytes(32).toString('hex');
-      user.resetPasswordToken = resetToken;
-      user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-      await user.save();
+      await userRepository.updateById(user._id, {
+        resetPasswordToken: resetToken,
+        resetPasswordExpires: new Date(Date.now() + 3600000) // 1 hour
+      });
 
       await sendPasswordResetEmail(email, user.firstName, resetToken);
 
@@ -327,10 +323,7 @@ router.post('/reset-password',
 
       const { token, password } = req.body;
 
-      const user = await User.findOne({
-        resetPasswordToken: token,
-        resetPasswordExpires: { $gt: Date.now() }
-      });
+      const user = await userRepository.findByResetToken(token);
 
       if (!user) {
         return res.status(400).json({
@@ -339,12 +332,13 @@ router.post('/reset-password',
         });
       }
 
-      user.password = password;
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
-      user.failedLoginAttempts = 0;
-      user.accountLocked = false;
-      await user.save();
+      await userRepository.updateById(user._id, {
+        password,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        failedLoginAttempts: 0,
+        accountLocked: false
+      });
 
       res.json({
         success: true,
@@ -381,7 +375,7 @@ router.put('/complete-profile', authenticate, async (req, res) => {
   try {
     const { phone, ageVerified, address } = req.body;
 
-    const user = await User.findById(req.user._id);
+    let user = await userRepository.findById(req.user._id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -389,31 +383,16 @@ router.put('/complete-profile', authenticate, async (req, res) => {
       });
     }
 
-    // Store age verification
-    if (ageVerified) {
-      user.ageVerified = true;
+    const updates = {};
+    if (ageVerified) updates.ageVerified = true;
+    if (phone) updates.phone = phone;
+    if (Object.keys(updates).length > 0) {
+      user = await userRepository.updateById(user._id, updates);
     }
 
-    // Update phone
-    if (phone) {
-      user.phone = phone;
-    }
-
-    // Add address as default
     if (address) {
-      // Remove existing default if any
-      user.addresses.forEach(addr => {
-        addr.isDefault = false;
-      });
-
-      // Add new address as default
-      user.addresses.push({
-        ...address,
-        isDefault: true
-      });
+      user = await userRepository.addAddress(user._id, { ...address, isDefault: true });
     }
-
-    await user.save();
 
     res.json({
       success: true,
@@ -467,23 +446,20 @@ router.post('/google', async (req, res) => {
     const { sub: googleId, email, given_name, family_name, picture } = payload;
 
     // Find existing user by googleId or email
-    let user = await User.findOne({
-      $or: [{ googleId }, { email }]
-    });
+    let user = await userRepository.findByGoogleIdOrEmail(googleId, email);
 
     if (user) {
       // Update Google info on each login
-      if (!user.googleId) {
-        user.googleId = googleId;
-      }
+      const updates = {};
+      if (!user.googleId) updates.googleId = googleId;
       // Always update avatar from Google if available
-      if (picture) {
-        user.avatar = picture;
+      if (picture) updates.avatar = picture;
+      if (Object.keys(updates).length > 0) {
+        user = await userRepository.updateById(user._id, updates);
       }
-      await user.save();
     } else {
       // Create new user
-      user = new User({
+      user = await userRepository.create({
         email,
         firstName: given_name || 'User',
         lastName: family_name || '',
@@ -492,7 +468,6 @@ router.post('/google', async (req, res) => {
         authProvider: 'google',
         emailVerified: true // Google already verified the email
       });
-      await user.save();
     }
 
     const authResponse = generateAuthResponse(user);
@@ -527,13 +502,12 @@ router.put('/profile',
       }
 
       const { firstName, lastName, phone } = req.body;
-      const user = await User.findById(req.user._id);
-      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-      user.firstName = firstName;
-      user.lastName = lastName;
-      if (phone !== undefined) user.phone = phone;
-      await user.save();
+      const updates = { firstName, lastName };
+      if (phone !== undefined) updates.phone = phone;
+
+      const user = await userRepository.updateById(req.user._id, updates);
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
       res.json({
         success: true,
@@ -565,7 +539,10 @@ router.put('/password',
       }
 
       const { currentPassword, newPassword } = req.body;
-      const user = await User.findById(req.user._id);
+
+      // req.user is sanitized (no password field) — fetch the raw record
+      // to actually compare against the stored hash.
+      const user = await userRepository.findById(req.user._id);
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
       // If user has a password (local auth), verify current password
@@ -573,14 +550,13 @@ router.put('/password',
         if (!currentPassword) {
           return res.status(400).json({ success: false, message: 'Current password is required' });
         }
-        const isValid = await user.comparePassword(currentPassword);
+        const isValid = await userRepository.comparePassword(user, currentPassword);
         if (!isValid) {
           return res.status(400).json({ success: false, message: 'Current password is incorrect' });
         }
       }
 
-      user.password = newPassword;
-      await user.save();
+      await userRepository.updateById(user._id, { password: newPassword });
 
       res.json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
@@ -593,17 +569,8 @@ router.put('/password',
 // Add Address
 router.post('/addresses', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await userRepository.addAddress(req.user._id, req.body);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    const address = req.body;
-
-    if (address.isDefault) {
-      user.addresses.forEach(addr => { addr.isDefault = false; });
-    }
-
-    user.addresses.push(address);
-    await user.save();
 
     res.json({ success: true, message: 'Address added successfully', addresses: user.addresses });
   } catch (error) {
@@ -615,20 +582,11 @@ router.post('/addresses', authenticate, async (req, res) => {
 // Update Address
 router.put('/addresses/:addressId', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    const address = user.addresses.id(req.params.addressId);
-    if (!address) return res.status(404).json({ success: false, message: 'Address not found' });
-
-    const updates = req.body;
-
-    if (updates.isDefault) {
-      user.addresses.forEach(addr => { addr.isDefault = false; });
-    }
-
-    Object.assign(address, updates);
-    await user.save();
+    // updateAddress ownership-checks addressId against req.user._id itself —
+    // returning null both when the user doesn't exist and when the address
+    // isn't theirs, so one user can never modify another's address via this route.
+    const user = await userRepository.updateAddress(req.user._id, req.params.addressId, req.body);
+    if (!user) return res.status(404).json({ success: false, message: 'Address not found' });
 
     res.json({ success: true, message: 'Address updated successfully', addresses: user.addresses });
   } catch (error) {
@@ -640,21 +598,8 @@ router.put('/addresses/:addressId', authenticate, async (req, res) => {
 // Delete Address
 router.delete('/addresses/:addressId', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    const address = user.addresses.id(req.params.addressId);
-    if (!address) return res.status(404).json({ success: false, message: 'Address not found' });
-
-    const wasDefault = address.isDefault;
-    user.addresses.pull(req.params.addressId);
-
-    // If deleted address was default, set first remaining as default
-    if (wasDefault && user.addresses.length > 0) {
-      user.addresses[0].isDefault = true;
-    }
-
-    await user.save();
+    const user = await userRepository.deleteAddress(req.user._id, req.params.addressId);
+    if (!user) return res.status(404).json({ success: false, message: 'Address not found' });
 
     res.json({ success: true, message: 'Address deleted successfully', addresses: user.addresses });
   } catch (error) {
@@ -676,30 +621,33 @@ router.get('/admin/users',
         role
       } = req.query;
 
-      const filter = {};
-      if (role) filter.role = role;
+      const where = {};
+      if (role) where.role = role;
       if (search) {
-        filter.$or = [
-          { firstName: { $regex: search, $options: 'i' } },
-          { lastName: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
+        where.OR = [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } }
         ];
       }
 
       const skip = (Number(page) - 1) * Number(limit);
 
       const [users, total] = await Promise.all([
-        User.find(filter)
-          .sort('-createdAt')
-          .skip(skip)
-          .limit(Number(limit))
-          .select('-password -verificationToken -resetPasswordToken -resetPasswordExpires'),
-        User.countDocuments(filter)
+        userRepository.find({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: Number(limit)
+          // addresses come back too, via find()'s default include — matches
+          // the original, which never excluded them (they were embedded).
+        }),
+        userRepository.count({ where })
       ]);
 
       res.json({
         success: true,
-        data: users,
+        data: users.map(userRepository.sanitize),
         pagination: {
           page: Number(page),
           limit: Number(limit),

@@ -1,39 +1,25 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import Review from '../models/Review.js';
-import Product from '../models/Product.js';
+import * as reviewRepository from '../repositories/reviewRepository.js';
+import * as productRepository from '../repositories/productRepository.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Helper: recalculate product rating stats
 async function recalcStats(productId) {
-  const stats = await Review.aggregate([
-    { $match: { product: productId } },
-    {
-      $group: {
-        _id: null,
-        avgRating: { $avg: '$rating' },
-        reviewCount: { $sum: 1 },
-      },
-    },
-  ]);
-
-  if (stats.length > 0) {
-    await Product.findByIdAndUpdate(productId, {
-      avgRating: Math.round(stats[0].avgRating * 10) / 10,
-      reviewCount: stats[0].reviewCount,
-    });
-  } else {
-    await Product.findByIdAndUpdate(productId, { avgRating: 0, reviewCount: 0 });
-  }
+  const { avgRating, reviewCount } = await reviewRepository.getStats(productId);
+  await productRepository.updateById(productId, { avgRating, reviewCount });
 }
 
 // GET /api/products/reviews/my — get product IDs the current user has reviewed
 router.get('/reviews/my', authenticate, async (req, res) => {
   try {
-    const reviews = await Review.find({ email: req.user.email }).select('product').lean();
-    const reviewedProductIds = reviews.map(r => r.product.toString());
+    const reviews = await reviewRepository.find({ where: { email: req.user.email } });
+    // .product already falls back to the bare id when not populated
+    // (reviewRepository's own relation-fallback handling) — no .toString()
+    // needed, Prisma already returns it as a plain string.
+    const reviewedProductIds = reviews.map(r => r.product);
     res.json({ success: true, data: reviewedProductIds });
   } catch (error) {
     console.error('Get my reviews error:', error);
@@ -44,8 +30,8 @@ router.get('/reviews/my', authenticate, async (req, res) => {
 // GET /api/products/:slug/reviews
 router.get('/:slug/reviews', async (req, res) => {
   try {
-    const product = await Product.findOne({ slug: req.params.slug, active: true });
-    if (!product) {
+    const product = await productRepository.findBySlug(req.params.slug);
+    if (!product || !product.active) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
@@ -53,27 +39,24 @@ router.get('/:slug/reviews', async (req, res) => {
     const limit = Number(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const [reviews, total, distribution] = await Promise.all([
-      Review.find({ product: product._id })
-        .sort('-createdAt')
-        .skip(skip)
-        .limit(limit)
-        .select('-email -__v'),
-      Review.countDocuments({ product: product._id }),
-      Review.aggregate([
-        { $match: { product: product._id } },
-        { $group: { _id: '$rating', count: { $sum: 1 } } },
-        { $sort: { _id: -1 } },
-      ]),
+    const [reviews, total, ratingDist] = await Promise.all([
+      reviewRepository.find({
+        where: { productId: product._id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      reviewRepository.count({ where: { productId: product._id } }),
+      reviewRepository.getRatingDistribution(product._id),
     ]);
 
-    // Build rating distribution { 5: 20, 4: 15, 3: 5, 2: 1, 1: 0 }
-    const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    distribution.forEach((d) => { ratingDist[d._id] = d.count; });
+    // Matches the original .select('-email -__v') — don't leak reviewer
+    // emails in a public review listing. Prisma has no __v field at all.
+    const publicReviews = reviews.map(({ email, ...rest }) => rest);
 
     res.json({
       success: true,
-      data: reviews,
+      data: publicReviews,
       summary: {
         avgRating: product.avgRating,
         reviewCount: product.reviewCount,
@@ -108,13 +91,13 @@ router.post(
         return res.status(400).json({ success: false, errors: errors.array() });
       }
 
-      const product = await Product.findOne({ slug: req.params.slug, active: true });
-      if (!product) {
+      const product = await productRepository.findBySlug(req.params.slug);
+      if (!product || !product.active) {
         return res.status(404).json({ success: false, message: 'Product not found' });
       }
 
-      const review = new Review({
-        product: product._id,
+      const review = await reviewRepository.create({
+        productId: product._id,
         author: req.user.firstName
           ? `${req.user.firstName} ${req.user.lastName ? req.user.lastName.charAt(0) + '.' : ''}`.trim()
           : req.user.email.split('@')[0],
@@ -124,12 +107,11 @@ router.post(
         body: req.body.body,
       });
 
-      await review.save();
       await recalcStats(product._id);
 
       res.status(201).json({ success: true, data: review });
     } catch (error) {
-      if (error.code === 11000) {
+      if (error.code === 'P2002') {
         return res.status(400).json({ success: false, message: 'You have already reviewed this product' });
       }
       console.error('Create review error:', error);

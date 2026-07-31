@@ -1,8 +1,6 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import Product from './models/Product.js';
-
-dotenv.config();
+import 'dotenv/config';
+import prisma from './lib/prisma.js';
+import * as productRepository from './repositories/productRepository.js';
 
 // Philippine sports teams data
 const teams = {
@@ -250,12 +248,24 @@ function generateProducts() {
 
 const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Connected to PostgreSQL');
+
+    // This deletes EVERY product in the database — including any real
+    // inventory (e.g. the UAAP catalog import). Never destructive-by-
+    // default against a database that might hold real data; requires an
+    // explicit flag.
+    if (!process.argv.includes('--yes-delete-all-products')) {
+      console.error(
+        '\nRefusing to run: this script deletes ALL existing products before seeding.\n' +
+        'Re-run with --yes-delete-all-products if you are certain DATABASE_URL points at a disposable/dev database.\n'
+      );
+      process.exit(1);
+    }
 
     // Clear ALL existing products first
-    const deleted = await Product.deleteMany({});
-    console.log(`Cleared ${deleted.deletedCount} existing products`);
+    const deleted = await prisma.product.deleteMany({});
+    console.log(`Cleared ${deleted.count} existing products`);
 
     // Generate and insert 100 products
     const products = generateProducts();
@@ -263,8 +273,7 @@ const seedDatabase = async () => {
 
     let created = 0;
     for (const productData of products) {
-      const product = new Product(productData);
-      await product.save();
+      await productRepository.create(productData);
       created++;
       const tag = productData.featured ? ' ★ FEATURED' : '';
       const sale = productData.salePrice ? ` (SALE: ₱${productData.salePrice})` : '';
@@ -293,6 +302,8 @@ const seedDatabase = async () => {
   } catch (error) {
     console.error('Seeding error:', error);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 };
 

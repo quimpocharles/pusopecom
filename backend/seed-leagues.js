@@ -1,14 +1,17 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import League from './models/League.js';
+import 'dotenv/config';
+import prisma from './lib/prisma.js';
+import * as leagueRepository from './repositories/leagueRepository.js';
 
-dotenv.config();
-
+// League.sports is now a real array field (a League — UAAP, PBA — is a
+// single institution that can span multiple sports; see the Domain
+// Model's "League is itself an Organization" note). The old per-(name,
+// sport) seed rows are merged here into one row per name, unioning
+// sports/teams — the schema's `name @unique` constraint requires it, and
+// it matches the actual domain model rather than a database quirk.
 const leagues = [
-  // Basketball
   {
     name: 'PBA',
-    sport: 'basketball',
+    sports: ['basketball'],
     teams: [
       'Barangay Ginebra', 'San Miguel Beermen', 'TNT Tropang Giga',
       'Magnolia Hotshots', 'Meralco Bolts', 'NLEX Road Warriors',
@@ -19,16 +22,19 @@ const leagues = [
   },
   {
     name: 'UAAP',
-    sport: 'basketball',
+    sports: ['basketball', 'volleyball'],
     teams: [
       'Ateneo Blue Eagles', 'La Salle Green Archers', 'UST Growling Tigers',
       'UP Fighting Maroons', 'FEU Tamaraws', 'NU Bulldogs',
-      'Adamson Soaring Falcons', 'UE Red Warriors'
+      'Adamson Soaring Falcons', 'UE Red Warriors',
+      'NU Lady Bulldogs', 'La Salle Lady Spikers',
+      'Ateneo Lady Eagles', 'UST Golden Tigresses',
+      'FEU Lady Tamaraws', 'Adamson Lady Falcons', 'UE Lady Warriors'
     ]
   },
   {
     name: 'NCAA',
-    sport: 'basketball',
+    sports: ['basketball'],
     teams: [
       'San Beda Red Lions', 'Letran Knights', 'Lyceum Pirates',
       'Mapua Cardinals', 'Arellano Chiefs', 'JRU Heavy Bombers',
@@ -37,14 +43,12 @@ const leagues = [
   },
   {
     name: 'National Team',
-    sport: 'basketball',
-    teams: ['Gilas Pilipinas']
+    sports: ['basketball', 'volleyball', 'football'],
+    teams: ['Gilas Pilipinas', 'Alas Pilipinas', 'Philippine Azkals']
   },
-
-  // Volleyball
   {
     name: 'PVL',
-    sport: 'volleyball',
+    sports: ['volleyball'],
     teams: [
       'Creamline Cool Smashers', 'Petro Gazz Angels', 'Chery Tiggo Crossovers',
       'PLDT High Speed Hitters', 'Cignal HD Spikers', 'F2 Logistics Cargo Movers',
@@ -52,30 +56,8 @@ const leagues = [
     ]
   },
   {
-    name: 'UAAP',
-    sport: 'volleyball',
-    teams: [
-      'NU Lady Bulldogs', 'La Salle Lady Spikers',
-      'Ateneo Lady Eagles', 'UST Golden Tigresses',
-      'UP Fighting Maroons', 'FEU Lady Tamaraws',
-      'Adamson Lady Falcons', 'UE Lady Warriors'
-    ]
-  },
-  {
-    name: 'National Team',
-    sport: 'volleyball',
-    teams: ['Alas Pilipinas']
-  },
-
-  // Football
-  {
-    name: 'National Team',
-    sport: 'football',
-    teams: ['Philippine Azkals']
-  },
-  {
     name: 'PFL',
-    sport: 'football',
+    sports: ['football'],
     teams: [
       'Kaya FC', 'United City FC', 'Stallion Laguna',
       'Maharlika Manila FC', 'Cebu FC', 'Dynamic Herb Cebu FC'
@@ -85,23 +67,24 @@ const leagues = [
 
 async function seedLeagues() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Connected to PostgreSQL');
 
     // Clear existing leagues
-    await League.deleteMany({});
+    await prisma.league.deleteMany({});
     console.log('Cleared existing leagues');
 
     // Insert new leagues
-    const result = await League.insertMany(leagues);
+    const result = await Promise.all(leagues.map((l) => leagueRepository.create(l)));
     console.log(`Seeded ${result.length} leagues:`);
-    result.forEach(l => console.log(`  - ${l.name} (${l.sport}): ${l.teams.length} teams`));
+    result.forEach(l => console.log(`  - ${l.name} (${l.sports.join(', ')}): ${l.teams.length} teams`));
 
-    await mongoose.connection.close();
     console.log('Done!');
   } catch (error) {
     console.error('Seed error:', error);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

@@ -27,6 +27,7 @@ const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 const AdminPickup = lazy(() => import('./pages/admin/AdminPickup'));
 const AdminShippingReports = lazy(() => import('./pages/admin/AdminShippingReports'));
+const DesignSystemDemo = lazy(() => import('./pages/_dev/DesignSystemDemo'));
 
 import AdminRoute from './components/admin/AdminRoute';
 import AdminLayout from './components/admin/AdminLayout';
@@ -60,6 +61,8 @@ function App() {
           <Route path="/account" element={<Account />} />
           <Route path="/privacy" element={<DataPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
+          {/* Unlinked design-system primitive demo — Phase 1 of the design system migration plan, not part of any real user flow. */}
+          <Route path="/_design-system" element={<DesignSystemDemo />} />
 
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<AdminDashboard />} />

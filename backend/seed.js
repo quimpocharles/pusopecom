@@ -1,9 +1,7 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import Product from './models/Product.js';
-import VenuePickupConfig from './models/VenuePickupConfig.js';
-
-dotenv.config();
+import 'dotenv/config';
+import prisma from './lib/prisma.js';
+import * as productRepository from './repositories/productRepository.js';
+import * as venuePickupConfigRepository from './repositories/venuePickupConfigRepository.js';
 
 const testProducts = [
   {
@@ -112,37 +110,43 @@ const testProducts = [
 
 const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Connected to PostgreSQL');
 
     // Clear existing products (optional - comment out if you want to keep existing)
-    // await Product.deleteMany({});
+    // await prisma.product.deleteMany({});
     // console.log('Cleared existing products');
 
     // Insert test products
     for (const productData of testProducts) {
-      const existing = await Product.findOne({ slug: productData.slug });
+      const existing = await prisma.product.findUnique({ where: { slug: productData.slug } });
       if (existing) {
         console.log(`Product already exists: ${productData.name}`);
       } else {
-        const product = new Product(productData);
-        await product.save();
+        await productRepository.create(productData);
         console.log(`Created: ${productData.name}`);
       }
     }
 
     // Seed default VenuePickupConfig (only if none exists)
-    const existingConfig = await VenuePickupConfig.findOne();
+    const existingConfig = await venuePickupConfigRepository.get();
     if (existingConfig) {
       console.log('VenuePickupConfig already exists — skipping');
     } else {
-      await VenuePickupConfig.create({
-        enabled:             false,
-        venueName:           'Venue Name Here',
-        venueAddress:        'Full venue address here',
-        pickupDate:          null,
-        pickupHours:         'e.g. 10:00 AM – 5:00 PM',
-        specialInstructions: 'Any special pickup instructions here',
+      // Fields live on a slot now, not on the config itself — see
+      // schema.prisma's PickupSlot model (this seed script predates that
+      // shape and was already out of sync with it even under Mongoose).
+      await venuePickupConfigRepository.upsert({
+        enabled: false,
+        deadlineHours: 6,
+        slots: [{
+          venueName: 'Venue Name Here',
+          venueAddress: 'Full venue address here',
+          pickupDate: null,
+          pickupHours: 'e.g. 10:00 AM – 5:00 PM',
+          specialInstructions: 'Any special pickup instructions here',
+          enabled: true,
+        }],
       });
       console.log('Created: default VenuePickupConfig');
     }
@@ -155,6 +159,8 @@ const seedDatabase = async () => {
   } catch (error) {
     console.error('Seeding error:', error);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 };
 

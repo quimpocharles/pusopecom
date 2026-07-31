@@ -1,5 +1,5 @@
 import express from 'express';
-import League from '../models/League.js';
+import * as leagueRepository from '../repositories/leagueRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -7,10 +7,13 @@ const router = express.Router();
 // Get all active leagues (public, for dropdowns)
 router.get('/', async (req, res) => {
   try {
-    const filter = { active: true };
-    if (req.query.sport) filter.sports = req.query.sport;
+    const where = { active: true };
+    // Mongoose treated `filter.sports = value` on an array field as a
+    // containment check; Prisma's equivalent on a native array column is
+    // `{ has: value }`.
+    if (req.query.sport) where.sports = { has: req.query.sport };
 
-    const leagues = await League.find(filter).sort('name');
+    const leagues = await leagueRepository.find({ where, orderBy: { name: 'asc' } });
 
     res.json({
       success: true,
@@ -28,7 +31,7 @@ router.get('/', async (req, res) => {
 // Get all leagues including inactive (admin)
 router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
   try {
-    const leagues = await League.find().sort('name');
+    const leagues = await leagueRepository.find({ orderBy: { name: 'asc' } });
 
     res.json({
       success: true,
@@ -48,8 +51,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
   try {
     const { name, sports, teams } = req.body;
 
-    const league = new League({ name, sports, teams: teams || [] });
-    await league.save();
+    const league = await leagueRepository.create({ name, sports, teams: teams || [] });
 
     res.status(201).json({
       success: true,
@@ -58,7 +60,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create league error:', error);
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,
         message: 'A league with this name and sport already exists'
@@ -74,18 +76,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
 // Update league (admin)
 router.put('/:id', authenticate, isAdmin, async (req, res) => {
   try {
-    const league = await League.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!league) {
-      return res.status(404).json({
-        success: false,
-        message: 'League not found'
-      });
-    }
+    const league = await leagueRepository.updateById(req.params.id, req.body);
 
     res.json({
       success: true,
@@ -93,8 +84,17 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
       data: league
     });
   } catch (error) {
+    // Prisma's update() throws (P2025) rather than returning null when the
+    // record doesn't exist — Mongoose's findByIdAndUpdate returned null,
+    // handled with a plain if-check. Same 404 outcome, different signal.
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'League not found'
+      });
+    }
     console.error('Update league error:', error);
-    if (error.code === 11000) {
+    if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,
         message: 'A league with this name and sport already exists'
@@ -110,24 +110,19 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
 // Soft-delete league (admin)
 router.delete('/:id', authenticate, isAdmin, async (req, res) => {
   try {
-    const league = await League.findByIdAndUpdate(
-      req.params.id,
-      { active: false },
-      { new: true }
-    );
-
-    if (!league) {
-      return res.status(404).json({
-        success: false,
-        message: 'League not found'
-      });
-    }
+    await leagueRepository.updateById(req.params.id, { active: false });
 
     res.json({
       success: true,
       message: 'League deleted successfully'
     });
   } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'League not found'
+      });
+    }
     console.error('Delete league error:', error);
     res.status(500).json({
       success: false,

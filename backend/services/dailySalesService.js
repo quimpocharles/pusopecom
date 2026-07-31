@@ -1,5 +1,5 @@
-import Order from '../models/Order.js';
-import User from '../models/User.js';
+import * as orderRepository from '../repositories/orderRepository.js';
+import * as userRepository from '../repositories/userRepository.js';
 import { sendDailySalesEmail } from './emailService.js';
 
 export const generateAndSendDailySalesReport = async () => {
@@ -18,10 +18,10 @@ export const generateAndSendDailySalesReport = async () => {
   ) - phOffset);
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const dateFilter = { createdAt: { $gte: startOfDay, $lt: endOfDay } };
+  const dateFilter = { createdAt: { gte: startOfDay, lt: endOfDay } };
 
   // All orders created today
-  const allOrders = await Order.find(dateFilter).lean();
+  const allOrders = await orderRepository.find({ where: dateFilter });
 
   // Paid orders only for revenue stats
   const paidOrders = allOrders.filter(o => o.paymentStatus === 'paid');
@@ -64,7 +64,7 @@ export const generateAndSendDailySalesReport = async () => {
   }
 
   // New customers registered today
-  const newCustomers = await User.countDocuments(dateFilter);
+  const newCustomers = await userRepository.count({ where: dateFilter });
 
   const report = {
     date: startOfDay,

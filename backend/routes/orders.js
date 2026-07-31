@@ -1,15 +1,82 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import Order from '../models/Order.js';
-import Product from '../models/Product.js';
-import ShippingEvent from '../models/ShippingEvent.js';
-import VenuePickupConfig from '../models/VenuePickupConfig.js';
+import prisma from '../lib/prisma.js';
+import * as orderRepository from '../repositories/orderRepository.js';
+import * as productRepository from '../repositories/productRepository.js';
+import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
+import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import { createCheckout, getCheckoutStatus } from '../services/mayaService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
 
 const router = express.Router();
+
+/**
+ * Restores stock for every item on an order inside one transaction — the
+ * symmetric inverse of the atomic reservation made at order creation.
+ * Used both when Maya checkout creation itself fails (the reservation was
+ * never going to be paid for) and when a payment later resolves to
+ * failed/expired — the Commerce Engine rule that stock reserved at Order
+ * placement releases automatically when checkout doesn't complete.
+ */
+async function releaseStock(order) {
+  await prisma.$transaction(async (tx) => {
+    for (const item of order.items) {
+      await productRepository.restoreStock(
+        { productId: item.productId ?? item.product, size: item.size, color: item.color, quantity: item.quantity },
+        { client: tx }
+      );
+    }
+    // Multiple round trips per item; Prisma's 5s default interactive-
+    // transaction timeout has been observed to be too tight under this
+    // deployment's real network latency (see the matching timeout on the
+    // order-creation transaction below).
+  }, { timeout: 15000 });
+}
+
+/**
+ * Applies the consequences of a resolved Maya payment status. Shared by
+ * both /verify-payment (the customer's browser polling after returning
+ * from checkout) and the webhook — the two paths converge here so a
+ * payment is only ever resolved once, via tryResolvePayment's atomic
+ * guard, regardless of which path notices first.
+ */
+async function applyPaymentResolution(order, mayaPaymentStatus) {
+  if (mayaPaymentStatus === 'PAYMENT_SUCCESS') {
+    // applied is false only when a concurrent request already resolved
+    // this order — Maya's answer is still authoritative either way, so
+    // the caller can trust 'paid' as the return value regardless.
+    const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' });
+    if (applied) {
+      try {
+        await shippingEventRepository.create({
+          orderId: order.orderNumber,
+          shippingMethod: order.shippingMethod || 'unknown',
+          orderTotal: order.total,
+          region: order.shippingRegion || null,
+        });
+      } catch (shippingEventError) {
+        console.error('Failed to record shipping event:', shippingEventError);
+      }
+
+      try {
+        await sendOrderConfirmationEmail(order.email, order);
+      } catch (emailError) {
+        console.error('Failed to send confirmation email:', emailError);
+      }
+    }
+    return 'paid';
+  }
+
+  if (mayaPaymentStatus === 'PAYMENT_FAILED' || mayaPaymentStatus === 'PAYMENT_EXPIRED') {
+    const applied = await orderRepository.tryResolvePayment(order._id, 'failed');
+    if (applied) await releaseStock(order);
+    return 'failed';
+  }
+
+  return order.paymentStatus; // still pending — Maya hasn't resolved it yet
+}
 
 // Create order and initiate Maya checkout
 router.post('/',
@@ -41,12 +108,16 @@ router.post('/',
 
       const { email, items, shippingAddress, notes, shippingMethod, shippingRegion, slotId } = req.body;
 
-      // Validate items and calculate totals
+      // Pass 1 — structural validation and price/image resolution. Not
+      // itself the stock-sufficiency check (that's the atomic
+      // decrementStock call below); this only confirms the product and
+      // the requested size/color combination exist at all.
       let subtotal = 0;
       const orderItems = [];
+      const productNames = {};
 
       for (const item of items) {
-        const product = await Product.findById(item.product);
+        const product = await productRepository.findById(item.product);
 
         if (!product || !product.active) {
           return res.status(400).json({
@@ -54,10 +125,10 @@ router.post('/',
             message: `Product not found: ${item.name}`
           });
         }
+        productNames[product._id] = product.name;
 
-        // Check stock availability
-        let sizeStock;
         let itemImage = product.images[0];
+        let sizeExists;
 
         if (item.color && product.colors?.length > 0) {
           const colorVariant = product.colors.find(c => c.color === item.color);
@@ -67,20 +138,20 @@ router.post('/',
               message: `Color ${item.color} not found for ${product.name}`
             });
           }
-          sizeStock = colorVariant.sizes.find(s => s.size === item.size);
           if (colorVariant.image) itemImage = colorVariant.image;
+          sizeExists = colorVariant.sizes.some(s => s.size === item.size);
         } else {
-          sizeStock = product.sizes.find(s => s.size === item.size);
+          sizeExists = product.sizes.some(s => s.size === item.size);
         }
 
-        if (!sizeStock || sizeStock.stock < item.quantity) {
+        if (!sizeExists) {
           return res.status(400).json({
             success: false,
             message: `Insufficient stock for ${product.name}${item.color ? ` - ${item.color}` : ''} - Size ${item.size}`
           });
         }
 
-        const price = product.salePrice || product.price;
+        const price = product.effectivePrice;
         subtotal += price * item.quantity;
 
         orderItems.push({
@@ -92,11 +163,6 @@ router.post('/',
           color: item.color || undefined,
           image: itemImage
         });
-
-        // Reduce stock and increment sold count
-        sizeStock.stock -= item.quantity;
-        product.totalSold = (product.totalSold || 0) + item.quantity;
-        await product.save();
       }
 
       // Recalculate shipping fee server-side — never trust the client value
@@ -105,8 +171,8 @@ router.post('/',
 
       if (shippingMethod === 'venue_pickup' && country === 'Philippines') {
         // Verify the specific slot is still active at time of order
-        const venue = await VenuePickupConfig.findOne().lean();
-        const targetSlot = venue?.slots?.find(s => s._id.toString() === slotId);
+        const venue = await venuePickupConfigRepository.get();
+        const targetSlot = venue?.slots?.find(s => s._id === slotId);
         const slotValid =
           venue?.enabled &&
           targetSlot &&
@@ -121,29 +187,62 @@ router.post('/',
 
       const total = subtotal + shippingFee;
 
-      // Create order
-      const order = new Order({
-        user: req.user?._id,
-        email,
-        items: orderItems,
-        shippingAddress,
-        subtotal,
-        shippingFee,
-        total,
-        shippingMethod: shippingMethod || undefined,
-        shippingRegion: shippingRegion || undefined,
-        notes
-      });
+      // Pass 2 — atomic: reserve stock for every item and create the order
+      // together, or none of it happens. This is the direct fix for the
+      // original per-item read-then-write loop, which could both oversell
+      // (two checkouts racing for the last unit) and leave partial stock
+      // decrements behind if a later item in the same order failed
+      // validation after earlier items had already been decremented.
+      let order;
+      try {
+        order = await prisma.$transaction(async (tx) => {
+          for (const item of orderItems) {
+            await productRepository.decrementStock(
+              { productId: item.product, size: item.size, color: item.color, quantity: item.quantity },
+              { client: tx }
+            );
+            await productRepository.updateById(
+              item.product,
+              { totalSold: { increment: item.quantity } },
+              { client: tx }
+            );
+          }
 
-      await order.save();
+          return orderRepository.create(
+            {
+              userId: req.user?._id,
+              email,
+              items: orderItems,
+              shippingAddress,
+              subtotal,
+              shippingFee,
+              total,
+              shippingMethod: shippingMethod || undefined,
+              shippingRegion: shippingRegion || undefined,
+              notes
+            },
+            { client: tx }
+          );
+        }, { timeout: 15000 }); // 2 round trips per item plus the order create — see releaseStock's matching note
+      } catch (error) {
+        if (error instanceof productRepository.InsufficientStockError) {
+          const name = productNames[error.productId] || 'item';
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for ${name}${error.color ? ` - ${error.color}` : ''} - Size ${error.size}`
+          });
+        }
+        throw error;
+      }
 
-      // Create Maya checkout session
+      // Maya checkout session creation is an external call — deliberately
+      // outside the DB transaction above, both because an external call
+      // can't be rolled back and because holding a transaction open across
+      // a slow network call would hold row locks far longer than necessary.
       try {
         const { checkoutId, redirectUrl } = await createCheckout(order);
 
-        order.mayaPaymentId = checkoutId;
-        order.mayaCheckoutUrl = redirectUrl;
-        await order.save();
+        await orderRepository.updateById(order._id, { mayaPaymentId: checkoutId, mayaCheckoutUrl: redirectUrl });
 
         res.status(201).json({
           success: true,
@@ -154,10 +253,13 @@ router.post('/',
           }
         });
       } catch (mayaError) {
-        // If Maya checkout fails, still keep the order but mark it as failed
+        // Checkout could never be paid for — release the reservation
+        // (Commerce Engine: stock reserved at placement releases
+        // automatically when checkout doesn't complete) rather than
+        // leaving it permanently decremented with no way to pay for it.
         console.error('Maya checkout failed:', mayaError);
-        order.paymentStatus = 'failed';
-        await order.save();
+        await releaseStock(order);
+        await orderRepository.updateById(order._id, { paymentStatus: 'failed' });
 
         return res.status(500).json({
           success: false,
@@ -181,73 +283,25 @@ router.get('/admin/stats',
   isAdmin,
   async (req, res) => {
     try {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const [
-        revenueResult,
-        monthlyRevenueResult,
-        topProducts,
-        statusCounts,
-        lowStockProducts
-      ] = await Promise.all([
-        // Total revenue from paid orders
-        Order.aggregate([
-          { $match: { paymentStatus: 'paid' } },
-          { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
-        ]),
-
-        // Revenue this month from paid orders
-        Order.aggregate([
-          { $match: { paymentStatus: 'paid', createdAt: { $gte: startOfMonth } } },
-          { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
-        ]),
-
-        // Top 5 selling products (from paid orders)
-        Order.aggregate([
-          { $match: { paymentStatus: 'paid' } },
-          { $unwind: '$items' },
-          {
-            $group: {
-              _id: '$items.product',
-              name: { $first: '$items.name' },
-              image: { $first: '$items.image' },
-              totalQuantity: { $sum: '$items.quantity' }
-            }
-          },
-          { $sort: { totalQuantity: -1 } },
-          { $limit: 5 }
-        ]),
-
-        // Orders by status
-        Order.aggregate([
-          { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
-        ]),
-
-        // Low stock products (totalStock <= 5 and active)
-        Product.find({ active: true, totalStock: { $lte: 5 } })
-          .select('name slug totalStock images')
-          .sort('totalStock')
-          .limit(10)
-          .lean()
+      const [revenueStats, topSellingProducts, ordersByStatus, lowStockProducts] = await Promise.all([
+        orderRepository.getRevenueStats(),
+        orderRepository.getTopSellingProducts(5),
+        orderRepository.getOrdersByStatus(),
+        productRepository.find({
+          where: { active: true, totalStock: { lte: 5 } },
+          orderBy: { totalStock: 'asc' },
+          take: 10,
+        }),
       ]);
-
-      const revenue = revenueResult[0] || { total: 0, count: 0 };
-      const monthlyRevenue = monthlyRevenueResult[0] || { total: 0, count: 0 };
-
-      const ordersByStatus = {};
-      for (const s of statusCounts) {
-        ordersByStatus[s._id] = s.count;
-      }
 
       res.json({
         success: true,
         data: {
-          totalRevenue: revenue.total,
-          paidOrdersCount: revenue.count,
-          revenueThisMonth: monthlyRevenue.total,
-          monthlyOrdersCount: monthlyRevenue.count,
-          topSellingProducts: topProducts,
+          totalRevenue: revenueStats.totalRevenue,
+          paidOrdersCount: revenueStats.paidOrdersCount,
+          revenueThisMonth: revenueStats.revenueThisMonth,
+          monthlyOrdersCount: revenueStats.monthlyOrdersCount,
+          topSellingProducts,
           ordersByStatus,
           lowStockProducts
         }
@@ -285,12 +339,13 @@ router.get('/admin/export',
         startDate = new Date(now.getFullYear(), 0, 1);
       }
 
-      const filter = startDate ? { createdAt: { $gte: startDate } } : {};
+      const where = startDate ? { createdAt: { gte: startDate } } : {};
 
-      const orders = await Order.find(filter)
-        .sort('-createdAt')
-        .populate('user', 'firstName lastName email')
-        .lean();
+      const orders = await orderRepository.find({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { items: true, user: true },
+      });
 
       const fmt = (d) => {
         const dt = new Date(d);
@@ -361,7 +416,7 @@ router.get('/admin/export',
 // Verify payment status with Maya (called when user returns from checkout)
 router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
   try {
-    const order = await Order.findOne({ orderNumber: req.params.orderNumber });
+    const order = await orderRepository.findByOrderNumber(req.params.orderNumber);
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
@@ -378,36 +433,9 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 
     // Poll Maya for checkout status
     const checkoutData = await getCheckoutStatus(order.mayaPaymentId);
+    const paymentStatus = await applyPaymentResolution(order, checkoutData.paymentStatus);
 
-    if (checkoutData.paymentStatus === 'PAYMENT_SUCCESS') {
-      order.paymentStatus = 'paid';
-      order.orderStatus = 'confirmed';
-      await order.save();
-
-      // Record shipping event for analytics
-      try {
-        await ShippingEvent.create({
-          orderId: order.orderNumber,
-          shippingMethod: order.shippingMethod || 'unknown',
-          orderTotal: order.total,
-          region: order.shippingRegion || null,
-        });
-      } catch (shippingEventError) {
-        console.error('Failed to record shipping event:', shippingEventError);
-      }
-
-      // Send confirmation email
-      try {
-        await sendOrderConfirmationEmail(order.email, order);
-      } catch (emailError) {
-        console.error('Failed to send confirmation email:', emailError);
-      }
-    } else if (checkoutData.paymentStatus === 'PAYMENT_FAILED' || checkoutData.paymentStatus === 'PAYMENT_EXPIRED') {
-      order.paymentStatus = 'failed';
-      await order.save();
-    }
-
-    res.json({ success: true, data: { paymentStatus: order.paymentStatus } });
+    res.json({ success: true, data: { paymentStatus } });
   } catch (error) {
     console.error('Verify payment error:', error);
     res.status(500).json({ success: false, message: 'Failed to verify payment' });
@@ -416,9 +444,9 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 
 router.get('/:orderNumber', optionalAuth, async (req, res) => {
   try {
-    const order = await Order.findOne({
-      orderNumber: req.params.orderNumber
-    }).populate('items.product', 'name slug images');
+    const order = await orderRepository.findByOrderNumber(req.params.orderNumber, {
+      include: { items: { include: { product: true } } },
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -460,9 +488,11 @@ router.get('/user/:userId', authenticate, async (req, res) => {
       });
     }
 
-    const orders = await Order.find({ user: req.params.userId })
-      .sort('-createdAt')
-      .populate('items.product', 'name slug images');
+    const orders = await orderRepository.find({
+      where: { userId: req.params.userId },
+      orderBy: { createdAt: 'desc' },
+      include: { items: { include: { product: true } } },
+    });
 
     res.json({
       success: true,
@@ -478,72 +508,36 @@ router.get('/user/:userId', authenticate, async (req, res) => {
 });
 
 // Maya webhook handler
+//
+// The original handler trusted `req.body.status` directly to decide
+// whether to mark an order paid — the platform audit's single most
+// severe finding, and something CLAUDE.md explicitly forbids ("No
+// webhook payload is trusted without signature verification, on any
+// current or future integration"). Maya's Checkout API webhook product
+// does not document a verifiable payload-signing scheme the way some of
+// their other APIs do (their own Webhook Guide recommends IP allowlisting
+// instead, and no signing secret exists anywhere in this codebase's
+// config) — so rather than fabricate a signature check against an
+// unconfirmed scheme, this treats the POST as nothing more than a wake-up
+// signal. The actual payment status is decided by an authenticated pull
+// against Maya's own API (getCheckoutStatus, signed with our secret key)
+// — the same trusted mechanism /verify-payment already relies on. A
+// forged webhook can, at worst, trigger one redundant, harmless status
+// check; it can never itself flip an order to paid or failed.
 router.post('/webhooks/maya', async (req, res) => {
   try {
-    const webhookData = req.body;
-
-    console.log('Maya webhook received:', webhookData);
-
-    if (webhookData.status === 'PAYMENT_SUCCESS') {
-      const order = await Order.findOne({
-        orderNumber: webhookData.requestReferenceNumber
-      });
-
-      if (order) {
-        const wasAlreadyPaid = order.paymentStatus === 'paid';
-        order.paymentStatus = 'paid';
-        order.orderStatus = 'confirmed';
-        await order.save();
-
-        // Record shipping event only once — skip if verify-payment already did it
-        if (!wasAlreadyPaid) {
-          try {
-            await ShippingEvent.create({
-              orderId: order.orderNumber,
-              shippingMethod: order.shippingMethod || 'unknown',
-              orderTotal: order.total,
-              region: order.shippingRegion || null,
-            });
-          } catch (shippingEventError) {
-            console.error('Failed to record shipping event:', shippingEventError);
-          }
-        }
-
-        // Send confirmation email
-        try {
-          await sendOrderConfirmationEmail(order.email, order);
-        } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
-        }
-      }
-    } else if (webhookData.status === 'PAYMENT_FAILED') {
-      const order = await Order.findOne({
-        orderNumber: webhookData.requestReferenceNumber
-      });
-
-      if (order) {
-        order.paymentStatus = 'failed';
-        await order.save();
-
-        // Restore stock
-        for (const item of order.items) {
-          const product = await Product.findById(item.product);
-          if (product) {
-            let sizeStock;
-            if (item.color && product.colors?.length > 0) {
-              const colorVariant = product.colors.find(c => c.color === item.color);
-              if (colorVariant) sizeStock = colorVariant.sizes.find(s => s.size === item.size);
-            } else {
-              sizeStock = product.sizes.find(s => s.size === item.size);
-            }
-            if (sizeStock) {
-              sizeStock.stock += item.quantity;
-              await product.save();
-            }
-          }
-        }
-      }
+    const { requestReferenceNumber } = req.body || {};
+    if (!requestReferenceNumber) {
+      return res.status(400).json({ success: false });
     }
+
+    const order = await orderRepository.findByOrderNumber(requestReferenceNumber);
+    if (!order || order.paymentStatus === 'paid' || order.paymentStatus === 'failed' || !order.mayaPaymentId) {
+      return res.json({ success: true });
+    }
+
+    const checkoutData = await getCheckoutStatus(order.mayaPaymentId);
+    await applyPaymentResolution(order, checkoutData.paymentStatus);
 
     res.json({ success: true });
   } catch (error) {
@@ -560,22 +554,11 @@ router.patch('/:id/status',
     try {
       const { orderStatus, trackingNumber, courier } = req.body;
 
-      const order = await Order.findByIdAndUpdate(
-        req.params.id,
-        {
-          orderStatus,
-          ...(trackingNumber !== undefined && { trackingNumber }),
-          ...(courier !== undefined && { courier })
-        },
-        { new: true, runValidators: true }
-      );
-
-      if (!order) {
-        return res.status(404).json({
-          success: false,
-          message: 'Order not found'
-        });
-      }
+      const order = await orderRepository.updateById(req.params.id, {
+        orderStatus,
+        ...(trackingNumber !== undefined && { trackingNumber }),
+        ...(courier !== undefined && { courier })
+      });
 
       res.json({
         success: true,
@@ -583,6 +566,12 @@ router.patch('/:id/status',
         data: order
       });
     } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
       console.error('Update order status error:', error);
       res.status(500).json({
         success: false,
@@ -605,20 +594,21 @@ router.get('/admin/all',
         paymentStatus
       } = req.query;
 
-      const filter = {};
-      if (status) filter.orderStatus = status;
-      if (paymentStatus) filter.paymentStatus = paymentStatus;
+      const where = {};
+      if (status) where.orderStatus = status;
+      if (paymentStatus) where.paymentStatus = paymentStatus;
 
       const skip = (Number(page) - 1) * Number(limit);
 
       const [orders, total] = await Promise.all([
-        Order.find(filter)
-          .sort('-createdAt')
-          .skip(skip)
-          .limit(Number(limit))
-          .populate('user', 'firstName lastName email')
-          .populate('items.product', 'name slug'),
-        Order.countDocuments(filter)
+        orderRepository.find({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: Number(limit),
+          include: { user: true, items: { include: { product: true } } },
+        }),
+        orderRepository.count({ where }),
       ]);
 
       res.json({

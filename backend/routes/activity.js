@@ -1,6 +1,6 @@
 import express from 'express';
-import UserActivity from '../models/UserActivity.js';
-import Product from '../models/Product.js';
+import * as userActivityRepository from '../repositories/userActivityRepository.js';
+import * as productRepository from '../repositories/productRepository.js';
 import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -14,21 +14,26 @@ router.post('/view', optionalAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'productId is required' });
     }
 
-    const product = await Product.findById(productId).select('category sport').lean();
+    // include: {} skips the sizes/colors nested relations the repository
+    // defaults to — this only needs category/sport, not the full product.
+    const product = await productRepository.findById(productId, { include: {} });
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
     await Promise.all([
-      UserActivity.create({
-        user: req.user?._id || null,
+      // userActivityRepository.create expects Prisma's own FK field names
+      // (userId/productId), not the Mongoose ref names (user/product) the
+      // original route used — the one real translation this swap needs.
+      userActivityRepository.create({
+        userId: req.user?._id || null,
         sessionId: req.user ? null : (sessionId || null),
         type: 'view',
-        product: productId,
+        productId,
         category: product.category,
         sport: product.sport
       }),
-      Product.updateOne({ _id: productId }, { $inc: { totalViews: 1 } })
+      productRepository.updateById(productId, { totalViews: { increment: 1 } })
     ]);
 
     res.json({ success: true });
@@ -47,8 +52,8 @@ router.post('/search', optionalAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'query is required' });
     }
 
-    await UserActivity.create({
-      user: req.user?._id || null,
+    await userActivityRepository.create({
+      userId: req.user?._id || null,
       sessionId: req.user ? null : (sessionId || null),
       type: 'search',
       query: query.trim()
