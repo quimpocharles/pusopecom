@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { ArchiveBoxIcon } from '@heroicons/react/24/outline';
-import { Button, Badge, Card, Modal, Input, EmptyState, ErrorState } from '../../components/ui';
+import { Button, Badge, Panel, Modal, Input, EmptyState, ErrorState } from '../../components/ui';
 
 /**
- * Internal, unlinked demo of the shared design system primitives —
- * Phase 1 of the design system migration plan. Not referenced from any
- * navigation and does not affect any existing page; it exists purely so
- * the primitives can be viewed and clicked through in isolation before
- * anything is migrated onto them.
+ * Internal, unlinked demo of the shared design system primitives. Not
+ * referenced from any navigation and does not affect any existing page;
+ * it exists purely so the primitives can be viewed and clicked through in
+ * isolation before anything is migrated onto them.
+ *
+ * Button and Panel below reflect the Editorial Design Language migration
+ * (docs/design/MIGRATION_PLAN.md, Part 1) — flat, bordered, rounded-editorial,
+ * no shadow, no gradient (EmptyState/ErrorState's own buttons inherit this
+ * too, since they call the shared .btn-* classes directly). Badge, Modal,
+ * and Input haven't been migrated yet — this page still previews their
+ * pre-migration styling.
  *
  * Reachable directly at /_design-system.
  */
@@ -34,12 +40,8 @@ const DesignSystemDemo = () => {
       <Section title="Button">
         <div className="flex flex-wrap gap-3">
           <Button variant="primary">Primary</Button>
-          <Button variant="primaryLight" className="bg-gray-900">Primary Light</Button>
           <Button variant="secondary">Secondary</Button>
-          <Button variant="secondaryLight" className="bg-gray-900">Secondary Light</Button>
-          <Button variant="outline">Outline</Button>
-          <Button variant="gold">Gold</Button>
-          <Button variant="tryon">Try It On</Button>
+          <Button variant="text">Text</Button>
           <Button disabled>Disabled</Button>
         </div>
       </Section>
@@ -53,14 +55,14 @@ const DesignSystemDemo = () => {
         </div>
       </Section>
 
-      <Section title="Card">
+      <Section title="Panel">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card title="Bordered (default)">
-            <p className="text-sm text-gray-600">Matches StatsCard / ReportCard's existing wrapper.</p>
-          </Card>
-          <Card variant="elevated" title="Elevated">
-            <p className="text-sm text-gray-600">Matches the existing .card class (OrderConfirmation, AdminPickup).</p>
-          </Card>
+          <Panel title="With a title">
+            <p className="text-sm text-gray-600">One flat, bordered treatment — no separate "elevated" variant anymore.</p>
+          </Panel>
+          <Panel>
+            <p className="text-sm text-gray-600">Same treatment, no title. Matches the .card class real pages (Checkout, OrderConfirmation, AdminPickup) already use directly.</p>
+          </Panel>
         </div>
       </Section>
 
@@ -83,7 +85,7 @@ const DesignSystemDemo = () => {
       </Section>
 
       <Section title="EmptyState">
-        <Card variant="elevated" padding="p-0">
+        <Panel padding="p-0">
           <EmptyState
             icon={ArchiveBoxIcon}
             title="No products found"
@@ -91,22 +93,22 @@ const DesignSystemDemo = () => {
             actionLabel="Clear Filters"
             onAction={() => alert('Clear filters clicked')}
           />
-        </Card>
+        </Panel>
       </Section>
 
       <Section title="ErrorState">
-        <Card variant="elevated" padding="p-0">
+        <Panel padding="p-0">
           <ErrorState
             title="Couldn't load orders"
             description="Something went wrong on our end."
             onRetry={() => alert('Retry clicked')}
           />
-        </Card>
+        </Panel>
       </Section>
 
       <Section title="Modal">
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setModalOpen(true)}>
+          <Button variant="secondary" onClick={() => setModalOpen(true)}>
             Open modal (with header)
           </Button>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)}>
@@ -126,7 +128,7 @@ const DesignSystemDemo = () => {
           </p>
           <Input label="Sample field" placeholder="Try tabbing to me" />
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button onClick={() => setModalOpen(false)}>Confirm</Button>
           </div>
         </div>
@@ -139,8 +141,8 @@ const DesignSystemDemo = () => {
             This reproduces CartDrawer's existing remove-confirmation modal exactly.
           </p>
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-            <Button variant="tryon" onClick={() => setConfirmOpen(false)}>Remove</Button>
+            <Button variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={() => setConfirmOpen(false)}>Remove</Button>
           </div>
         </div>
       </Modal>

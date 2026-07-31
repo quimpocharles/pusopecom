@@ -89,25 +89,19 @@
 }
 
 @layer components {
-  /* ---- Fill-up hover effect (shared base) ---- */
-  .btn-primary,
-  .btn-primary-light,
-  .btn-secondary,
-  .btn-secondary-light,
-  .btn-outline,
-  .btn-gold,
-  .btn-tryon,
+  /*
+   * ---- Fill-up hover effect (shared base) ----
+   * Kept as a standalone utility for existing direct callers (e.g.
+   * ProductDetail.jsx's review-submit button uses `hover-fill hover-fill-dark`
+   * directly) — out of scope for this pass. The `.btn-*` classes below no
+   * longer participate in this animated sliding-reveal mechanism; per
+   * docs/design/COMPONENT_SPECIFICATION.md, a button's hover/active state is
+   * a plain border or background value shift, not a performed transition.
+   */
   .hover-fill {
     @apply relative overflow-hidden isolate;
   }
 
-  .btn-primary::before,
-  .btn-primary-light::before,
-  .btn-secondary::before,
-  .btn-secondary-light::before,
-  .btn-outline::before,
-  .btn-gold::before,
-  .btn-tryon::before,
   .hover-fill::before {
     content: '';
     position: absolute;
@@ -118,13 +112,6 @@
     border-radius: inherit;
   }
 
-  .btn-primary:hover::before,
-  .btn-primary-light:hover::before,
-  .btn-secondary:hover::before,
-  .btn-secondary-light:hover::before,
-  .btn-outline:hover::before,
-  .btn-gold:hover::before,
-  .btn-tryon:hover::before,
   .hover-fill:hover::before {
     transform: translateY(0);
   }
@@ -140,88 +127,49 @@
     background-color: rgba(0, 0, 0, 0.15);
   }
 
-  /* Primary Button — navy bg, white text */
+  /*
+   * ---- Buttons (docs/design/COMPONENT_SPECIFICATION.md § Buttons) ----
+   * Three functional types only — Primary, Secondary, Text. Flat, bordered
+   * where a border applies, `rounded-editorial`, no shadow, no gradient, no
+   * scale-press animation. State changes are a background/border value
+   * shift on hover only.
+   *
+   * `.btn-secondary` and `.btn-outline` are two class names already used
+   * directly across real pages for what the new spec treats as one type —
+   * both are kept (removing either would break pages this phase doesn't
+   * touch) and now resolve to the identical Secondary treatment. `.btn-
+   * primary-light`, `.btn-secondary-light`, `.btn-gold`, and `.btn-tryon`
+   * are removed outright: confirmed zero direct usage anywhere in the
+   * codebase (grep, 2026-08-01), and the Migration Plan calls for retiring
+   * gold/tryon as distinct identities regardless.
+   */
+
+  /* Primary — solid fill, the one high-emphasis action per view */
   .btn-primary {
-    @apply inline-flex items-center justify-center bg-primary-600 text-white px-6 py-3 rounded-xl font-semibold
-           active:scale-[0.98] transition-all duration-200
-           disabled:bg-gray-300 disabled:cursor-not-allowed
-           shadow-sm hover:shadow-md;
-  }
-  .btn-primary::before {
-    background-color: #081d4f; /* primary-700 */
+    @apply inline-flex items-center justify-center bg-ink-900 text-white px-6 py-3
+           rounded-editorial font-semibold text-editorial-label
+           transition-colors duration-150
+           hover:bg-ink-700
+           disabled:bg-ink-500 disabled:cursor-not-allowed;
   }
 
-  /* Primary Light — white bg, navy text (for use on dark backgrounds) */
-  .btn-primary-light {
-    @apply inline-flex items-center justify-center bg-white text-primary-600 px-6 py-3 rounded-xl font-semibold
-           active:scale-[0.98] transition-all duration-200
-           shadow-sm hover:shadow-md;
-  }
-  .btn-primary-light::before {
-    background-color: #0A2463; /* primary-600 */
-  }
-  .btn-primary-light:hover {
-    color: #fff;
-  }
-
-  /* Secondary Button — white bg, black border */
-  .btn-secondary {
-    @apply inline-flex items-center justify-center bg-white text-gray-900 border-2 border-gray-900
-           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
-           transition-all duration-200;
-  }
-  .btn-secondary::before {
-    background-color: #0a0a0a;
-  }
-  .btn-secondary:hover {
-    @apply text-white border-gray-900;
-  }
-
-  /* Secondary Light — transparent, white border (for use on dark backgrounds) */
-  .btn-secondary-light {
-    @apply inline-flex items-center justify-center bg-transparent text-white border-2 border-white
-           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
-           transition-all duration-200;
-  }
-  .btn-secondary-light::before {
-    background-color: #fff;
-  }
-  .btn-secondary-light:hover {
-    color: #0A2463;
-    border-color: #fff;
-  }
-
-  /* Outline Button */
+  /* Secondary — bordered, quiet, for a real but lower-priority action */
+  .btn-secondary,
   .btn-outline {
-    @apply inline-flex items-center justify-center border-2 border-gray-200 text-gray-700
-           px-6 py-3 rounded-xl font-semibold
-           active:scale-[0.98] transition-all duration-200;
-  }
-  .btn-outline::before {
-    background-color: #0A2463; /* primary-600 */
-  }
-  .btn-outline:hover {
-    @apply text-white border-primary-600;
+    @apply inline-flex items-center justify-center bg-transparent text-ink-900 border-2 border-ink-700
+           px-6 py-3 rounded-editorial font-semibold text-editorial-label
+           transition-colors duration-150
+           hover:bg-ink-900 hover:text-white
+           disabled:text-ink-500 disabled:border-ink-200 disabled:cursor-not-allowed;
   }
 
-  /* Gold Accent Button */
-  .btn-gold {
-    @apply inline-flex items-center justify-center bg-secondary-500 text-primary-900
-           px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
-           transition-all duration-200 shadow-sm hover:shadow-md;
-  }
-  .btn-gold::before {
-    background-color: #d97706; /* secondary-600 deeper gold */
-  }
-
-  /* Try-On Button */
-  .btn-tryon {
-    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-accent-500
-           text-white px-6 py-3 rounded-xl font-semibold active:scale-[0.98]
-           transition-all duration-200 shadow-md hover:shadow-lg;
-  }
-  .btn-tryon::before {
-    background: linear-gradient(to right, #081d4f, #991b1b); /* darker gradient */
+  /* Text — label only, no fill or border, the lowest-emphasis action */
+  .btn-text {
+    @apply inline-flex items-center justify-center bg-transparent text-ink-900
+           px-4 py-2 font-semibold text-editorial-label
+           transition-colors duration-150
+           hover:text-ink-700
+           disabled:text-ink-500 disabled:cursor-not-allowed;
   }
 
   /* Input Fields */
@@ -231,10 +179,16 @@
            focus:bg-white transition-all duration-200 placeholder:text-gray-400;
   }
 
-  /* Card - MoreLabs style with subtle shadow */
+  /*
+   * ---- Panel (docs/design/COMPONENT_SPECIFICATION.md § Panels) ----
+   * Replaces the old "Card" — one flat, bordered treatment, no shadow, no
+   * hover elevation. Used directly by real pages (Checkout, OrderConfirmation,
+   * AdminPickup, etc.) via className="card", and by the Panel component —
+   * kept as the class name `.card` specifically so those pages inherit the
+   * new treatment automatically without being touched.
+   */
   .card {
-    @apply bg-white rounded-2xl shadow-card overflow-hidden
-           hover:shadow-card-hover transition-shadow duration-300;
+    @apply bg-white rounded-editorial border-2 border-ink-200 overflow-hidden;
   }
 
 
@@ -331,6 +285,18 @@
 }
 
 .animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Faster than .animate-marquee (25s) — same keyframe, its own class rather
+   than changing .animate-marquee's duration directly, since that class is
+   shared with Home.jsx's ticker bar and speeding that up wasn't asked for.
+   Used by ProductCard's sold-out marquee. */
+.animate-marquee-fast {
+  animation: marquee 10s linear infinite;
+}
+
+.animate-marquee-fast:hover {
   animation-play-state: paused;
 }
 

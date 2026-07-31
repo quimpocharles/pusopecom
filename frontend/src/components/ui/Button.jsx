@@ -2,18 +2,22 @@ import { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 
 /**
- * Button — wraps the existing .btn-* classes defined in index.css.
- * Does not introduce any new visual styling; every variant maps 1:1
- * to a class that already exists and is already in use across the app.
+ * Button — the platform's three functional types, per
+ * docs/design/COMPONENT_SPECIFICATION.md § Buttons: Primary (one
+ * high-emphasis action per view), Secondary (bordered, lower priority),
+ * Text (label only, lowest emphasis). No feature — including virtual
+ * try-on — gets a bespoke variant of its own; use Primary for it like any
+ * other primary action.
+ *
+ * Nothing in production currently imports this component (see
+ * docs/design/MIGRATION_PLAN.md), so this variant set was free to change
+ * without touching any page. The underlying `.btn-*` classes in index.css
+ * are what real pages reference directly today.
  */
 const VARIANT_CLASS = {
   primary: 'btn-primary',
-  primaryLight: 'btn-primary-light',
   secondary: 'btn-secondary',
-  secondaryLight: 'btn-secondary-light',
-  outline: 'btn-outline',
-  gold: 'btn-gold',
-  tryon: 'btn-tryon',
+  text: 'btn-text',
 };
 
 const Button = forwardRef(function Button(
@@ -33,7 +37,6 @@ const Button = forwardRef(function Button(
 });
 
 Button.propTypes = {
-  /** Maps directly to an existing .btn-* class — no new styling is introduced by adding a variant. */
   variant: PropTypes.oneOf(Object.keys(VARIANT_CLASS)),
   fullWidth: PropTypes.bool,
   className: PropTypes.string,

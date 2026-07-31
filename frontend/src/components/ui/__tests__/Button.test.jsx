@@ -16,12 +16,8 @@ describe('Button', () => {
 
   it.each([
     ['primary', 'btn-primary'],
-    ['primaryLight', 'btn-primary-light'],
     ['secondary', 'btn-secondary'],
-    ['secondaryLight', 'btn-secondary-light'],
-    ['outline', 'btn-outline'],
-    ['gold', 'btn-gold'],
-    ['tryon', 'btn-tryon'],
+    ['text', 'btn-text'],
   ])('maps variant="%s" to the existing .%s class', (variant, expectedClass) => {
     render(<Button variant={variant}>Button</Button>);
     expect(screen.getByRole('button')).toHaveClass(expectedClass);
