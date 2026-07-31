@@ -25,8 +25,20 @@ const upload = multer({
   }
 });
 
+// Records which provider/model actually served the request, e.g.
+// "wavespeed:nano-banana-2" or "replicate" — read once per request so a
+// mid-flight env var change never mislabels an in-progress attempt.
+function currentProvider() {
+  return process.env.WAVESPEED_API_KEY
+    ? `wavespeed:${(process.env.WAVESPEED_MODEL || 'seedream').toLowerCase()}`
+    : 'replicate';
+}
+
 // Virtual try-on endpoint
 router.post('/', upload.single('userImage'), async (req, res) => {
+  const provider = currentProvider();
+  let genStart;
+
   try {
     const { productImageUrl, productName, productId } = req.body;
 
@@ -45,6 +57,7 @@ router.post('/', upload.single('userImage'), async (req, res) => {
     }
 
     let result;
+    genStart = Date.now();
 
     if (process.env.WAVESPEED_API_KEY) {
       // WaveSpeed path — passes buffer + public URL directly (no base64 conversion)
@@ -78,6 +91,8 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       );
     }
 
+    const durationMs = Date.now() - genStart;
+
     // Fire-and-forget: log try-on attempt
     const logProductId = productId && UUID_RE.test(productId)
       ? productId
@@ -92,7 +107,9 @@ router.post('/', upload.single('userImage'), async (req, res) => {
         productId: resolvedProductId || undefined,
         productName: productName || 'Unknown',
         productImage: productImageUrl,
-        success: result.success
+        success: result.success,
+        provider,
+        durationMs
       });
     })().catch(err => console.error('TryOnLog write error:', err));
 
@@ -111,11 +128,15 @@ router.post('/', upload.single('userImage'), async (req, res) => {
   } catch (error) {
     console.error('Try-on error:', error);
 
-    // Log failed attempt
+    // Log failed attempt — durationMs is null if the failure happened
+    // before genStart was set (e.g. validation errors never reach the provider)
+    const durationMs = genStart ? Date.now() - genStart : null;
     tryOnLogRepository.create({
       productName: req.body?.productName || 'Unknown',
       productImage: req.body?.productImageUrl,
-      success: false
+      success: false,
+      provider,
+      durationMs
     }).catch(err => console.error('TryOnLog write error:', err));
 
     const isRateLimit = error.message?.toLowerCase().includes('rate limit');

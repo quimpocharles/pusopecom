@@ -340,9 +340,32 @@ router.get('/tryon', async (req, res) => {
       createdAt: l.createdAt,
     }));
 
+    // Real observed speed/reliability per WaveSpeed model (or Replicate) —
+    // added to answer empirically which model to run in production,
+    // rather than relying on provider documentation, which turned out to
+    // be incomplete/inconsistent on latency. Rows logged before this field
+    // existed fall back to 'unknown'; durationMs can be null on an attempt
+    // that failed before generation started, so the average excludes those
+    // rather than counting them as 0ms.
+    const byProvider = [...groupBy(logs, (l) => l.provider ?? 'unknown').entries()]
+      .map(([provider, ls]) => {
+        const withDuration = ls.filter((l) => l.durationMs != null);
+        const avgDurationMs = withDuration.length > 0
+          ? Math.round(withDuration.reduce((s, l) => s + l.durationMs, 0) / withDuration.length)
+          : null;
+        const successCount = ls.filter((l) => l.success === true).length;
+        return {
+          provider,
+          attempts: ls.length,
+          avgDurationMs,
+          successRate: ls.length > 0 ? Math.round((successCount / ls.length) * 10000) / 100 : 0,
+        };
+      })
+      .sort((a, b) => b.attempts - a.attempts);
+
     res.json({
       success: true,
-      data: { tryOnOverTime, totalAttempts, successfulAttempts, successRate, mostTriedProducts, recentTryOns },
+      data: { tryOnOverTime, totalAttempts, successfulAttempts, successRate, mostTriedProducts, recentTryOns, byProvider },
     });
   } catch (error) {
     console.error('Try-on report error:', error);

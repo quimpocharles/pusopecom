@@ -629,6 +629,16 @@ model TryOnLog {
   productImage String?
   success      Boolean?
 
+  // Added to answer a real question empirically (WaveSpeed model choice —
+  // nano-banana-2 vs seedream vs nano-banana-pro) rather than trusting
+  // provider documentation, which turned out to be incomplete/inconsistent
+  // on latency. `provider` is e.g. "wavespeed:nano-banana-2" or
+  // "replicate" — whichever path routes/tryon.js actually took for this
+  // attempt, since WAVESPEED_MODEL can change over time and old rows
+  // should keep recording what was true when they were created.
+  provider   String?
+  durationMs Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

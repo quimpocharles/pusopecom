@@ -103,10 +103,22 @@ beforeAll(async () => {
   createdOrderIds.push(paidLoggedIn.id, paidGuest.id, pendingOrder.id, failedOrder.id);
 
   await prisma.tryOnLog.create({
-    data: { productId: productWithLeague.id, productName: productWithLeague.name, productImage: 'x.jpg', success: true },
+    data: {
+      productId: productWithLeague.id, productName: productWithLeague.name, productImage: 'x.jpg',
+      success: true, provider: `${MARKER}-providerA`, durationMs: 3000,
+    },
   });
   await prisma.tryOnLog.create({
-    data: { productName: `${MARKER} Unresolved`, productImage: 'x.jpg', success: false },
+    data: {
+      productName: `${MARKER} Unresolved`, productImage: 'x.jpg',
+      success: false, provider: `${MARKER}-providerA`, durationMs: 5000,
+    },
+  });
+  await prisma.tryOnLog.create({
+    data: {
+      productId: productWithLeague.id, productName: productWithLeague.name, productImage: 'x.jpg',
+      success: true, provider: `${MARKER}-providerB`, durationMs: 40000,
+    },
   });
 
   await prisma.shippingEvent.create({
@@ -193,9 +205,27 @@ describe('GET /reports/tryon', () => {
   it('computes success rate and the most-tried products list', async () => {
     const res = await request(app).get(`/api/reports/tryon?${rangeQS}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.totalAttempts).toBeGreaterThanOrEqual(2);
-    expect(res.body.data.successfulAttempts).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.totalAttempts).toBeGreaterThanOrEqual(3);
+    expect(res.body.data.successfulAttempts).toBeGreaterThanOrEqual(2);
     expect(res.body.data.mostTriedProducts.some((p) => p.productName === productWithLeague.name)).toBe(true);
+  }, 15000);
+
+  it('breaks down attempts by provider with average duration and per-provider success rate', async () => {
+    const res = await request(app).get(`/api/reports/tryon?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    // Provider labels are MARKER-scoped (not real WaveSpeed model names) so
+    // this test can assert exact counts/averages, immune to any other test
+    // file's fixtures or real production try-on rows sharing the range.
+    const providerA = res.body.data.byProvider.find((p) => p.provider === `${MARKER}-providerA`);
+    expect(providerA.attempts).toBe(2);
+    expect(providerA.avgDurationMs).toBe(4000); // (3000 + 5000) / 2
+    expect(providerA.successRate).toBe(50); // one success, one failure in the fixture
+
+    const providerB = res.body.data.byProvider.find((p) => p.provider === `${MARKER}-providerB`);
+    expect(providerB.attempts).toBe(1);
+    expect(providerB.avgDurationMs).toBe(40000);
+    expect(providerB.successRate).toBe(100);
   }, 15000);
 });
 
