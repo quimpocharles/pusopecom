@@ -478,12 +478,12 @@ Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.pr
 - Product reference (optional FK), product name, product image (denormalized)
 - Success flag
 - `provider` (e.g. `wavespeed:nano-banana-2`, `replicate`) and `durationMs` — recorded on every attempt, surfaced via `GET /api/reports/tryon`'s `byProvider` breakdown
-- **No automatic expiry currently runs** — Mongo's 90-day TTL index wasn't ported to a replacement cleanup job; the table grows unbounded until one is added (see `UserActivity` below, same gap)
+- Auto-expires after 90 days — replaces Mongo's TTL index with a daily node-cron job (`server.js`, 3:00 AM PHT) calling `tryOnLogRepository.deleteOlderThan(90)`
 
 ### UserActivity
 - User reference (optional, null for guests), session ID
 - Type (view / search), product reference, search query
-- **No automatic expiry currently runs** — same TTL-index gap as `TryOnLog` above; a schema comment claims a daily cleanup cron replaced it, but no such job exists in `server.js`
+- Auto-expires after 90 days — same daily cron job as `TryOnLog` above, calling `userActivityRepository.deleteOlderThan(90)`
 
 ### VenuePickupConfig
 - Singleton row
@@ -519,6 +519,7 @@ The application sends HTML-formatted, mobile-responsive emails for:
 ## Scheduled Jobs
 
 - **Daily sales report** — runs at 11:59 PM Asia/Manila via `node-cron`; sends a summary email to `ADMIN_EMAIL` with total revenue, paid order count, items sold, average order value, top 5 products, order/payment status breakdowns, and new customer count
+- **TryOnLog/UserActivity cleanup** — runs at 3:00 AM Asia/Manila via `node-cron`; deletes rows older than 90 days from both tables, replacing MongoDB's TTL indexes (Postgres has no equivalent)
 
 ## Deployment
 

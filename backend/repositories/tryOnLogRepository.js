@@ -14,4 +14,16 @@ export async function find({ where, orderBy, skip, take, include, client = prism
   return serialize(logs.map(withProductFallback));
 }
 
-export default { create, find };
+/**
+ * Replaces MongoDB's TTL index (`expireAfterSeconds: 90 days`) — Postgres
+ * has no equivalent, so this is called from a daily node-cron job (see
+ * server.js), the same pattern already used there for the daily sales
+ * report and for userActivityRepository.deleteOlderThan.
+ */
+export async function deleteOlderThan(days, { client = prisma } = {}) {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await client.tryOnLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return result.count;
+}
+
+export default { create, find, deleteOlderThan };

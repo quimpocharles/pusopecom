@@ -618,7 +618,10 @@ model SiteSettings {
 }
 
 // ---------------------------------------------------------------------------
-// TryOnLog
+// TryOnLog — Mongoose used a TTL index (expireAfterSeconds: 90 days) to
+// auto-expire rows. Postgres has no equivalent; replaced by the same daily
+// node-cron cleanup job that handles UserActivity below (see server.js).
+// The @@index([createdAt]) below is what that job's DELETE query relies on.
 // ---------------------------------------------------------------------------
 
 model TryOnLog {

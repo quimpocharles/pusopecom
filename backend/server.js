@@ -11,6 +11,8 @@ import logger from './lib/logger.js';
 import prisma from './lib/prisma.js';
 import redis from './lib/redis.js';
 import * as productRepository from './repositories/productRepository.js';
+import * as tryOnLogRepository from './repositories/tryOnLogRepository.js';
+import * as userActivityRepository from './repositories/userActivityRepository.js';
 import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
 
 // Import routes
@@ -190,6 +192,21 @@ cron.schedule('59 23 * * *', async () => {
     await generateAndSendDailySalesReport();
   } catch (error) {
     logger.error({ err: error }, 'Daily sales report failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Replaces MongoDB's TTL indexes on TryOnLog/UserActivity (both had
+// `expireAfterSeconds: 90 days`) — Postgres has no equivalent, so this
+// deletes what the TTL indexes used to. Scheduled outside the sales
+// report's window so the two never overlap.
+cron.schedule('0 3 * * *', async () => {
+  try {
+    const tryOnDeleted = await tryOnLogRepository.deleteOlderThan(90);
+    const activityDeleted = await userActivityRepository.deleteOlderThan(90);
+    logger.info({ tryOnDeleted, activityDeleted }, 'Expired TryOnLog/UserActivity rows cleaned up');
+  } catch (error) {
+    logger.error({ err: error }, 'TryOnLog/UserActivity cleanup failed');
     Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });

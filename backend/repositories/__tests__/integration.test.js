@@ -8,6 +8,8 @@ import * as siteSettingsRepo from '../siteSettingsRepository.js';
 import * as organizationRepo from '../organizationRepository.js';
 import * as teamRepo from '../teamRepository.js';
 import * as athleteAffiliationRepo from '../athleteAffiliationRepository.js';
+import * as tryOnLogRepo from '../tryOnLogRepository.js';
+import * as userActivityRepo from '../userActivityRepository.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -760,4 +762,34 @@ describe('Product coexistence with the new organizationId/teamId FKs', () => {
       expect(survived.teamId).toBeNull();
       expect(survived.organizationId).toBe(org._id); // unaffected
     }));
+});
+
+describe('deleteOlderThan — the TTL-index replacement for TryOnLog/UserActivity', () => {
+  it('tryOnLogRepository.deleteOlderThan removes only rows past the cutoff', () =>
+    withRollback(async (tx) => {
+      const old = await tx.tryOnLog.create({
+        data: { productName: `Old TryOnLog ${Date.now()}`, createdAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000) },
+      });
+      const recent = await tryOnLogRepo.create({ productName: `Recent TryOnLog ${Date.now()}` }, { client: tx });
+
+      const deletedCount = await tryOnLogRepo.deleteOlderThan(90, { client: tx });
+      expect(deletedCount).toBe(1);
+
+      expect(await tx.tryOnLog.findUnique({ where: { id: old.id } })).toBeNull();
+      expect(await tx.tryOnLog.findUnique({ where: { id: recent._id } })).not.toBeNull();
+    }), 15000);
+
+  it('userActivityRepository.deleteOlderThan removes only rows past the cutoff', () =>
+    withRollback(async (tx) => {
+      const old = await tx.userActivity.create({
+        data: { type: 'view', timestamp: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000) },
+      });
+      const recent = await userActivityRepo.create({ type: 'view' }, { client: tx });
+
+      const deletedCount = await userActivityRepo.deleteOlderThan(90, { client: tx });
+      expect(deletedCount).toBe(1);
+
+      expect(await tx.userActivity.findUnique({ where: { id: old.id } })).toBeNull();
+      expect(await tx.userActivity.findUnique({ where: { id: recent._id } })).not.toBeNull();
+    }), 15000);
 });
