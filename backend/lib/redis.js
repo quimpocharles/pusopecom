@@ -13,11 +13,14 @@ const redisUrl = process.env.REDIS_URL;
 
 const redis = redisUrl
   ? new Redis(redisUrl, {
+      // Bounds how long any single command waits/retries before giving up —
+      // rate limiting and caching both have safe fallbacks, a hung request
+      // does not. Offline queueing stays on (ioredis's default): rate-limit-
+      // redis's RedisStore sends its initial Lua-script-loading commands
+      // synchronously at construction time, before the connection is even
+      // established, so disabling the offline queue made every request
+      // crash the process at startup instead of just waiting a beat.
       maxRetriesPerRequest: 2,
-      // Don't crash callers waiting on a command if Redis is briefly down —
-      // rate limiting and caching both have safe fallbacks; a hung request
-      // does not.
-      enableOfflineQueue: false,
     })
   : null;
 
