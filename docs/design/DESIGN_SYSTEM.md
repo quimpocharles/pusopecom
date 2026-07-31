@@ -42,7 +42,7 @@ Two groups: **Foundations**, the shared tokens every surface draws from, and **C
 
 **A single radius value across the entire platform, small enough to remove the harshness of a perfectly sharp digital corner without ever reading as "rounded."** This is not a scale of options — it's one decided value, applied uniformly to every rectangular surface: buttons, panels, inputs, images, dialogs, badges. Consistency here matters more than any single component's individual preference.
 
-**No pill shapes, anywhere, for any reason.** A button, a badge, a tag — none of them use a fully-rounded, capsule silhouette. This is one of the clearest, most visible breaks from the platform's earlier, MoreLabs-inspired direction, and it's non-negotiable precisely because a pill shape is the single most recognizable signature of the consumer-app register this system exists to move away from.
+**No pill shapes, anywhere, for any reason.** A button, a badge, a tag — none of them use a fully-rounded, capsule silhouette. This is one of the clearest, most visible breaks from the platform's earlier direction, and it's non-negotiable precisely because a pill shape is the single most recognizable signature of the consumer-app register this system exists to move away from.
 
 **Fully circular treatment is reserved for elements that are structurally circular** — a portrait or avatar, a small status indicator, an icon-only mark with no rectangular content inside it. A circle used here is a genuine circle, not a rectangle rounded until it happens to look like one.
 

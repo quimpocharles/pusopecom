@@ -1,6 +1,6 @@
 # Puso Pilipinas - Sports Merchandise Store
 
-A full-stack ecommerce platform for Philippine sports merchandise, featuring a MoreLabs-inspired storefront design, Maya payment integration, and email notifications.
+A full-stack ecommerce platform for Philippine sports merchandise, featuring the PusoStore Editorial System storefront design, Maya payment integration, and email notifications.
 
 ## Tech Stack
 
@@ -40,7 +40,7 @@ A full-stack ecommerce platform for Philippine sports merchandise, featuring a M
 - Virtual try-on powered by Replicate (Seedream 4.5) with download and add-to-cart on result; predictions are cancelled automatically on timeout or error to avoid wasted credits
 - Size chart modal on product detail page (XS–3XL with shoulder, chest, and body length measurements); full size list always shown — sizes with no stock are greyed out with a diagonal slash; hidden for sizeless products (caps, stickers, etc.)
 - Mobile-first responsive design
-- MoreLabs-inspired homepage design
+- PusoStore Editorial homepage design
 - `sport: general` products appear across all sport filters
 
 ### User Account
@@ -557,17 +557,9 @@ Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and fronten
 
 ## Design System
 
-**Target direction — read first:** `docs/design/EDITORIAL_DESIGN_LANGUAGE.md` (the design philosophy — why) and `docs/design/DESIGN_SYSTEM.md` (the concrete specification — buttons, panels, inputs, spacing, radius, elevation, grid, and every other primitive, fully redefined) are the current source of truth for all new and migrated UI work. They supersede the dark-B&W/pill-button system described below, which was the platform's first-generation, MoreLabs-inspired direction. Nothing in the actual codebase has been migrated yet — this is a documented target, not a completed change — so treat those two documents as what to build *toward*, and everything below as what's still actually running in production today.
+**The PusoStore Editorial System is the canonical design system — read `docs/design/EDITORIAL_DESIGN_LANGUAGE.md` first** (the design philosophy — why) **then `docs/design/DESIGN_SYSTEM.md`** (the concrete specification — buttons, panels, inputs, spacing, radius, elevation, grid, and every other primitive). Built from first principles around what PusoStore actually is — the home of Philippine sports culture, identity driven by pride and community — rather than a generic storefront template: sharp geometry, restrained flat surfaces, and typography carrying the weight a decorative treatment would otherwise have to.
 
-**Current implementation (pre-migration):** the storefront runs a dark B&W editorial aesthetic — `#0a0a0a`/`#1a1a1a` alternating section backgrounds, Dharma Gothic E as the display face, Pro Sans as the body face, fully pill-shaped CTAs (`border-radius: 100px`), a frosted-glass navbar that morphs shape on scroll, and a soft-shadow "MoreLabs style" card treatment across the shared component library. None of that is described further here to avoid duplicating detail that will drift from the code the moment it changes — see `Home.jsx` and `index.css` directly for the exact current values, or the design-system docs above for what they're being replaced with.
-
----
-
-## Design Inspiration
-
-- Dark editorial tech-product aesthetic (inspired by AI/SaaS landing pages)
-- Philippine sports culture — identity driven by pride and community
-- [MoreLabs](https://morelabs.com) — Original product interactions, button hover animations, circle collections section
+Migration across the app is incremental and ongoing — see `docs/design/MIGRATION_PLAN.md` for the current status of every page and shared component. `Header.jsx`, `Products.jsx`, `ProductCard.jsx`, and the shared `Button`/`Panel` components are migrated; `Home.jsx` and the remaining pages still run the platform's earlier dark B&W visual language (`#0a0a0a`/`#1a1a1a` alternating section backgrounds, Dharma Gothic E display face, Pro Sans body face, pill-shaped CTAs, a frosted-glass navbar) until their turn in the plan. That earlier language isn't described further here to avoid duplicating detail that will drift from the code the moment it changes — see `Home.jsx` and `index.css` directly for the exact current values, or the design-system docs for what they're being replaced with.
 
 ## Support
 

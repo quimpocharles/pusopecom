@@ -14,7 +14,7 @@ It also assumes the **Platform Strategy** (the North Star, the Product Principle
 
 ## Philosophy
 
-PusoStore did not begin here. It began as a MoreLabs-inspired ecommerce design — a real, working direction that successfully established the platform's first generation and proved the commerce mechanics underneath it. That direction was correct for what the platform was at the time: a store. It is no longer only that. PusoStore is becoming the home of Philippine sports culture, and a store's visual grammar — optimized for browsing density, conversion pressure, and category navigation — was never built to carry an institution's identity, history, or meaning. The visual language has to evolve because what the platform *is* has evolved, not because the previous direction failed.
+PusoStore did not begin here. Its first generation was a conventional ecommerce design — a real, working direction that successfully established the platform and proved the commerce mechanics underneath it. That direction was correct for what the platform was at the time: a store. It is no longer only that. PusoStore is becoming the home of Philippine sports culture, and a store's visual grammar — optimized for browsing density, conversion pressure, and category navigation — was never built to carry an institution's identity, history, or meaning. The visual language has to evolve because what the platform *is* has evolved, not because the previous direction failed.
 
 **The inversion this document asks for is the same one a genuine cultural publication makes over a retail catalogue: commerce is not the reason the page exists, it's something the page is also honest and capable enough to do.** A retail catalogue exists to move product, and any editorial content it carries is in service of that. A cultural publication exists to say something true and considered about its subject, and commerce — where it exists at all — is a natural, unforced extension of a reader who already cares. PusoStore has to read as the second kind of thing. A fan should experience the platform the way they'd experience a respected sports publication, a museum's exhibition catalogue, or a season guide compiled by people who take the subject seriously — never the way they'd experience a Shopify storefront that happens to sell jerseys.
 
@@ -172,7 +172,7 @@ A visual language is judged by what it makes someone feel before they've read a 
 
 ## Anti-Patterns
 
-Named because a principle nobody can recognize in practice is a principle nobody will actually hold to. Each of these is a real temptation, not a hypothetical one — several describe exactly the instinct that shaped the platform's earlier, MoreLabs-inspired phase, which is worth naming honestly rather than pretending this evolution started from nothing.
+Named because a principle nobody can recognize in practice is a principle nobody will actually hold to. Each of these is a real temptation, not a hypothetical one — several describe exactly the instinct that shaped the platform's earlier, conventional-ecommerce phase, before the system settled into the discipline described above.
 
 **Decorating a call to action instead of trusting its placement.** Reaching for a bright color, a gradient, or a hover flourish to make a button noticeable is a sign the layout around it isn't doing enough work — a well-composed page makes its primary action obvious through position and typographic weight alone.
 

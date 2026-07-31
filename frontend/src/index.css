@@ -197,7 +197,7 @@
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 
-  /* Section Spacing - MoreLabs uses generous whitespace */
+  /* Section Spacing - generous whitespace between sections */
   .section {
     @apply py-16 md:py-24;
   }
@@ -247,7 +247,7 @@
     @apply h-px bg-gray-200 my-8;
   }
 
-  /* Price Display - MoreLabs style */
+  /* Price Display */
   .price {
     @apply text-2xl font-bold text-gray-900;
   }
