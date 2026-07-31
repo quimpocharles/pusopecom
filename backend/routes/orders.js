@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import { body, validationResult } from 'express-validator';
 import prisma from '../lib/prisma.js';
 import * as orderRepository from '../repositories/orderRepository.js';
@@ -57,13 +59,15 @@ async function applyPaymentResolution(order, mayaPaymentStatus) {
           region: order.shippingRegion || null,
         });
       } catch (shippingEventError) {
-        console.error('Failed to record shipping event:', shippingEventError);
+        logger.error({ err: shippingEventError }, 'Failed to record shipping event');
+        Sentry.captureException(shippingEventError);
       }
 
       try {
         await sendOrderConfirmationEmail(order.email, order);
       } catch (emailError) {
-        console.error('Failed to send confirmation email:', emailError);
+        logger.error({ err: emailError }, 'Failed to send confirmation email');
+        Sentry.captureException(emailError);
       }
     }
     return 'paid';
@@ -257,7 +261,8 @@ router.post('/',
         // (Commerce Engine: stock reserved at placement releases
         // automatically when checkout doesn't complete) rather than
         // leaving it permanently decremented with no way to pay for it.
-        console.error('Maya checkout failed:', mayaError);
+        logger.error({ err: mayaError }, 'Maya checkout failed');
+        Sentry.captureException(mayaError);
         await releaseStock(order);
         await orderRepository.updateById(order._id, { paymentStatus: 'failed' });
 
@@ -268,7 +273,8 @@ router.post('/',
         });
       }
     } catch (error) {
-      console.error('Create order error:', error);
+      logger.error({ err: error }, 'Create order error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to create order'
@@ -307,7 +313,8 @@ router.get('/admin/stats',
         }
       });
     } catch (error) {
-      console.error('Get admin stats error:', error);
+      logger.error({ err: error }, 'Get admin stats error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve admin stats'
@@ -406,7 +413,8 @@ router.get('/admin/export',
       res.setHeader('Content-Disposition', 'attachment; filename="transaction-report.csv"');
       res.send(csv);
     } catch (error) {
-      console.error('Export orders error:', error);
+      logger.error({ err: error }, 'Export orders error');
+      Sentry.captureException(error);
       res.status(500).json({ success: false, message: 'Failed to export orders' });
     }
   }
@@ -437,7 +445,8 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 
     res.json({ success: true, data: { paymentStatus } });
   } catch (error) {
-    console.error('Verify payment error:', error);
+    logger.error({ err: error }, 'Verify payment error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to verify payment' });
   }
 });
@@ -470,7 +479,8 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
       data: order
     });
   } catch (error) {
-    console.error('Get order error:', error);
+    logger.error({ err: error }, 'Get order error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve order'
@@ -499,7 +509,8 @@ router.get('/user/:userId', authenticate, async (req, res) => {
       data: orders
     });
   } catch (error) {
-    console.error('Get user orders error:', error);
+    logger.error({ err: error }, 'Get user orders error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve orders'
@@ -541,7 +552,8 @@ router.post('/webhooks/maya', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Webhook error:', error);
+    logger.error({ err: error }, 'Webhook error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false });
   }
 });
@@ -572,7 +584,8 @@ router.patch('/:id/status',
           message: 'Order not found'
         });
       }
-      console.error('Update order status error:', error);
+      logger.error({ err: error }, 'Update order status error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to update order status'
@@ -622,7 +635,8 @@ router.get('/admin/all',
         }
       });
     } catch (error) {
-      console.error('Get all orders error:', error);
+      logger.error({ err: error }, 'Get all orders error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve orders'

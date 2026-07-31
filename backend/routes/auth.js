@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { body, validationResult } from 'express-validator';
@@ -87,7 +89,8 @@ router.post('/register',
         }
       });
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error({ err: error }, 'Registration error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Registration failed. Please try again.'
@@ -127,7 +130,8 @@ router.get('/verify-email', async (req, res) => {
       message: 'Email verified successfully. You can now log in.'
     });
   } catch (error) {
-    console.error('Email verification error:', error);
+    logger.error({ err: error }, 'Email verification error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Email verification failed'
@@ -202,7 +206,8 @@ router.post('/login',
         ...authResponse
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error({ err: error }, 'Login error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Login failed. Please try again.'
@@ -251,7 +256,8 @@ router.post('/resend-verification',
         message: 'Verification email sent successfully'
       });
     } catch (error) {
-      console.error('Resend verification error:', error);
+      logger.error({ err: error }, 'Resend verification error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to send verification email'
@@ -296,7 +302,8 @@ router.post('/forgot-password',
         message: 'If an account exists with this email, a password reset link has been sent.'
       });
     } catch (error) {
-      console.error('Forgot password error:', error);
+      logger.error({ err: error }, 'Forgot password error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to process password reset request'
@@ -345,7 +352,8 @@ router.post('/reset-password',
         message: 'Password reset successful. You can now log in with your new password.'
       });
     } catch (error) {
-      console.error('Reset password error:', error);
+      logger.error({ err: error }, 'Reset password error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to reset password'
@@ -362,7 +370,8 @@ router.get('/me', authenticate, async (req, res) => {
       user: req.user
     });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.error({ err: error }, 'Get user error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve user information'
@@ -412,7 +421,8 @@ router.put('/complete-profile', authenticate, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Complete profile error:', error);
+    logger.error({ err: error }, 'Complete profile error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to update profile'
@@ -478,7 +488,8 @@ router.post('/google', async (req, res) => {
       ...authResponse
     });
   } catch (error) {
-    console.error('Google auth error:', error);
+    logger.error({ err: error }, 'Google auth error');
+    Sentry.captureException(error);
     res.status(401).json({
       success: false,
       message: 'Google authentication failed'
@@ -519,7 +530,8 @@ router.put('/profile',
         }
       });
     } catch (error) {
-      console.error('Update profile error:', error);
+      logger.error({ err: error }, 'Update profile error');
+      Sentry.captureException(error);
       res.status(500).json({ success: false, message: 'Failed to update profile' });
     }
   }
@@ -560,7 +572,8 @@ router.put('/password',
 
       res.json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
-      console.error('Change password error:', error);
+      logger.error({ err: error }, 'Change password error');
+      Sentry.captureException(error);
       res.status(500).json({ success: false, message: 'Failed to change password' });
     }
   }
@@ -574,7 +587,8 @@ router.post('/addresses', authenticate, async (req, res) => {
 
     res.json({ success: true, message: 'Address added successfully', addresses: user.addresses });
   } catch (error) {
-    console.error('Add address error:', error);
+    logger.error({ err: error }, 'Add address error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to add address' });
   }
 });
@@ -590,7 +604,8 @@ router.put('/addresses/:addressId', authenticate, async (req, res) => {
 
     res.json({ success: true, message: 'Address updated successfully', addresses: user.addresses });
   } catch (error) {
-    console.error('Update address error:', error);
+    logger.error({ err: error }, 'Update address error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to update address' });
   }
 });
@@ -603,7 +618,8 @@ router.delete('/addresses/:addressId', authenticate, async (req, res) => {
 
     res.json({ success: true, message: 'Address deleted successfully', addresses: user.addresses });
   } catch (error) {
-    console.error('Delete address error:', error);
+    logger.error({ err: error }, 'Delete address error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to delete address' });
   }
 });
@@ -656,7 +672,8 @@ router.get('/admin/users',
         }
       });
     } catch (error) {
-      console.error('Get all users error:', error);
+      logger.error({ err: error }, 'Get all users error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve users'

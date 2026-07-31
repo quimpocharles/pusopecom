@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -76,7 +78,8 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
     };
 
   } catch (error) {
-    console.error('Gemini try-on error:', error.message);
+    logger.error({ err: error }, 'Gemini try-on error');
+    Sentry.captureException(error);
 
     // More specific error messages
     if (error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key not valid')) {

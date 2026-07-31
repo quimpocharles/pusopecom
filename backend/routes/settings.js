@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
@@ -11,7 +13,8 @@ router.get('/', async (req, res) => {
     const settings = await siteSettingsRepository.get();
     res.json({ success: true, data: settings });
   } catch (error) {
-    console.error('Get settings error:', error);
+    logger.error({ err: error }, 'Get settings error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to fetch settings' });
   }
 });
@@ -29,7 +32,8 @@ router.put('/', authenticate, isAdmin, async (req, res) => {
     });
     res.json({ success: true, data: settings });
   } catch (error) {
-    console.error('Update settings error:', error);
+    logger.error({ err: error }, 'Update settings error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to update settings' });
   }
 });
@@ -40,7 +44,8 @@ router.get('/venue-pickup', async (req, res) => {
     const config = await venuePickupConfigRepository.get();
     res.json({ success: true, data: config || { enabled: false } });
   } catch (error) {
-    console.error('Get venue pickup error:', error);
+    logger.error({ err: error }, 'Get venue pickup error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to fetch venue pickup config' });
   }
 });

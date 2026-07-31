@@ -1,4 +1,6 @@
 import axios from 'axios';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 const REPLICATE_API_URL = 'https://api.replicate.com/v1';
 
@@ -18,7 +20,7 @@ const cancelPrediction = async (apiToken, predictionId) => {
       if (i < 4) await sleep(3000);
     }
   }
-  console.warn('Failed to cancel Replicate prediction after retries:', predictionId);
+  logger.warn({ predictionId }, 'Failed to cancel Replicate prediction after retries');
 };
 
 export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
@@ -141,7 +143,8 @@ IMAGE DEFINITIONS:
       await cancelPrediction(apiToken, predictionId);
     }
 
-    console.error('Replicate try-on error:', error.response?.data || error.message);
+    logger.error({ err: error }, 'Replicate try-on error');
+    Sentry.captureException(error);
 
     if (error.response?.status === 401) {
       throw new Error('Invalid API token. Please check your Replicate API token.');

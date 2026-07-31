@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import multer from 'multer';
 import axios from 'axios';
 import { generateTryOn as replicateGenerateTryOn } from '../services/replicateService.js';
@@ -111,7 +113,7 @@ router.post('/', upload.single('userImage'), async (req, res) => {
         provider,
         durationMs
       });
-    })().catch(err => console.error('TryOnLog write error:', err));
+    })().catch(err => logger.error({ err }, 'TryOnLog write error'));
 
     if (result.success) {
       res.json({
@@ -126,7 +128,8 @@ router.post('/', upload.single('userImage'), async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Try-on error:', error);
+    logger.error({ err: error }, 'Try-on error');
+    Sentry.captureException(error);
 
     // Log failed attempt — durationMs is null if the failure happened
     // before genStart was set (e.g. validation errors never reach the provider)
@@ -137,7 +140,7 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       success: false,
       provider,
       durationMs
-    }).catch(err => console.error('TryOnLog write error:', err));
+    }).catch(err => logger.error({ err }, 'TryOnLog write error'));
 
     const isRateLimit = error.message?.toLowerCase().includes('rate limit');
     res.status(isRateLimit ? 429 : 500).json({

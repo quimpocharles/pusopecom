@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
   try {
@@ -55,7 +57,8 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
     };
 
   } catch (error) {
-    console.error('Overlay try-on error:', error);
+    logger.error({ err: error }, 'Overlay try-on error');
+    Sentry.captureException(error);
     throw new Error(error.message || 'Failed to generate virtual try-on');
   }
 };

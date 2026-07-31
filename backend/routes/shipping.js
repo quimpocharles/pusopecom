@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import {
   getDomesticRate,
@@ -87,7 +89,8 @@ router.post('/options', async (req, res) => {
 
     res.json({ success: true, data: { shippingOptions } });
   } catch (error) {
-    console.error('Shipping options error:', error);
+    logger.error({ err: error }, 'Shipping options error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to fetch shipping options' });
   }
 });

@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as userActivityRepository from '../repositories/userActivityRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import { optionalAuth } from '../middleware/auth.js';
@@ -38,7 +40,8 @@ router.post('/view', optionalAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Track view error:', error);
+    logger.error({ err: error }, 'Track view error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to track view' });
   }
 });
@@ -61,7 +64,8 @@ router.post('/search', optionalAuth, async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Track search error:', error);
+    logger.error({ err: error }, 'Track search error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to track search' });
   }
 });

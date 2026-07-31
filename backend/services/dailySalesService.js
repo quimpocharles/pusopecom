@@ -1,3 +1,4 @@
+import logger from '../lib/logger.js';
 import * as orderRepository from '../repositories/orderRepository.js';
 import * as userRepository from '../repositories/userRepository.js';
 import { sendDailySalesEmail } from './emailService.js';
@@ -5,7 +6,7 @@ import { sendDailySalesEmail } from './emailService.js';
 export const generateAndSendDailySalesReport = async () => {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) {
-    console.error('ADMIN_EMAIL not set, skipping daily sales report');
+    logger.warn('ADMIN_EMAIL not set, skipping daily sales report');
     return;
   }
 
@@ -79,5 +80,5 @@ export const generateAndSendDailySalesReport = async () => {
   };
 
   await sendDailySalesEmail(adminEmail, report);
-  console.log(`Daily sales report sent to ${adminEmail}`);
+  logger.info({ adminEmail }, 'Daily sales report sent');
 };

@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
@@ -13,7 +15,8 @@ router.get('/', async (req, res) => {
     const config = await venuePickupConfigRepository.get();
     res.json({ success: true, data: config || { enabled: false, slots: [], deadlineHours: 6 } });
   } catch (error) {
-    console.error('Get pickup config error:', error);
+    logger.error({ err: error }, 'Get pickup config error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to fetch pickup config' });
   }
 });
@@ -57,7 +60,8 @@ router.put('/', async (req, res) => {
 
     res.json({ success: true, data: config });
   } catch (error) {
-    console.error('Update pickup config error:', error);
+    logger.error({ err: error }, 'Update pickup config error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to update pickup config' });
   }
 });

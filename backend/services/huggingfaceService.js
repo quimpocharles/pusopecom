@@ -1,4 +1,6 @@
 import { Client, handle_file } from '@gradio/client';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
   try {
@@ -70,7 +72,8 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
     throw new Error('No output image generated');
 
   } catch (error) {
-    console.error('HuggingFace try-on error:', error);
+    logger.error({ err: error }, 'HuggingFace try-on error');
+    Sentry.captureException(error);
 
     if (error.message?.includes('exceeded')) {
       throw new Error('Service is busy. Please try again in a few moments.');

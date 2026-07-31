@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import multer from 'multer';
 import cloudinary from '../config/cloudinary.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
@@ -49,7 +51,8 @@ router.post('/', authenticate, isAdmin, upload.single('image'), async (req, res)
       data: { url: result.secure_url, publicId: result.public_id },
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error({ err: error }, 'Upload error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to upload image' });
   }
 });
@@ -70,7 +73,8 @@ router.post('/multiple', authenticate, isAdmin, upload.array('images', 10), asyn
       data: results.map((r) => ({ url: r.secure_url, publicId: r.public_id })),
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error({ err: error }, 'Upload error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to upload images' });
   }
 });
@@ -102,7 +106,8 @@ router.post('/video', authenticate, isAdmin, videoUpload.single('video'), async 
     });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
   } catch (error) {
-    console.error('Video upload error:', error);
+    logger.error({ err: error }, 'Video upload error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to upload video' });
   }
 });

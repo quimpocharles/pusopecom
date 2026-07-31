@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import { body, validationResult } from 'express-validator';
 import * as productRepository from '../repositories/productRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
@@ -55,7 +57,8 @@ router.get('/', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get products error:', error);
+    logger.error({ err: error }, 'Get products error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve products'
@@ -111,7 +114,8 @@ router.get('/admin/export',
       res.setHeader('Content-Disposition', 'attachment; filename="inventory-report.csv"');
       res.send(csv);
     } catch (error) {
-      console.error('Export products error:', error);
+      logger.error({ err: error }, 'Export products error');
+      Sentry.captureException(error);
       res.status(500).json({ success: false, message: 'Failed to export products' });
     }
   }
@@ -159,7 +163,8 @@ router.get('/admin/all',
         }
       });
     } catch (error) {
-      console.error('Get admin products error:', error);
+      logger.error({ err: error }, 'Get admin products error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve products'
@@ -188,7 +193,8 @@ router.get('/admin/:id',
         data: product
       });
     } catch (error) {
-      console.error('Get admin product error:', error);
+      logger.error({ err: error }, 'Get admin product error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve product'
@@ -276,7 +282,8 @@ router.get('/recommendations/cart', async (req, res) => {
 
     res.json({ success: true, data: recommendations });
   } catch (error) {
-    console.error('Cart recommendations error:', error);
+    logger.error({ err: error }, 'Cart recommendations error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to get recommendations' });
   }
 });
@@ -307,7 +314,8 @@ router.get('/search/suggestions', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Search suggestions error:', error);
+    logger.error({ err: error }, 'Search suggestions error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to get suggestions' });
   }
 });
@@ -329,7 +337,8 @@ router.get('/:slug', async (req, res) => {
       data: product
     });
   } catch (error) {
-    console.error('Get product error:', error);
+    logger.error({ err: error }, 'Get product error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve product'
@@ -368,7 +377,8 @@ router.post('/',
         data: product
       });
     } catch (error) {
-      console.error('Create product error:', error);
+      logger.error({ err: error }, 'Create product error');
+      Sentry.captureException(error);
       if (error.code === 'P2002') {
         return res.status(400).json({
           success: false,
@@ -403,7 +413,8 @@ router.put('/:id',
           message: 'Product not found'
         });
       }
-      console.error('Update product error:', error);
+      logger.error({ err: error }, 'Update product error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to update product'
@@ -437,7 +448,8 @@ router.delete('/:id/permanent',
           message: 'Product not found'
         });
       }
-      console.error('Hard delete product error:', error);
+      logger.error({ err: error }, 'Hard delete product error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to delete product'
@@ -465,7 +477,8 @@ router.delete('/:id',
           message: 'Product not found'
         });
       }
-      console.error('Delete product error:', error);
+      logger.error({ err: error }, 'Delete product error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to delete product'
@@ -487,7 +500,8 @@ router.get('/admin/stats',
         data: stats
       });
     } catch (error) {
-      console.error('Get stats error:', error);
+      logger.error({ err: error }, 'Get stats error');
+      Sentry.captureException(error);
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve statistics'

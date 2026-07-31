@@ -1,9 +1,12 @@
 import 'dotenv/config';
+import Sentry from './lib/sentry.js'; // must import before anything else so init() runs first
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cron from 'node-cron';
+import pinoHttp from 'pino-http';
+import logger from './lib/logger.js';
 import prisma from './lib/prisma.js';
 import * as productRepository from './repositories/productRepository.js';
 import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
@@ -27,6 +30,10 @@ const app = express();
 
 // Trust Railway/Vercel reverse proxy (required for express-rate-limit)
 app.set('trust proxy', 1);
+
+// Structured request logging — placed early so it wraps the full request
+// lifecycle regardless of what later middleware does.
+app.use(pinoHttp({ logger }));
 
 // Security middleware
 app.use(helmet({
@@ -137,7 +144,8 @@ app.get('/api/sitemap.xml', async (req, res) => {
     res.header('Content-Type', 'application/xml');
     res.send(xml);
   } catch (error) {
-    console.error('Sitemap error:', error);
+    logger.error({ err: error }, 'Sitemap generation failed');
+    Sentry.captureException(error);
     res.status(500).send('Failed to generate sitemap');
   }
 });
@@ -152,7 +160,8 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Server error:', err);
+  (req.log || logger).error({ err }, 'Unhandled request error');
+  Sentry.captureException(err);
 
   res.status(err.status || 500).json({
     success: false,
@@ -165,7 +174,8 @@ cron.schedule('59 23 * * *', async () => {
   try {
     await generateAndSendDailySalesReport();
   } catch (error) {
-    console.error('Daily sales report failed:', error);
+    logger.error({ err: error }, 'Daily sales report failed');
+    Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });
 
@@ -180,29 +190,46 @@ const PORT = process.env.PORT || 5000;
 async function start() {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    console.log('Connected to PostgreSQL');
+    logger.info('Connected to PostgreSQL');
   } catch (error) {
-    console.error('Database connection error:', error);
+    logger.fatal({ err: error }, 'Database connection error');
+    Sentry.captureException(error);
+    await Sentry.close(2000);
     process.exit(1);
   }
 
   app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info({ port: PORT, environment: process.env.NODE_ENV || 'development' }, 'Server is running');
   });
 }
 
 start();
 
+// Catch what nothing else caught. Logged and reported before exiting so a
+// crash leaves a real record instead of just unstructured stderr scrollback.
+process.on('uncaughtException', async (error) => {
+  logger.fatal({ err: error }, 'Uncaught exception');
+  Sentry.captureException(error);
+  await Sentry.close(2000);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason) => {
+  logger.fatal({ err: reason }, 'Unhandled promise rejection');
+  Sentry.captureException(reason);
+  await Sentry.close(2000);
+  process.exit(1);
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server');
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT signal received: closing HTTP server');
+  logger.info('SIGINT signal received: closing HTTP server');
   await prisma.$disconnect();
   process.exit(0);
 });

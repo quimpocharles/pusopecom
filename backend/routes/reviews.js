@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import { body, validationResult } from 'express-validator';
 import * as reviewRepository from '../repositories/reviewRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
@@ -22,7 +24,8 @@ router.get('/reviews/my', authenticate, async (req, res) => {
     const reviewedProductIds = reviews.map(r => r.product);
     res.json({ success: true, data: reviewedProductIds });
   } catch (error) {
-    console.error('Get my reviews error:', error);
+    logger.error({ err: error }, 'Get my reviews error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to retrieve reviews' });
   }
 });
@@ -70,7 +73,8 @@ router.get('/:slug/reviews', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Get reviews error:', error);
+    logger.error({ err: error }, 'Get reviews error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to retrieve reviews' });
   }
 });
@@ -114,7 +118,8 @@ router.post(
       if (error.code === 'P2002') {
         return res.status(400).json({ success: false, message: 'You have already reviewed this product' });
       }
-      console.error('Create review error:', error);
+      logger.error({ err: error }, 'Create review error');
+      Sentry.captureException(error);
       res.status(500).json({ success: false, message: 'Failed to create review' });
     }
   }

@@ -1,5 +1,7 @@
 import axios from 'axios';
 import cloudinary from '../config/cloudinary.js';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 const WAVESPEED_API_URL = 'https://api.wavespeed.ai/api/v3';
 
@@ -60,7 +62,7 @@ export const generateTryOn = async (userImageBuffer, userImageMimeType, productI
     const uploadStart = Date.now();
     const { url: userImageUrl, publicId } = await uploadToCloudinary(userImageBuffer);
     userPublicId = publicId;
-    console.log(`[WaveSpeed] Cloudinary upload: ${Date.now() - uploadStart}ms`);
+    logger.debug({ durationMs: Date.now() - uploadStart }, '[WaveSpeed] Cloudinary upload');
 
     const prompt = `Virtual try-on: Take the person from Figure 2 and dress them in the wearable exterior of the garment from Figure 1.
 
@@ -86,7 +88,7 @@ IMAGE DEFINITIONS:
 - Figure 1: Garment reference (design reference only; internal tags are NOT part of the design)
 - Figure 2: Person to wear the garment`;
 
-    console.log(`[WaveSpeed] Using model: ${model.endpoint}`);
+    logger.debug({ endpoint: model.endpoint }, '[WaveSpeed] Using model');
 
     const submitResponse = await axios.post(
       `${WAVESPEED_API_URL}/${model.endpoint}`,
@@ -107,7 +109,7 @@ IMAGE DEFINITIONS:
     );
 
     const { status, outputs, id: taskId } = submitResponse.data?.data || {};
-    console.log(`[WaveSpeed] Task: ${taskId}, status: ${status}`);
+    logger.debug({ taskId, status }, '[WaveSpeed] Task status');
 
     if (status !== 'completed' || !outputs) {
       throw new Error('WaveSpeed: generation did not complete successfully');
@@ -117,7 +119,7 @@ IMAGE DEFINITIONS:
     if (!imageUrl) throw new Error('WaveSpeed: completed but no output URL');
 
     const totalMs = Date.now() - startTime;
-    console.log(`[WaveSpeed] Done in ${totalMs}ms (${(totalMs / 1000).toFixed(1)}s)`);
+    logger.info({ durationMs: totalMs }, '[WaveSpeed] Generation done');
 
     if (userPublicId) deleteFromCloudinary(userPublicId);
     return { success: true, image: imageUrl };
@@ -125,7 +127,8 @@ IMAGE DEFINITIONS:
   } catch (error) {
     if (userPublicId) deleteFromCloudinary(userPublicId);
 
-    console.error('[WaveSpeed] Error:', error.response?.data || error.message);
+    logger.error({ err: error }, '[WaveSpeed] Error');
+    Sentry.captureException(error);
 
     if (error.response?.status === 401) throw new Error('Invalid WaveSpeed API key.');
     if (error.response?.status === 402) throw new Error('WaveSpeed: insufficient credits.');

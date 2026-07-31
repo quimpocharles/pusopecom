@@ -1,4 +1,6 @@
 import axios from 'axios';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 const FASHN_API_URL = 'https://api.fashn.ai/v1';
 
@@ -94,7 +96,8 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
     throw new Error('Try-on generation timed out. Please try again.');
 
   } catch (error) {
-    console.error('Fashn try-on error:', error.response?.data || error.message);
+    logger.error({ err: error }, 'Fashn try-on error');
+    Sentry.captureException(error);
 
     // Handle specific error cases
     if (error.response?.status === 401) {

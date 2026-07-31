@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as orderRepository from '../repositories/orderRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as userRepository from '../repositories/userRepository.js';
@@ -122,7 +124,8 @@ router.get('/sales', async (req, res) => {
       data: { revenueOverTime, salesByCategory, salesBySport, totalRevenue, totalOrders, averageOrderValue },
     });
   } catch (error) {
-    console.error('Sales report error:', error);
+    logger.error({ err: error }, 'Sales report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate sales report' });
   }
 });
@@ -187,7 +190,8 @@ router.get('/products', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Products report error:', error);
+    logger.error({ err: error }, 'Products report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate products report' });
   }
 });
@@ -235,7 +239,8 @@ router.get('/orders', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Orders report error:', error);
+    logger.error({ err: error }, 'Orders report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate orders report' });
   }
 });
@@ -303,7 +308,8 @@ router.get('/customers', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Customers report error:', error);
+    logger.error({ err: error }, 'Customers report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate customers report' });
   }
 });
@@ -368,7 +374,8 @@ router.get('/tryon', async (req, res) => {
       data: { tryOnOverTime, totalAttempts, successfulAttempts, successRate, mostTriedProducts, recentTryOns, byProvider },
     });
   } catch (error) {
-    console.error('Try-on report error:', error);
+    logger.error({ err: error }, 'Try-on report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate try-on report' });
   }
 });
@@ -390,7 +397,8 @@ router.get('/shipping', async (req, res) => {
 
     res.json({ success: true, data: { methodBreakdown, rawEvents, totalOrders: rawEvents.length } });
   } catch (error) {
-    console.error('Shipping report error:', error);
+    logger.error({ err: error }, 'Shipping report error');
+    Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to generate shipping report' });
   }
 });

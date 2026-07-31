@@ -1,4 +1,6 @@
 import axios from 'axios';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 
 const MAYA_API_URL = process.env.MAYA_SANDBOX === 'true'
   ? 'https://pg-sandbox.paymaya.com'
@@ -82,7 +84,8 @@ export const createCheckout = async (order) => {
       redirectUrl: response.data.redirectUrl
     };
   } catch (error) {
-    console.error('Maya checkout error:', error.response?.data || error.message);
+    logger.error({ err: error }, 'Maya checkout error');
+    Sentry.captureException(error);
     throw new Error(error.response?.data?.message || 'Failed to create checkout session');
   }
 };
@@ -100,7 +103,8 @@ export const getCheckoutStatus = async (checkoutId) => {
 
     return response.data;
   } catch (error) {
-    console.error('Maya status check error:', error.response?.data || error.message);
+    logger.error({ err: error }, 'Maya status check error');
+    Sentry.captureException(error);
     throw new Error('Failed to retrieve checkout status');
   }
 };

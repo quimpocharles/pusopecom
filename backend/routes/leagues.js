@@ -1,4 +1,6 @@
 import express from 'express';
+import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as leagueRepository from '../repositories/leagueRepository.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
@@ -20,7 +22,8 @@ router.get('/', async (req, res) => {
       data: leagues
     });
   } catch (error) {
-    console.error('Get leagues error:', error);
+    logger.error({ err: error }, 'Get leagues error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve leagues'
@@ -38,7 +41,8 @@ router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
       data: leagues
     });
   } catch (error) {
-    console.error('Get admin leagues error:', error);
+    logger.error({ err: error }, 'Get admin leagues error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve leagues'
@@ -59,7 +63,8 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
       data: league
     });
   } catch (error) {
-    console.error('Create league error:', error);
+    logger.error({ err: error }, 'Create league error');
+    Sentry.captureException(error);
     if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,
@@ -93,7 +98,8 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
         message: 'League not found'
       });
     }
-    console.error('Update league error:', error);
+    logger.error({ err: error }, 'Update league error');
+    Sentry.captureException(error);
     if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,
@@ -123,7 +129,8 @@ router.delete('/:id', authenticate, isAdmin, async (req, res) => {
         message: 'League not found'
       });
     }
-    console.error('Delete league error:', error);
+    logger.error({ err: error }, 'Delete league error');
+    Sentry.captureException(error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete league'
