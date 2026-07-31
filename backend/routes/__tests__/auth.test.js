@@ -231,6 +231,12 @@ describe('routes/auth.js', () => {
       const firstRes = await request(app).post('/api/auth/google').send({ credential: 'fake' });
       const firstToken = firstRes.body.token;
 
+      // jwt's `iat` claim only has second-level granularity, and it's the
+      // only field that varies between these two tokens — without this,
+      // two logins landing in the same wall-clock second produce identical
+      // tokens and the "fresh token" assertion below flakes.
+      await new Promise((r) => setTimeout(r, 1100));
+
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ sub: googleId, email, given_name: 'Gil', family_name: 'Puyat', picture: 'https://example.com/second.jpg' }),
