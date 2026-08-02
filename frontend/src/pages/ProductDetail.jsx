@@ -14,6 +14,8 @@ import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import VirtualTryOn from '../components/products/VirtualTryOn';
+import ShareButton from '../components/products/ShareButton';
+import { TRYON_PRIMARY_BTN } from '../components/products/tryOn/tryOnButtonStyles';
 import productService from '../services/productService';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
@@ -407,7 +409,7 @@ const ProductDetail = () => {
               {isTryOnEligible && (
                 <button
                   onClick={() => setShowTryOn(true)}
-                  className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm text-gray-900 px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shadow-md hover:bg-white transition-colors"
+                  className={`${TRYON_PRIMARY_BTN} absolute bottom-4 left-4 gap-1.5 px-4 py-2`}
                 >
                   <SparklesIcon className="w-4 h-4" />
                   Virtual Try-On
@@ -435,10 +437,17 @@ const ProductDetail = () => {
 
           {/* Right — Product Info */}
           <div className="lg:pt-2">
-            {/* Team / Sport badge */}
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              {product.team || product.sport} &middot; {genderLabel && <>{genderLabel} &middot; </>}{categoryLabel}
-            </p>
+            {/* Team / Sport badge + Share */}
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {product.team || product.sport} &middot; {genderLabel && <>{genderLabel} &middot; </>}{categoryLabel}
+              </p>
+              <ShareButton
+                title={product.name}
+                text={`Check out ${toTitleCase(product.name)} on PusoStore!`}
+                url={`${window.location.origin}/products/${product.slug}`}
+              />
+            </div>
 
             {/* Product Name */}
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-3">
