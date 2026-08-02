@@ -11,6 +11,7 @@ import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import authService from '../services/authService';
 import api from '../services/api';
 import { toTitleCase } from '../utils/text';
 import SEO from '../components/common/SEO';
@@ -46,7 +47,7 @@ const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note
 const Checkout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { items, getCartTotal } = useCartStore();
+  const { items, getCartTotal, openCart } = useCartStore();
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -55,6 +56,8 @@ const Checkout = () => {
   const [deliveryMethod, setDeliveryMethod] = useState('standard'); // 'standard' | slotId
   const [shippingOptions, setShippingOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(true);
+  // Opt-in only — "once a user agrees to save it" — never saved silently.
+  const [saveAddress, setSaveAddress] = useState(false);
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
 
@@ -210,6 +213,18 @@ const Checkout = () => {
       const response = await orderService.createOrder(orderData);
 
       if (response.success && response.data.checkoutUrl) {
+        // Only a real typed address is worth saving — not the synthetic
+        // venue-pickup "address", and only once the order itself is
+        // confirmed to have gone through. Never blocks or fails checkout:
+        // the save is a convenience for next time, not a requirement now.
+        if (user && saveAddress && !isPickup) {
+          try {
+            await authService.addAddress(shippingAddress);
+          } catch (saveError) {
+            console.error('Failed to save address for next time:', saveError);
+          }
+        }
+
         redirectingRef.current = true;
         setRedirecting(true);
         window.location.href = response.data.checkoutUrl;
@@ -393,6 +408,18 @@ const Checkout = () => {
                     watch={watch}
                   />
 
+                  {user && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={saveAddress}
+                        onChange={(e) => setSaveAddress(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">Save this address for faster checkout next time</span>
+                    </label>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Order Notes (Optional)
@@ -418,7 +445,20 @@ const Checkout = () => {
 
               {error && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-                  {error}
+                  <p>{error}</p>
+                  {/* Stock/availability errors are the one case where "try
+                      again" doesn't help — the cart itself needs editing,
+                      and there's no dedicated /cart page to send someone
+                      to, only the drawer. */}
+                  {/stock|sold out|unavailable/i.test(error) && (
+                    <button
+                      type="button"
+                      onClick={openCart}
+                      className="mt-2 text-sm font-semibold underline underline-offset-2 hover:text-red-800"
+                    >
+                      Edit Cart
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -447,7 +487,16 @@ const Checkout = () => {
           {/* Order Summary */}
           <div className="order-first lg:order-last">
             <div className="card p-6 sticky top-24">
-              <h2 className="text-xl font-bold mb-4">Order Summary</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Order Summary</h2>
+                <button
+                  type="button"
+                  onClick={openCart}
+                  className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  Edit Cart
+                </button>
+              </div>
 
               <div className="space-y-3 mb-4">
                 {items.map((item) => (
