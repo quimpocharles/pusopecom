@@ -63,13 +63,18 @@ const Header = () => {
           the whole block sideways depending on whether the hamburger
           cell is present. */}
       <div className="pointer-events-auto bg-white p-2 lg:p-3 flex flex-col items-stretch border-2 border-ink-900" ref={navRef}>
-        <div className="flex items-stretch bg-white border-ink-900">
-          <Link to="/" className="flex items-center px-3 md:px-4 py-2 md:py-2.5">
+        <div className="flex items-stretch bg-white border-ink-900 border-2">
+          {/* Fixed h-11/h-12 on both this row's cells and the cart button
+              (below) — not derived from padding + intrinsic image/icon
+              size, which is what made the two boxes drift apart by a few
+              px depending on breakpoint. Explicit height makes them match
+              exactly, by construction, regardless of what's inside. */}
+          <Link to="/" className="h-11 md:h-12 flex items-center px-3 md:px-4">
             <img src={LogoColor} alt="Puso Pilipinas" className="h-7 md:h-8 w-auto" />
           </Link>
           <button
             onClick={() => setNavOpen((v) => !v)}
-            className="flex items-center justify-center px-3 border-ink-900 text-ink-900 hover:bg-ink-900 hover:text-white transition-colors duration-150"
+            className="h-11 md:h-12 flex items-center justify-center px-3 border-ink-900 text-ink-900 hover:bg-ink-900 hover:text-white transition-colors duration-150"
             aria-label="Open menu"
             aria-expanded={navOpen}
           >
@@ -79,7 +84,7 @@ const Header = () => {
 
         <div
           className={`flex flex-col items-start bg-white transition-all duration-200 ease-out overflow-hidden ${
-            navOpen ? 'max-h-96 border-x-2 border-y-2 border-ink-900 py-2' : 'max-h-0 border-0'
+            navOpen ? 'max-h-96 border-x-2 border-b-2 border-ink-900 py-2' : 'max-h-0 border-0'
           }`}
         >
           {navLinks.map((link) => (
@@ -120,7 +125,7 @@ const Header = () => {
       <div className="pointer-events-auto bg-white p-2 lg:p-3 border-2 border-ink-900">
         <button
           onClick={() => useCartStore.getState().openCart()}
-          className="relative flex items-center justify-center px-3 md:px-4 py-2 md:py-2.5 text-ink-900 hover:bg-ink-900 hover:text-white transition-colors duration-150"
+          className="relative h-11 md:h-12 border-2 border-ink-900 flex items-center justify-center px-3 md:px-4 text-ink-900 hover:bg-ink-900 hover:text-white transition-colors duration-150"
           aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} item${cartCount !== 1 ? 's' : ''}` : ''}`}
         >
           <ShoppingBagIcon className="w-5 h-5" />
