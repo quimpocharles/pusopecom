@@ -168,10 +168,14 @@ const Home = () => {
           this section occupies is not allowed to go blank. ── */}
       <section className="pt-4 pb-10 md:pt-6 md:pb-16 lg:pt-8 lg:pb-24 overflow-hidden bg-paper">
         <div className="container-custom">
-          {/* Promise */}
-          <div className="max-w-2xl mx-auto text-center mb-10 md:mb-16">
+          {/* Promise — subheadline is deliberately lighter than the headline
+              on mobile (text-base vs the old text-lg, ~11% smaller, and
+              Tailwind's bundled line-height drops with it, 28px→24px) so
+              "WEAR THE PUSO." reads as the one strong statement, not a
+              a tie. Unchanged at md: and up. */}
+          <div className="max-w-2xl mx-auto text-center mb-5 md:mb-16">
             <h2
-              className="font-bold mb-4 md:mb-6 text-ink-900"
+              className="font-bold text-ink-900"
               style={{
                 fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
                 letterSpacing: '-0.03em',
@@ -180,7 +184,7 @@ const Home = () => {
             >
               {tryOnCampaign?.headline || 'WEAR THE PUSO.'}
             </h2>
-            <p className="text-lg md:text-xl font-semibold text-ink-700">
+            <p className="text-base md:text-xl font-semibold text-ink-700">
               {tryOnCampaign?.subheadline || "See yourself wearing your team's official merchandise before you buy."}
             </p>
           </div>
@@ -193,13 +197,16 @@ const Home = () => {
               beforeImage={tryOnCampaign?.beforeImage}
               afterImage={tryOnCampaign?.afterImage}
               aspectClassName="aspect-[2/3] md:aspect-[5/4]"
+              beforeLabel="You"
+              afterLabel="Game Day"
             />
 
             {/* Action — copy sells confidence, not the technology; CTA is
                 the section's last word, after the demo has made its case. */}
             <div className="max-w-xl mx-auto text-center mt-8 md:mt-12">
               <p className="text-sm md:text-lg mb-6 md:mb-8 text-ink-500 whitespace-pre-line" style={{ lineHeight: 1.72 }}>
-                {tryOnCampaign?.description || 'Upload one photo.\nSee yourself wearing your team\'s official jersey in seconds.'}
+                {tryOnCampaign?.description ||
+                  "Upload one photo and see yourself wearing your team's official jersey in seconds."}
               </p>
               <Link
                 to={
@@ -433,13 +440,25 @@ const Home = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    width: '160px',
                     height: '84px',
-                    minWidth: '172px',
                     margin: '0 10px',
-                    padding: '0 32px',
+                    padding: '18px 24px',
                   }}
                 >
-                  <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
+                  {/* Fixed box + object-fit: contain — every logo scales to
+                      the same bounding box regardless of its native aspect
+                      ratio, instead of a fixed height letting wide logos
+                      render bigger than square/narrow ones. (A fixed box
+                      width also matters for the marquee's own math: the
+                      seamless translateX(-50%) loop assumes every box is
+                      the same width — the old `minWidth` let a wide logo's
+                      content push its box wider than its neighbors.) */}
+                  <img
+                    src={src}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }}
+                  />
                 </div>
               ))}
             </div>
@@ -457,13 +476,25 @@ const Home = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    width: '160px',
                     height: '84px',
-                    minWidth: '172px',
                     margin: '0 10px',
-                    padding: '0 32px',
+                    padding: '18px 24px',
                   }}
                 >
-                  <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
+                  {/* Fixed box + object-fit: contain — every logo scales to
+                      the same bounding box regardless of its native aspect
+                      ratio, instead of a fixed height letting wide logos
+                      render bigger than square/narrow ones. (A fixed box
+                      width also matters for the marquee's own math: the
+                      seamless translateX(-50%) loop assumes every box is
+                      the same width — the old `minWidth` let a wide logo's
+                      content push its box wider than its neighbors.) */}
+                  <img
+                    src={src}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }}
+                  />
                 </div>
               ))}
             </div>

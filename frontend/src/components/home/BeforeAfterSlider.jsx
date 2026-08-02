@@ -16,6 +16,13 @@ import { ChevronLeftIcon, ChevronRightIcon, PhotoIcon } from '@heroicons/react/2
  * "customer in a plain shirt" / "AI Try-On result" pair available without
  * one actually being uploaded, and showing an unrelated photo in that role
  * would misrepresent what the feature does.
+ *
+ * beforeLabel/afterLabel are the on-image visual badges only ("You" /
+ * "Game Day" reads as an emotional before/after, not a technical diff) —
+ * the range input's own aria-label/aria-valuetext deliberately do NOT
+ * reuse them. "Drag to reveal you and game day" would be genuinely
+ * confusing read aloud; the accessible description stays plain regardless
+ * of whatever marketing copy the visual badges carry.
  */
 const Placeholder = ({ label }) => (
   <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-2 bg-[#1a1a1a] text-white/25">
@@ -39,7 +46,7 @@ const BeforeAfterSlider = ({
       {afterImage ? (
         <img
           src={afterImage}
-          alt={afterLabel}
+          alt="After — wearing the official jersey"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           draggable={false}
           width={800}
@@ -58,7 +65,7 @@ const BeforeAfterSlider = ({
         {beforeImage ? (
           <img
             src={beforeImage}
-            alt={beforeLabel}
+            alt="Before — without the jersey"
             className="absolute inset-0 w-full h-full object-cover"
             draggable={false}
             width={800}
@@ -97,8 +104,8 @@ const BeforeAfterSlider = ({
         max={100}
         value={position}
         onChange={(e) => setPosition(Number(e.target.value))}
-        aria-label={`Comparison slider — drag to reveal ${beforeLabel.toLowerCase()} and ${afterLabel.toLowerCase()}`}
-        aria-valuetext={`${position}% ${afterLabel.toLowerCase()} revealed`}
+        aria-label="Before and after comparison — drag to reveal how you'd look wearing the jersey"
+        aria-valuetext={`${position}% revealed`}
         className="absolute inset-0 w-full h-full m-0 opacity-0 cursor-ew-resize appearance-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-white focus-visible:outline-offset-2"
       />
     </div>
