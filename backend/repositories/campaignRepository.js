@@ -30,16 +30,21 @@ export async function deleteById(id, { client = prisma } = {}) {
 }
 
 /**
- * The Hero's data source once Milestone 3 wires it up: the single campaign
- * flagged for the homepage, active, and inside its own schedule window (an
- * unset startDate/endDate means "no bound" on that side). At most one
- * campaign is expected to satisfy this at a time — Milestone 1 doesn't
- * enforce that at the DB level (no partial unique index), since the admin
- * UI that would make "only one" a meaningful constraint doesn't exist yet.
+ * The active campaign for a given homepage slot (the Hero, or the AI Try-On
+ * section — see CampaignPlacement): flagged for the homepage, active, and
+ * inside its own schedule window (an unset startDate/endDate means "no
+ * bound" on that side). At most one campaign is expected to satisfy this
+ * per placement at a time — not enforced at the DB level (no partial unique
+ * index), left to the admin UI to keep honest.
+ *
+ * Includes featuredProduct so a tryOn campaign's CTA can resolve a product
+ * slug without a second request — safe to always include since it's a
+ * cheap, optional relation and every other placement simply has it null.
  */
-export async function findActiveHomepageCampaign({ now = new Date(), client = prisma } = {}) {
+export async function findActiveHomepageCampaign({ placement, now = new Date(), client = prisma } = {}) {
   const campaign = await client.campaign.findFirst({
     where: {
+      placement,
       featuredOnHomepage: true,
       active: true,
       AND: [
@@ -48,6 +53,7 @@ export async function findActiveHomepageCampaign({ now = new Date(), client = pr
       ],
     },
     orderBy: { createdAt: 'desc' },
+    include: { featuredProduct: true },
   });
   return serialize(campaign);
 }

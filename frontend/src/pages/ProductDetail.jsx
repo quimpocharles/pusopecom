@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   SparklesIcon,
   ChevronLeftIcon,
@@ -177,6 +177,7 @@ const SizeChartModal = ({ category, onClose }) => {
 const ProductDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const addItem = useCartStore((state) => state.addItem);
   const { user, isAuthenticated } = useAuthStore();
 
@@ -227,6 +228,16 @@ const ProductDetail = () => {
     };
     fetchProduct();
   }, [slug]);
+
+  // Auto-opens Virtual Try-On when arriving via a `?tryOn=1` link — the
+  // homepage AI Try-On section's CTA "links directly to the AI Try-On
+  // experience" rather than just to the product page, without duplicating
+  // the modal-mounting logic that already lives here.
+  useEffect(() => {
+    if (product?.tryOnEnabled && searchParams.get('tryOn') === '1') {
+      setShowTryOn(true);
+    }
+  }, [product, searchParams]);
 
   // Fetch reviews
   useEffect(() => {

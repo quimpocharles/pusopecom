@@ -12,13 +12,15 @@ import {
   TruckIcon,
   ArrowLeftIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 
 const navItems = [
   { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
   { label: 'Products', to: '/admin/products', icon: CubeIcon },
   { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon },
+  { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon },
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },

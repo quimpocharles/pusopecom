@@ -25,7 +25,7 @@ describe('routes/homepageSections.js', () => {
     expect(res.status).toBe(200);
     const keys = res.body.data.map((s) => s.key);
     expect(keys).toEqual(
-      expect.arrayContaining(['hero', 'shopBySport', 'marquee', 'featuredProducts', 'featuredTeam', 'partners', 'faq'])
+      expect.arrayContaining(['hero', 'aiTryOn', 'marquee', 'featuredProducts', 'featuredTeam', 'partners', 'faq'])
     );
     for (let i = 1; i < res.body.data.length; i++) {
       expect(res.body.data[i].displayOrder).toBeGreaterThanOrEqual(res.body.data[i - 1].displayOrder);

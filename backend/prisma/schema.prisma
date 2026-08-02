@@ -212,6 +212,7 @@ model Product {
   reviews    Review[]
   tryOnLogs  TryOnLog[]
   activities UserActivity[]
+  campaigns  Campaign[] // campaigns featuring this product (e.g. the AI Try-On section's featuredProduct)
 
   // Organization-first migration (ADR-001/002, single pilot Organization —
   // see docs/decisions/0000-decision-log.md and the plan this shipped
@@ -635,7 +636,7 @@ model SiteSettings {
 // (not its position) is still configurable, via PromoMessage below.
 enum HomepageSectionKey {
   hero
-  shopBySport
+  aiTryOn // renamed from shopBySport — the AI Try-On split section replaced it in-place, same slot
   marquee
   featuredProducts
   featuredTeam
@@ -670,16 +671,44 @@ model HomepageSection {
 // `headline` etc. are the actual public-facing copy — the two are allowed to
 // differ (an admin might name it "Aug 2026 Restock" for a headline that
 // actually reads "Game Day Ready").
+//
+// `placement` was added once a second surface (the homepage's AI Try-On
+// section) needed the exact same shape — rotating headline/copy/CTA/
+// schedule — for a slot independent of the Hero's own campaign. Mirrors
+// PromoMessage.placement below exactly: one model, a discriminator, instead
+// of a near-duplicate table per homepage slot.
+enum CampaignPlacement {
+  hero
+  tryOn
+}
+
 model Campaign {
-  id          String  @id @default(uuid())
+  id          String            @id @default(uuid())
+  placement   CampaignPlacement @default(hero)
   name        String
   eyebrow     String?
   headline    String
+  subheadline String?
   description String?
   image       String?
   ctaLabel    String?
   ctaLink     String?
   accentColor String?
+
+  // Before/after pair for the AI Try-On section's comparison slider.
+  // Unused by placement=hero; kept on the shared model rather than a
+  // separate table for the same reason `placement` exists at all — one
+  // schema, discriminated by slot, not one table per slot.
+  beforeImage String?
+  afterImage  String?
+
+  // The Product the Try-On CTA should open Virtual Try-On for. Nullable —
+  // a hero campaign has no reason to set it, and even a tryOn campaign can
+  // leave it unset if ctaLink is set explicitly instead. onDelete: SetNull
+  // matches Product.teamId's precedent: a deleted product must never take
+  // a still-scheduled campaign down with it.
+  featuredProductId String?
+  featuredProduct   Product? @relation(fields: [featuredProductId], references: [id], onDelete: SetNull)
 
   featuredOnHomepage Boolean   @default(false)
   startDate          DateTime?
@@ -694,7 +723,7 @@ model Campaign {
   // indexed directly — a handful of campaign rows never justifies a partial
   // or range index, and Prisma 5 can't express one declaratively anyway (see
   // the OrganizationParticipation model's own comment on that same limit).
-  @@index([featuredOnHomepage, active])
+  @@index([placement, featuredOnHomepage, active])
   @@map("campaigns")
 }
 

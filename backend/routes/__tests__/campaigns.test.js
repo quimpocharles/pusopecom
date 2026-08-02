@@ -16,10 +16,18 @@ app.use(express.json());
 app.use('/api/campaigns', campaignsRouter);
 
 let createdId;
+let tryOnCampaignId;
+let productId;
 
 afterAll(async () => {
   if (createdId) {
     await prisma.campaign.delete({ where: { id: createdId } }).catch(() => {});
+  }
+  if (tryOnCampaignId) {
+    await prisma.campaign.delete({ where: { id: tryOnCampaignId } }).catch(() => {});
+  }
+  if (productId) {
+    await prisma.product.delete({ where: { id: productId } }).catch(() => {});
   }
   await prisma.$disconnect();
 });
@@ -42,18 +50,34 @@ describe('routes/campaigns.js', () => {
     expect(res.body.data._id).toBe(createdId);
   });
 
-  it('GET /active returns null when nothing is flagged featuredOnHomepage', async () => {
+  it('GET /active requires a placement query param', async () => {
     const res = await request(app).get('/api/campaigns/active');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /active rejects an unrecognized placement', async () => {
+    const res = await request(app).get('/api/campaigns/active?placement=footer');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /active?placement=hero returns null when nothing is flagged featuredOnHomepage', async () => {
+    const res = await request(app).get('/api/campaigns/active?placement=hero');
     expect(res.status).toBe(200);
     expect(res.body.data).toBeNull();
   });
 
-  it('GET /active returns the campaign once flagged and in-window', async () => {
+  it('GET /active?placement=hero returns the campaign once flagged and in-window (defaults placement=hero)', async () => {
     await request(app).put(`/api/campaigns/${createdId}`).send({ featuredOnHomepage: true });
 
-    const res = await request(app).get('/api/campaigns/active');
+    const res = await request(app).get('/api/campaigns/active?placement=hero');
     expect(res.status).toBe(200);
     expect(res.body.data._id).toBe(createdId);
+  });
+
+  it('GET /active?placement=tryOn does not return a placement=hero campaign', async () => {
+    const res = await request(app).get('/api/campaigns/active?placement=tryOn');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeNull();
   });
 
   it('DELETE /:id soft-deletes (active: false), not a real row delete', async () => {
@@ -68,5 +92,40 @@ describe('routes/campaigns.js', () => {
   it('PUT /:id on a nonexistent id returns 404', async () => {
     const res = await request(app).put('/api/campaigns/00000000-0000-0000-0000-000000000000').send({ headline: 'x' });
     expect(res.status).toBe(404);
+  });
+
+  it('a placement=tryOn campaign resolves its featuredProduct in the active response', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: 'Campaign Test Jersey',
+        slug: `campaign-test-jersey-${Date.now()}`,
+        description: 'fixture',
+        price: 1000,
+        category: 'jersey',
+        sport: 'basketball',
+        images: ['https://example.com/img.jpg'],
+        active: true,
+      },
+    });
+    productId = product.id;
+
+    const created = await request(app).post('/api/campaigns').send({
+      placement: 'tryOn',
+      name: 'Try-On Test Campaign',
+      headline: 'WEAR THE PUSO.',
+      beforeImage: 'https://example.com/before.jpg',
+      afterImage: 'https://example.com/after.jpg',
+      featuredProductId: product.id,
+      featuredOnHomepage: true,
+    });
+    expect(created.status).toBe(201);
+    tryOnCampaignId = created.body.data._id;
+
+    const res = await request(app).get('/api/campaigns/active?placement=tryOn');
+    expect(res.status).toBe(200);
+    expect(res.body.data._id).toBe(tryOnCampaignId);
+    expect(res.body.data.beforeImage).toBe('https://example.com/before.jpg');
+    expect(res.body.data.featuredProduct._id).toBe(product.id);
+    expect(res.body.data.featuredProduct.slug).toBe(product.slug);
   });
 });

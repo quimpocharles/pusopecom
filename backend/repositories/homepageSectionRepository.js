@@ -7,7 +7,7 @@ import { serialize } from './serialize.js';
  */
 const DEFAULT_ORDER = [
   'hero',
-  'shopBySport',
+  'aiTryOn',
   'marquee',
   'featuredProducts',
   'featuredTeam',

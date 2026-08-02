@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import gilasImage from '../assets/images/gilas.png';
 import pbaImage from '../assets/images/pba.png';
 import uaapImage from '../assets/images/uaap.png';
@@ -16,28 +16,16 @@ import {
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
-import ProductCard from '../components/products/ProductCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
-import useCartStore from '../store/cartStore';
+import BeforeAfterSlider from '../components/home/BeforeAfterSlider';
 import productService from '../services/productService';
+import campaignService from '../services/campaignService';
 import SEO from '../components/common/SEO';
 
 const Home = () => {
-  const [categoryProducts, setCategoryProducts] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [tryOnCampaign, setTryOnCampaign] = useState(null);
   const [activeFeatured, setActiveFeatured] = useState(0);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('basketball');
-  const openQuickAdd = useCartStore((state) => state.openQuickAdd);
   const [openFaq, setOpenFaq] = useState(null);
-  const carouselRef = useRef(null);
-
-  const categories = [
-    { id: 'basketball', label: 'Basketball', icon: '🏀' },
-    { id: 'volleyball', label: 'Volleyball', icon: '🏐' },
-    { id: 'football', label: 'Football', icon: '⚽' },
-    { id: 'esports', label: 'E-Sports', icon: '🎮' },
-  ];
 
   // Featured Team — swapped by hand once a month. Update these five fields
   // (image import above included) and nothing else needs to change. `color`
@@ -67,37 +55,23 @@ const Home = () => {
     fetchFeatured();
   }, []);
 
-  // Fetch products by sport when active category changes
+  // AI Try-On section content — the active placement=tryOn campaign, fully
+  // CMS-driven (headline/subheadline/copy/CTA/before-after images/featured
+  // product/schedule/visibility all live on Campaign; see campaignRepository
+  // .findActiveHomepageCampaign). Falls back to the approved default copy
+  // below when no campaign is currently active, so the section — which
+  // replaces Shop by Sport in this exact slot — never goes blank.
   useEffect(() => {
-    const fetchByCategory = async () => {
-      setCategoryLoading(true);
+    const fetchTryOnCampaign = async () => {
       try {
-        const res = await productService.getProducts({ sport: activeCategory, sort: 'most-bought', limit: 20 });
-        setCategoryProducts(res.data);
+        const res = await campaignService.getActiveCampaign('tryOn');
+        setTryOnCampaign(res.data);
       } catch (error) {
-        console.error('Failed to fetch category products:', error);
-      } finally {
-        setCategoryLoading(false);
+        console.error('Failed to fetch AI Try-On campaign:', error);
       }
     };
-    fetchByCategory();
-    if (carouselRef.current) carouselRef.current.scrollLeft = 0;
-  }, [activeCategory]);
-
-  const handleBuyNow = (product) => {
-    openQuickAdd(product);
-  };
-
-  // Scroll carousel
-  const scrollCarousel = (direction) => {
-    if (carouselRef.current) {
-      const scrollAmount = 300;
-      carouselRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
-    }
-  };
+    fetchTryOnCampaign();
+  }, []);
 
   return (
     <Layout>
@@ -175,89 +149,69 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Shop by Sport - Tabbed Carousel */}
+      {/* ── AI Try-On — replaces Shop by Sport in this exact slot (same
+          background, same padding rhythm) rather than adding a section.
+          Deliberately NOT another image-left/text-right split — Hero and
+          Featured Team both already use that composition, and this is the
+          platform's flagship differentiator, not a third repeat of it.
+          Content follows Promise → Proof → Action: headline/subheadline set
+          up the claim, the enlarged comparison proves it (the section's
+          focal point — sized and spaced to read as a premium showcase, not
+          a supporting feature), then a short copy line and the CTA close
+          it. The CTA comes last on purpose — it's the action a fan takes
+          once they've seen the demo, not before.
+          Fully CMS-driven via the placement=tryOn Campaign: headline,
+          subheadline, body copy, CTA label/destination, before/after
+          images, featured product, schedule, and visibility are all
+          editable from the admin without a deploy. The copy below is only
+          the fallback shown while no campaign is configured — the slot
+          this section occupies is not allowed to go blank. ── */}
       <section className="pt-4 pb-10 md:pt-6 md:pb-16 lg:pt-8 lg:pb-24 overflow-hidden bg-paper">
         <div className="container-custom">
-          <div className="text-center mb-8 md:mb-10">
-            <h2 className="text-2xl md:text-editorial-headline mb-2 md:mb-4 font-bold text-ink-900">
-              Shop by Sport
+          {/* Promise */}
+          <div className="max-w-2xl mx-auto text-center mb-10 md:mb-16">
+            <h2
+              className="font-bold mb-4 md:mb-6 text-ink-900"
+              style={{
+                fontSize: 'clamp(2rem, 4.5vw, 3.5rem)',
+                letterSpacing: '-0.03em',
+                lineHeight: 1.05,
+              }}
+            >
+              {tryOnCampaign?.headline || 'WEAR THE PUSO.'}
             </h2>
-            <p className="text-sm md:text-lg mb-6 md:mb-8 text-ink-500">
-              Find gear for your favorite league
+            <p className="text-lg md:text-xl font-semibold text-ink-700">
+              {tryOnCampaign?.subheadline || "See yourself wearing your team's official merchandise before you buy."}
             </p>
-
-            {/* Category Tabs — flat text tabs, active state marked by an
-                underline/weight change, never a filled pill container
-                (COMPONENT_SPECIFICATION.md § Tabs). */}
-            <div className="inline-flex items-center gap-6 border-b-2 border-ink-200">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  aria-pressed={activeCategory === cat.id}
-                  className={`pb-3 -mb-0.5 border-b-2 font-semibold text-xs md:text-sm uppercase tracking-wide transition-colors duration-150 flex items-center gap-1.5 md:gap-2 ${
-                    activeCategory === cat.id
-                      ? 'border-ink-900 text-ink-900'
-                      : 'border-transparent text-ink-500 hover:text-ink-900'
-                  }`}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* Product Carousel */}
-          <div className="relative">
-            {/* Scroll Right Button */}
-            <button
-              onClick={() => scrollCarousel('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 border-2 border-ink-900 bg-white flex items-center justify-center transition-colors hover:bg-ink-900 hover:text-white text-ink-900 hidden md:flex"
-              aria-label="Scroll products"
-            >
-              <ChevronRightIcon className="w-6 h-6" />
-            </button>
+          {/* Proof — enlarged (~25% taller than the previous pass) and
+              wider (max-w-6xl vs 4xl), so the comparison itself is the
+              thing a fan's eye lands on first. */}
+          <div className="max-w-6xl mx-auto">
+            <BeforeAfterSlider
+              beforeImage={tryOnCampaign?.beforeImage}
+              afterImage={tryOnCampaign?.afterImage}
+              aspectClassName="aspect-[2/3] md:aspect-[5/4]"
+            />
 
-            {/* Carousel Container */}
-            <div
-              ref={carouselRef}
-              className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-4 snap-x snap-mandatory"
-              style={{ scrollSnapType: 'x mandatory' }}
-            >
-              {categoryLoading ? (
-                <div className="w-full flex justify-center py-12">
-                  <LoadingSpinner />
-                </div>
-              ) : categoryProducts.length > 0 ? (
-                categoryProducts.map((product) => (
-                  <div
-                    key={product._id}
-                    className="flex-shrink-0 w-[220px] md:w-[280px] snap-start"
-                  >
-                    <ProductCard product={product} onBuyNow={handleBuyNow} />
-                  </div>
-                ))
-              ) : (
-                <div className="w-full text-center py-12">
-                  <p className="text-ink-500 mb-4">No {activeCategory} products available yet</p>
-                  <Link to="/products" className="btn-primary">
-                    Browse All Products
-                  </Link>
-                </div>
-              )}
+            {/* Action — copy sells confidence, not the technology; CTA is
+                the section's last word, after the demo has made its case. */}
+            <div className="max-w-xl mx-auto text-center mt-8 md:mt-12">
+              <p className="text-sm md:text-lg mb-6 md:mb-8 text-ink-500 whitespace-pre-line" style={{ lineHeight: 1.72 }}>
+                {tryOnCampaign?.description || 'Upload one photo.\nSee yourself wearing your team\'s official jersey in seconds.'}
+              </p>
+              <Link
+                to={
+                  tryOnCampaign?.ctaLink ||
+                  (tryOnCampaign?.featuredProduct ? `/products/${tryOnCampaign.featuredProduct.slug}?tryOn=1` : '/products')
+                }
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                {tryOnCampaign?.ctaLabel || 'Try It On'}
+                <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
+              </Link>
             </div>
-          </div>
-
-          {/* View All Link */}
-          <div className="text-center mt-8">
-            <Link
-              to={`/products?sport=${activeCategory}`}
-              className="inline-flex items-center gap-2 font-semibold text-ink-700 hover:text-ink-900 transition-colors"
-            >
-              View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Products
-              <ChevronRightIcon className="w-5 h-5" />
-            </Link>
           </div>
         </div>
       </section>

@@ -177,11 +177,15 @@ describe('GET /products/recommendations/cart', () => {
     // limit is generous — the real UAAP catalog already has plenty of real
     // basketball accessories, so a small limit makes whether p5 lands in
     // the top N nondeterministic against production data, not a real bug.
+    // A generous limit against the live catalog is also genuinely slow
+    // under full-suite parallel load, hence the explicit timeout — this
+    // was timing out at the 5000ms default often enough to be a real flake,
+    // not a one-off.
     const res = await request(app).get(`/api/products/recommendations/cart?cartProductIds=${p1.id}&limit=200`);
     expect(res.status).toBe(200);
     expect(res.body.data.some((p) => p._id === p5.id)).toBe(true); // shorts complements jersey
     expect(res.body.data.some((p) => p._id === p1.id)).toBe(false); // never recommends what's already in cart
-  });
+  }, 20000);
 
   it('returns an empty list with no cartProductIds', async () => {
     const res = await request(app).get('/api/products/recommendations/cart');

@@ -6,10 +6,19 @@ import { authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// The single active, in-window, homepage-flagged campaign, or null (public — Milestone 3's Hero data source)
+const VALID_PLACEMENTS = ['hero', 'tryOn'];
+
+// The single active, in-window, homepage-flagged campaign for a placement, or
+// null (public). ?placement=hero powers the Hero once wired; ?placement=tryOn
+// powers the AI Try-On section. Required — silently defaulting to one
+// placement would be an easy way to serve the wrong campaign to the wrong slot.
 router.get('/active', async (req, res) => {
   try {
-    const campaign = await campaignRepository.findActiveHomepageCampaign();
+    const { placement } = req.query;
+    if (!VALID_PLACEMENTS.includes(placement)) {
+      return res.status(400).json({ success: false, message: `placement must be one of: ${VALID_PLACEMENTS.join(', ')}` });
+    }
+    const campaign = await campaignRepository.findActiveHomepageCampaign({ placement });
     res.json({ success: true, data: campaign });
   } catch (error) {
     logger.error({ err: error }, 'Get active campaign error');
