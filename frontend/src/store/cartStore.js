@@ -13,14 +13,28 @@ const useCartStore = create(
 
       // Drawer state (not persisted)
       isCartOpen: false,
-      pendingProduct: null,
 
-      openCart: (pendingProduct = null) => {
-        set({ isCartOpen: true, pendingProduct });
+      openCart: () => {
+        set({ isCartOpen: true });
       },
 
       closeCart: () => {
-        set({ isCartOpen: false, pendingProduct: null });
+        set({ isCartOpen: false });
+      },
+
+      // Quick Add Modal state (not persisted) — a product-card/gallery
+      // context (Home, Products, Virtual Try-On) has no dedicated
+      // size/color picker on screen, and sizing genuinely varies per item
+      // (a jersey isn't a keychain), so clicking "Add to Cart" there opens
+      // QuickAddModal to ask, rather than guessing a size for the fan.
+      quickAddProduct: null,
+
+      openQuickAdd: (product) => {
+        set({ quickAddProduct: product });
+      },
+
+      closeQuickAdd: () => {
+        set({ quickAddProduct: null });
       },
 
       addItem: (product, size, quantity = 1, color = null) => {

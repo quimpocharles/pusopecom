@@ -149,14 +149,14 @@ const ProductCard = ({ product, onBuyNow, dark = false }) => {
           </div>
         )}
 
-        {/* Buy Now Button on Hover */}
+        {/* Add to Cart Button on Hover */}
         {product.totalStock > 0 && onBuyNow && (
           <div className="absolute inset-x-0 bottom-0 p-3 z-10 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
             <button
               onClick={handleBuyNow}
               className="w-full btn-primary"
             >
-              Buy Now
+              Add to Cart
             </button>
           </div>
         )}

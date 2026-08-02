@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import CartDrawer from '../cart/CartDrawer';
+import QuickAddModal from '../cart/QuickAddModal';
 import AnnouncementBar from '../common/AnnouncementBar';
 
 // 2rem = 32px — must match AnnouncementBar's h-8
@@ -43,6 +44,7 @@ const Layout = ({ children }) => {
       </main>
       <Footer />
       <CartDrawer />
+      <QuickAddModal />
     </div>
   );
 };

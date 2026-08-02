@@ -63,6 +63,13 @@ const StarSelect = ({ value, onChange }) => (
 
 const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
+// Shelved: almost every product today has exactly one color variant, so the
+// swatch picker is dead UI more often than not. Selection/stock logic below
+// still runs on the auto-picked first in-stock color regardless — only the
+// picker itself is hidden. Flip back on once color variants are common
+// enough to be worth a fan's attention.
+const COLOR_SELECTOR_ENABLED = false;
+
 // Returns the full size list to display, merging standard sizes with DB sizes.
 // Sizes not in DB or with 0 stock are marked as unavailable.
 const getDisplaySizes = (availableSizes) => {
@@ -466,7 +473,7 @@ const ProductDetail = () => {
             <hr className="border-gray-200 mb-6" />
 
             {/* Color Selection */}
-            {hasColors && (
+            {COLOR_SELECTOR_ENABLED && hasColors && (
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-gray-900">Color</h3>

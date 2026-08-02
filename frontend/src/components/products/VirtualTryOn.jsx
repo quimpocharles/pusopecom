@@ -322,7 +322,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
               <button
                 onClick={() => {
                   onClose();
-                  useCartStore.getState().openCart(product);
+                  useCartStore.getState().openQuickAdd(product);
                 }}
                 className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
               >

@@ -28,7 +28,7 @@ const Home = () => {
   const [activeFeatured, setActiveFeatured] = useState(0);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState('basketball');
-  const openCart = useCartStore((state) => state.openCart);
+  const openQuickAdd = useCartStore((state) => state.openQuickAdd);
   const [openFaq, setOpenFaq] = useState(null);
   const carouselRef = useRef(null);
 
@@ -85,7 +85,7 @@ const Home = () => {
   }, [activeCategory]);
 
   const handleBuyNow = (product) => {
-    openCart(product);
+    openQuickAdd(product);
   };
 
   // Scroll carousel
@@ -157,7 +157,7 @@ const Home = () => {
                 Game Day Ready
               </h1>
               <p
-                className="text-sm md:text-lg mb-6 md:mb-8 max-w-md text-white/38"
+                className="text-sm md:text-lg mb-6 md:mb-8 max-w-md text-white/40"
                 style={{ lineHeight: 1.72 }}
               >
                 Introducing our 2025 collection of authentic jerseys, training gear, and accessories.
@@ -264,7 +264,7 @@ const Home = () => {
 
       {/* ── Marquee bar ──────────────────────────────────────────── */}
       <div
-        className="overflow-x-hidden text-xs md:text-sm bg-[#1a1a1a] text-white/35 border-t border-b border-white/6"
+        className="overflow-x-hidden text-xs md:text-sm bg-[#1a1a1a] text-white/35 border-t border-b border-white/5"
         style={{ padding: '10px 0' }}
       >
         <div className="animate-marquee whitespace-nowrap flex">
@@ -274,16 +274,16 @@ const Home = () => {
                 <SparklesIcon className="w-3 h-3 opacity-50" />
                 <span>Try jerseys virtually before you buy</span>
               </span>
-              <span className="text-white/12">✦</span>
+              <span className="text-white/10">✦</span>
               <span className="flex items-center gap-2">
                 <TruckIcon className="w-3 h-3 opacity-50" />
                 <span>Free shipping on orders over ₱2,000</span>
               </span>
-              <span className="text-white/12">✦</span>
+              <span className="text-white/10">✦</span>
               <span>Authentic licensed merchandise</span>
-              <span className="text-white/12">✦</span>
+              <span className="text-white/10">✦</span>
               <span>Support Philippine Sports 🇵🇭</span>
-              <span className="text-white/12">✦</span>
+              <span className="text-white/10">✦</span>
             </div>
           ))}
         </div>
@@ -309,7 +309,7 @@ const Home = () => {
                       key={product._id}
                       onClick={() => setActiveFeatured(index)}
                       className={`block text-left w-full transition-all duration-300 text-base md:text-2xl lg:text-[calc(2.2rem*0.9)] ${
-                        activeFeatured === index ? 'text-white' : 'text-white/18 hover:text-white/45'
+                        activeFeatured === index ? 'text-white' : 'text-white/20 hover:text-white/45'
                       }`}
                     >
                       <span
@@ -325,7 +325,7 @@ const Home = () => {
 
                 {/* Description of active product */}
                 <p
-                  className="text-sm md:text-base mt-5 md:mt-8 mb-5 md:mb-8 max-w-md transition-all duration-300 text-white/38"
+                  className="text-sm md:text-base mt-5 md:mt-8 mb-5 md:mb-8 max-w-md transition-all duration-300 text-white/40"
                   style={{ lineHeight: 1.72 }}
                 >
                   {featuredProducts[activeFeatured]?.description}
@@ -449,7 +449,7 @@ const Home = () => {
       <section className="bg-ink-900" style={{ padding: '64px 0 72px', overflow: 'hidden' }}>
         {/* Label */}
         <p
-          className="text-center mb-10 text-white/28"
+          className="text-center mb-10 text-white/30"
           style={{
             fontSize: '11px',
             letterSpacing: '0.16em',
@@ -526,7 +526,7 @@ const Home = () => {
           >
             Frequently Asked Questions
           </h2>
-          <p className="text-sm md:text-base text-center mb-8 md:mb-12 text-white/38">
+          <p className="text-sm md:text-base text-center mb-8 md:mb-12 text-white/40">
             Everything you need to know about Puso Pilipinas
           </p>
 
@@ -557,7 +557,7 @@ const Home = () => {
                 a: 'Yes! We ship worldwide so our kababayans abroad can rep Philippine sports no matter where they are. International shipping rates and delivery times vary by destination and will be calculated at checkout.',
               },
             ].map((faq, index) => (
-              <div key={index} className="border-b border-white/8">
+              <div key={index} className="border-b border-white/10">
                 <button
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                   className="w-full flex items-center justify-between py-5 md:py-6 text-left"
@@ -570,7 +570,7 @@ const Home = () => {
                   >
                     {faq.q}
                   </span>
-                  <span className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-white/38">
+                  <span className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-white/40">
                     <svg
                       className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${openFaq === index ? 'rotate-45' : ''}`}
                       fill="none"
@@ -590,7 +590,7 @@ const Home = () => {
                   }}
                 >
                   <p
-                    className="text-sm md:text-base pb-5 md:pb-6 text-white/38"
+                    className="text-sm md:text-base pb-5 md:pb-6 text-white/40"
                     style={{ lineHeight: 1.72 }}
                   >
                     {faq.a}

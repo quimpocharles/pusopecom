@@ -54,7 +54,7 @@ const Products = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({});
-  const openCart = useCartStore((state) => state.openCart);
+  const openQuickAdd = useCartStore((state) => state.openQuickAdd);
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [showSearchBox, setShowSearchBox] = useState(() => !!searchParams.get('search'));
@@ -184,7 +184,7 @@ const Products = () => {
   };
 
   const handleBuyNow = (product) => {
-    openCart(product);
+    openQuickAdd(product);
   };
 
   // ── Search handlers — same pattern the header's search used to run
