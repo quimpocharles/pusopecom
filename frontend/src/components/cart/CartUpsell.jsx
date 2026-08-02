@@ -48,10 +48,6 @@ const CartUpsell = ({ cartProductIds }) => {
     return () => { cancelled = true; };
   }, [cartProductIds.join(',')]);
 
-  const setColor = (productId, color) => {
-    setSelections((prev) => ({ ...prev, [productId]: { color, size: null } }));
-  };
-
   const setSize = (productId, size) => {
     setSelections((prev) => ({ ...prev, [productId]: { ...prev[productId], size } }));
   };
@@ -87,7 +83,6 @@ const CartUpsell = ({ cartProductIds }) => {
         {recommendations.map((product) => {
           const price = product.salePrice || product.price;
           const sel = selections[product._id] || {};
-          const hasColors = product.colors?.length > 0;
           const sizes = getSizes(product, sel.color);
           const canAdd = !!sel.size;
 
@@ -124,27 +119,6 @@ const CartUpsell = ({ cartProductIds }) => {
                   </p>
                 </div>
               </div>
-
-              {/* Color swatches (if variant product) */}
-              {hasColors && (
-                <div className="flex flex-wrap gap-1.5">
-                  {product.colors.map((c) => {
-                    const hasStock = c.sizes.some((s) => s.stock > 0);
-                    return (
-                      <button
-                        key={c.color}
-                        onClick={() => hasStock && setColor(product._id, c.color)}
-                        disabled={!hasStock}
-                        title={c.color}
-                        className={`w-6 h-6 rounded-full border-2 transition-all ${
-                          sel.color === c.color ? 'border-primary-600 scale-110' : 'border-gray-300'
-                        } ${!hasStock ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                        style={{ backgroundColor: c.hex || '#ccc' }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
 
               {/* Size chips */}
               <div className="flex flex-wrap gap-1.5">
