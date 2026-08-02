@@ -247,20 +247,47 @@ router.get('/recommendations/cart', async (req, res) => {
       complementaryCategories.delete(cat);
     }
 
+    // Team names already in the cart — a fan who added an Ateneo cap is far
+    // more likely to want an Ateneo shirt than a shirt from any other
+    // school, so this takes priority over plain category-complement below.
+    // `team` is a free-text column (not the Organization FK — see the
+    // schema comment on Product.teamRef), the same field the sport-match
+    // query below already reads, so this stays consistent with what every
+    // other route currently treats as the source of truth.
+    const cartTeams = [...new Set(cartProducts.map(p => p.team).filter(Boolean))];
+
     let recommendations = [];
 
-    // Try complementary categories in the same sport(s)
-    if (complementaryCategories.size > 0) {
+    // Tier 1: same team + complementary category + same sport
+    if (cartTeams.length > 0 && complementaryCategories.size > 0) {
       recommendations = await productRepository.find({
         where: {
           active: true,
           id: { notIn: ids },
+          team: { in: cartTeams },
           category: { in: [...complementaryCategories] },
           sport: { in: [...sports] },
           totalStock: { gt: 0 }
         },
+        orderBy: [{ featured: 'desc' }, { reviewCount: 'desc' }],
         take: Number(limit),
       });
+    }
+
+    // Tier 2: complementary categories in the same sport(s), any team
+    if (recommendations.length < Number(limit) && complementaryCategories.size > 0) {
+      const existing = new Set([...ids, ...recommendations.map(r => r._id)]);
+      const sameCategory = await productRepository.find({
+        where: {
+          active: true,
+          id: { notIn: [...existing] },
+          category: { in: [...complementaryCategories] },
+          sport: { in: [...sports] },
+          totalStock: { gt: 0 }
+        },
+        take: Number(limit) - recommendations.length,
+      });
+      recommendations = [...recommendations, ...sameCategory];
     }
 
     // Fall back to popular products in the same sport if not enough

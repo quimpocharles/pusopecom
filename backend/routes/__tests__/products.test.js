@@ -51,7 +51,8 @@ let p1; // jersey, basketball, men, featured, no sale
 let p2; // tshirt, volleyball, women, on sale
 let p3; // jersey, basketball, men — INACTIVE
 let p4; // cap, general sport, unisex — cheap, tests the general/unisex fallback
-let p5; // shorts, basketball — complementary-category recommendation target
+let p5; // shorts, basketball, same TEAM as p1 — complementary-category recommendation target
+let p6; // shorts, basketball, DIFFERENT team — same category as p5, used to prove team-priority ranking
 
 beforeAll(async () => {
   p1 = await makeProduct({ name: 'P1', category: 'jersey', sport: 'basketball', gender: 'men', price: 1000, featured: true });
@@ -59,6 +60,7 @@ beforeAll(async () => {
   p3 = await makeProduct({ name: 'P3', category: 'jersey', sport: 'basketball', gender: 'men', price: 2000, active: false });
   p4 = await makeProduct({ name: 'P4', category: 'cap', sport: 'general', gender: 'unisex', price: 300 });
   p5 = await makeProduct({ name: 'P5', category: 'shorts', sport: 'basketball', gender: 'unisex', price: 300 });
+  p6 = await makeProduct({ name: 'P6', category: 'shorts', sport: 'basketball', gender: 'unisex', price: 300, team: `${TEAM}-rival` });
 }, 30000);
 
 afterAll(async () => {
@@ -184,6 +186,15 @@ describe('GET /products/recommendations/cart', () => {
   it('returns an empty list with no cartProductIds', async () => {
     const res = await request(app).get('/api/products/recommendations/cart');
     expect(res.body.data).toEqual([]);
+  });
+
+  it('prioritizes a same-team complementary product over a different-team one', async () => {
+    // p5 shares p1's team; p6 is the same category/sport but a rival team.
+    // A tight limit forces the priority tier to prove itself: if team
+    // weren't prioritized, either could win depending on query order.
+    const res = await request(app).get(`/api/products/recommendations/cart?cartProductIds=${p1.id}&limit=1`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p) => p._id)).toEqual([p5.id]);
   });
 });
 
