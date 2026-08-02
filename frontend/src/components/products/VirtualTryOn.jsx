@@ -1,25 +1,65 @@
 import { useState, useRef, useEffect } from 'react';
-import { XMarkIcon, CameraIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 import useCartStore from '../../store/cartStore';
 import settingsService from '../../services/settingsService';
+import { useCameraCapture } from '../../hooks/useCameraCapture';
+import { optimizeImage } from '../../utils/imageOptimization';
+import { validateImage } from '../../utils/imageValidation';
+import TryOnEntryScreen from './tryOn/TryOnEntryScreen';
+import TryOnCameraScreen from './tryOn/TryOnCameraScreen';
+import TryOnPreviewScreen from './tryOn/TryOnPreviewScreen';
+import TryOnPreparingScreen from './tryOn/TryOnPreparingScreen';
 
+/**
+ * Orchestrates the image-acquisition flow (entry → camera/upload → preview
+ * → prepare) and then hands off into the existing AI-generation flow
+ * (loading → result), which is untouched below — same states
+ * (`loading`/`generatedImage`), same endpoint, same error handling, same
+ * loading UI. Acquisition concerns are split into their own modules
+ * (useCameraCapture, imageOptimization, imageValidation, and the
+ * tryOn/TryOn*Screen presentational components) rather than living here.
+ */
 const VirtualTryOn = ({ product, isOpen, onClose }) => {
+  // Unchanged from before this pass — the actual AI generation pipeline's
+  // own state and flow.
   const [userImage, setUserImage] = useState(null);
-  const [userImagePreview, setUserImagePreview] = useState(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState('');
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
+
+  // Acquisition flow state — everything before an image is handed to
+  // handleGenerate().
+  const [phase, setPhase] = useState('entry'); // 'entry' | 'camera' | 'preview' | 'preparing'
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewBlob, setPreviewBlob] = useState(null);
+  const [preparingStage, setPreparingStage] = useState('preparing');
+
   const fileInputRef = useRef(null);
+  const camera = useCameraCapture();
 
   useEffect(() => {
     if (!isOpen) return;
     settingsService.getSettings().then((res) => {
       if (res.data?.tryOnAd) setAd(res.data.tryOnAd);
     }).catch(() => {});
+  }, [isOpen]);
+
+  // Reset the acquisition flow (and release the camera) every time the
+  // modal closes — it doesn't unmount between opens (isOpen just gates
+  // what renders), so state would otherwise leak into the next open.
+  useEffect(() => {
+    if (!isOpen) {
+      camera.stop();
+      setPhase('entry');
+      setPreviewUrl(null);
+      setPreviewBlob(null);
+      setError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Show blurred preview after 30s to signal "almost done"
@@ -52,23 +92,99 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
     return () => clearInterval(interval);
   }, [loading]);
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setError('Image must be less than 10MB');
-        return;
-      }
-      setUserImage(file);
-      setUserImagePreview(URL.createObjectURL(file));
-      setGeneratedImage(null);
-      setError('');
+  // ── Acquisition handlers ──────────────────────────────────────────
+
+  const handleTakePhoto = async () => {
+    setError('');
+    const opened = await camera.open();
+    if (opened) {
+      setPhase('camera');
+    } else {
+      // camera.error is set by the hook; surfaced via the shared error
+      // banner below, with Upload Existing Photo still right there on the
+      // entry screen — guides the user onward without interrupting anything.
+      setError(camera.error || 'Camera unavailable. You can upload a photo instead.');
     }
   };
 
-  const handleGenerate = async () => {
-    if (!userImage) {
-      setError('Please upload your photo first');
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError("We couldn't read this file. Please choose a photo.");
+      return;
+    }
+    setError('');
+    setPreviewBlob(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setPhase('preview');
+  };
+
+  const handleCameraCapture = async () => {
+    const blob = await camera.capture();
+    camera.stop();
+    if (!blob) {
+      setError('Could not capture a photo. Please try again.');
+      setPhase('entry');
+      return;
+    }
+    setPreviewBlob(blob);
+    setPreviewUrl(URL.createObjectURL(blob));
+    setPhase('preview');
+  };
+
+  const handleCancelCamera = () => {
+    camera.stop();
+    setPhase('entry');
+  };
+
+  const handleRetake = async () => {
+    setError('');
+    const opened = await camera.open();
+    setPhase(opened ? 'camera' : 'entry');
+    if (!opened) setError(camera.error || 'Camera unavailable. You can upload a photo instead.');
+  };
+
+  const handleUsePhoto = async () => {
+    setError('');
+    setPhase('preparing');
+    setPreparingStage('preparing');
+
+    let finalBlob = previewBlob;
+    try {
+      setPreparingStage('optimizing');
+      const { blob, canvas } = await optimizeImage(previewBlob);
+      finalBlob = blob;
+
+      setPreparingStage('validating');
+      const validation = await validateImage(canvas);
+      if (!validation.valid) {
+        setError(validation.message);
+        setPhase('preview');
+        return;
+      }
+    } catch (err) {
+      // Optimization failing is never fatal — fall back to the original
+      // capture/upload rather than blocking the fan from trying it on.
+      console.error('Image optimization failed, using original photo:', err);
+    }
+
+    setPreparingStage('starting');
+    setUserImage(finalBlob);
+    await handleGenerate(finalBlob);
+  };
+
+  // ── AI generation — unchanged pipeline below this point ─────────────
+
+  const handleGenerate = async (imageOverride) => {
+    const imageToSend = imageOverride ?? userImage;
+    if (!imageToSend) {
+      setError('Please add a photo first');
       return;
     }
 
@@ -77,7 +193,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
 
     try {
       const formData = new FormData();
-      formData.append('userImage', userImage);
+      formData.append('userImage', imageToSend);
       formData.append('productImageUrl', product.images[0]);
       formData.append('productName', product.name);
       if (product._id) formData.append('productId', product._id);
@@ -103,13 +219,6 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleReset = () => {
-    setUserImage(null);
-    setUserImagePreview(null);
-    setGeneratedImage(null);
-    setError('');
   };
 
   if (!isOpen) return null;
@@ -239,37 +348,40 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       );
     }
 
-    // User uploaded photo (ready to generate)
-    if (userImagePreview) {
+    // ── Acquisition phases ──────────────────────────────────────────
+    if (phase === 'preparing') {
+      return <TryOnPreparingScreen stage={preparingStage} />;
+    }
+
+    if (phase === 'camera') {
       return (
-        <div className="relative w-full aspect-[3/4] rounded-xl overflow-hidden">
-          <img
-            src={userImagePreview}
-            alt="Your photo"
-            className="w-full h-full object-cover"
-          />
-          <button
-            onClick={handleReset}
-            className="absolute top-2 right-2 bg-white/90 p-2 rounded-full hover:bg-white transition-colors shadow-lg"
-          >
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
+        <TryOnCameraScreen
+          videoRef={camera.videoRef}
+          canvasRef={camera.canvasRef}
+          onCapture={handleCameraCapture}
+          onCancel={handleCancelCamera}
+        />
       );
     }
 
-    // Empty state - upload prompt
+    if (phase === 'preview') {
+      return (
+        <TryOnPreviewScreen
+          imageUrl={previewUrl}
+          onUsePhoto={handleUsePhoto}
+          onRetake={handleRetake}
+          onChooseAnother={handleUploadClick}
+          cameraAvailable={camera.hasCamera !== false}
+        />
+      );
+    }
+
     return (
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full aspect-[3/4] border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-all p-6"
-      >
-        <CameraIcon className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mb-4" />
-        <p className="text-gray-600 font-medium text-center mb-2">Upload Your Photo</p>
-        <p className="text-sm text-gray-400 text-center">
-          Front-facing photo with good lighting works best
-        </p>
-      </div>
+      <TryOnEntryScreen
+        hasCamera={camera.hasCamera}
+        onTakePhoto={handleTakePhoto}
+        onUploadPhoto={handleUploadClick}
+      />
     );
   };
 
@@ -316,31 +428,24 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Action Button */}
-          {!loading && (
-            generatedImage ? (
-              <button
-                onClick={() => {
-                  onClose();
-                  useCartStore.getState().openQuickAdd(product);
-                }}
-                className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
-              >
-                <ShoppingCartIcon className="w-5 h-5" />
-                Add to Cart
-              </button>
-            ) : (
-              <button
-                onClick={userImagePreview ? handleGenerate : () => fileInputRef.current?.click()}
-                className="btn-primary w-full mt-4"
-              >
-                {userImagePreview ? 'Generate Try-On' : 'Upload Photo'}
-              </button>
-            )
+          {/* Action Button — only the post-generation states need one here;
+              every acquisition-phase screen (entry/camera/preview) owns
+              its own action buttons. */}
+          {!loading && generatedImage && (
+            <button
+              onClick={() => {
+                onClose();
+                useCartStore.getState().openQuickAdd(product);
+              }}
+              className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
+            >
+              <ShoppingCartIcon className="w-5 h-5" />
+              Add to Cart
+            </button>
           )}
 
-          {/* Tips - only show before upload */}
-          {!userImagePreview && !loading && (
+          {/* Tips - only show on the entry screen */}
+          {phase === 'entry' && !loading && !generatedImage && (
             <div className="mt-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500">
                 <span className="font-medium">Tip:</span> Use a clear front-facing photo for best results
