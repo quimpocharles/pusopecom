@@ -9,7 +9,7 @@ import * as shippingEventRepository from '../repositories/shippingEventRepositor
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
-import { createCheckout, getCheckoutStatus } from '../services/mayaService.js';
+import * as paymentService from '../services/paymentService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
 
 const router = express.Router();
@@ -38,19 +38,27 @@ async function releaseStock(order) {
 }
 
 /**
- * Applies the consequences of a resolved Maya payment status. Shared by
- * both /verify-payment (the customer's browser polling after returning
- * from checkout) and the webhook — the two paths converge here so a
- * payment is only ever resolved once, via tryResolvePayment's atomic
- * guard, regardless of which path notices first.
+ * Applies the consequences of a resolved payment status. Shared by both
+ * /verify-payment (the customer's browser polling after returning from
+ * checkout) and the webhook — the two paths converge here so a payment is
+ * only ever resolved once, via tryResolvePayment's atomic guard,
+ * regardless of which path notices first.
+ *
+ * `gatewayStatus` is the normalized, gateway-agnostic status paymentService
+ * returns ('succeeded'|'failed'|'expired'|'pending') — never a
+ * gateway-specific string like Maya's 'PAYMENT_SUCCESS'.
  */
-async function applyPaymentResolution(order, mayaPaymentStatus) {
-  if (mayaPaymentStatus === 'PAYMENT_SUCCESS') {
+async function applyPaymentResolution(order, gatewayStatus) {
+  const logContext = { orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod };
+
+  if (gatewayStatus === 'succeeded') {
     // applied is false only when a concurrent request already resolved
-    // this order — Maya's answer is still authoritative either way, so
-    // the caller can trust 'paid' as the return value regardless.
+    // this order — the gateway's answer is still authoritative either
+    // way, so the caller can trust 'paid' as the return value regardless.
     const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' });
     if (applied) {
+      logger.info(logContext, 'Payment verified — order marked paid');
+
       try {
         await shippingEventRepository.create({
           orderId: order.orderNumber,
@@ -59,27 +67,31 @@ async function applyPaymentResolution(order, mayaPaymentStatus) {
           region: order.shippingRegion || null,
         });
       } catch (shippingEventError) {
-        logger.error({ err: shippingEventError }, 'Failed to record shipping event');
+        logger.error({ err: shippingEventError, ...logContext }, 'Failed to record shipping event');
         Sentry.captureException(shippingEventError);
       }
 
       try {
         await sendOrderConfirmationEmail(order.email, order);
+        logger.info(logContext, 'Confirmation email sent');
       } catch (emailError) {
-        logger.error({ err: emailError }, 'Failed to send confirmation email');
+        logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
         Sentry.captureException(emailError);
       }
     }
     return 'paid';
   }
 
-  if (mayaPaymentStatus === 'PAYMENT_FAILED' || mayaPaymentStatus === 'PAYMENT_EXPIRED') {
+  if (gatewayStatus === 'failed' || gatewayStatus === 'expired') {
     const applied = await orderRepository.tryResolvePayment(order._id, 'failed');
-    if (applied) await releaseStock(order);
+    if (applied) {
+      logger.info({ ...logContext, reason: gatewayStatus }, 'Payment did not succeed — order marked failed, stock released');
+      await releaseStock(order);
+    }
     return 'failed';
   }
 
-  return order.paymentStatus; // still pending — Maya hasn't resolved it yet
+  return order.paymentStatus; // still pending — the gateway hasn't resolved it yet
 }
 
 // Create order and initiate Maya checkout
@@ -239,14 +251,20 @@ router.post('/',
         throw error;
       }
 
-      // Maya checkout session creation is an external call — deliberately
-      // outside the DB transaction above, both because an external call
-      // can't be rolled back and because holding a transaction open across
-      // a slow network call would hold row locks far longer than necessary.
+      // Gateway checkout session creation is an external call —
+      // deliberately outside the DB transaction above, both because an
+      // external call can't be rolled back and because holding a
+      // transaction open across a slow network call would hold row locks
+      // far longer than necessary.
       try {
-        const { checkoutId, redirectUrl } = await createCheckout(order);
+        const { paymentReference, redirectUrl } = await paymentService.createCheckoutSession(order);
 
-        await orderRepository.updateById(order._id, { mayaPaymentId: checkoutId, mayaCheckoutUrl: redirectUrl });
+        await orderRepository.updateById(order._id, { mayaPaymentId: paymentReference, mayaCheckoutUrl: redirectUrl });
+
+        logger.info(
+          { orderNumber: order.orderNumber, paymentId: paymentReference, gateway: order.paymentMethod, customerId: req.user?._id },
+          'Order created'
+        );
 
         res.status(201).json({
           success: true,
@@ -256,13 +274,16 @@ router.post('/',
             checkoutUrl: redirectUrl
           }
         });
-      } catch (mayaError) {
+      } catch (gatewayError) {
         // Checkout could never be paid for — release the reservation
         // (Commerce Engine: stock reserved at placement releases
         // automatically when checkout doesn't complete) rather than
         // leaving it permanently decremented with no way to pay for it.
-        logger.error({ err: mayaError }, 'Maya checkout failed');
-        Sentry.captureException(mayaError);
+        logger.error(
+          { err: gatewayError, orderNumber: order.orderNumber, gateway: order.paymentMethod },
+          'Gateway checkout session creation failed'
+        );
+        Sentry.captureException(gatewayError);
         await releaseStock(order);
         await orderRepository.updateById(order._id, { paymentStatus: 'failed' });
 
@@ -273,7 +294,7 @@ router.post('/',
         });
       }
     } catch (error) {
-      logger.error({ err: error }, 'Create order error');
+      logger.error({ err: error, email: req.body?.email, customerId: req.user?._id }, 'Create order error');
       Sentry.captureException(error);
       res.status(500).json({
         success: false,
@@ -439,13 +460,13 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
       return res.json({ success: true, data: { paymentStatus: order.paymentStatus } });
     }
 
-    // Poll Maya for checkout status
-    const checkoutData = await getCheckoutStatus(order.mayaPaymentId);
-    const paymentStatus = await applyPaymentResolution(order, checkoutData.paymentStatus);
+    // Poll the gateway for checkout status
+    const { status } = await paymentService.getPaymentStatus(order.mayaPaymentId, order.paymentMethod);
+    const paymentStatus = await applyPaymentResolution(order, status);
 
     res.json({ success: true, data: { paymentStatus } });
   } catch (error) {
-    logger.error({ err: error }, 'Verify payment error');
+    logger.error({ err: error, orderNumber: req.params.orderNumber }, 'Verify payment error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to verify payment' });
   }
@@ -531,10 +552,10 @@ router.get('/user/:userId', authenticate, async (req, res) => {
 // config) — so rather than fabricate a signature check against an
 // unconfirmed scheme, this treats the POST as nothing more than a wake-up
 // signal. The actual payment status is decided by an authenticated pull
-// against Maya's own API (getCheckoutStatus, signed with our secret key)
-// — the same trusted mechanism /verify-payment already relies on. A
-// forged webhook can, at worst, trigger one redundant, harmless status
-// check; it can never itself flip an order to paid or failed.
+// against Maya's own API (paymentService.getPaymentStatus, signed with our
+// secret key) — the same trusted mechanism /verify-payment already relies
+// on. A forged webhook can, at worst, trigger one redundant, harmless
+// status check; it can never itself flip an order to paid or failed.
 router.post('/webhooks/maya', async (req, res) => {
   try {
     const { requestReferenceNumber } = req.body || {};
@@ -542,17 +563,20 @@ router.post('/webhooks/maya', async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
+    logger.info({ orderNumber: requestReferenceNumber, gateway: 'maya' }, 'Webhook received');
+
     const order = await orderRepository.findByOrderNumber(requestReferenceNumber);
     if (!order || order.paymentStatus === 'paid' || order.paymentStatus === 'failed' || !order.mayaPaymentId) {
       return res.json({ success: true });
     }
 
-    const checkoutData = await getCheckoutStatus(order.mayaPaymentId);
-    await applyPaymentResolution(order, checkoutData.paymentStatus);
+    const { status } = await paymentService.getPaymentStatus(order.mayaPaymentId, order.paymentMethod);
+    logger.info({ orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod, status }, 'Webhook verified against gateway');
+    await applyPaymentResolution(order, status);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error({ err: error }, 'Webhook error');
+    logger.error({ err: error, orderNumber: req.body?.requestReferenceNumber }, 'Webhook error');
     Sentry.captureException(error);
     res.status(500).json({ success: false });
   }

@@ -478,7 +478,7 @@ describe('Order — multi-Organization-shaped Order-plus-OrderItems, and relatio
       );
 
       expect(order._id).toBeTypeOf('string');
-      expect(order.orderNumber).toMatch(/^PP-/);
+      expect(order.orderNumber).toMatch(/^PS-\d{8}-[A-Z0-9]{6}$/);
       expect(order.items).toHaveLength(1);
       // Not included, so product falls back to the bare id — exactly what
       // Order.items[].product looked like in Mongoose before .populate().

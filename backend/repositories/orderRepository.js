@@ -1,11 +1,38 @@
+import crypto from 'crypto';
 import prisma from '../lib/prisma.js';
 import { serialize, withRelationFallback } from './serialize.js';
 
-/** Matches orderSchema.pre('validate')'s order number generation exactly. */
-export function generateOrderNumber() {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `PP-${timestamp}-${random}`;
+const ORDER_NUMBER_PREFIX = process.env.ORDER_NUMBER_PREFIX || 'PS';
+// Excludes 0/O/1/I — a support agent reading this back to a customer over
+// the phone, or a customer typing it off a shipping label, shouldn't have
+// to guess which character it was.
+const ORDER_NUMBER_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ORDER_NUMBER_SUFFIX_LENGTH = 6;
+const MAX_ORDER_NUMBER_ATTEMPTS = 5;
+
+function randomOrderSuffix() {
+  const bytes = crypto.randomBytes(ORDER_NUMBER_SUFFIX_LENGTH);
+  let result = '';
+  for (let i = 0; i < ORDER_NUMBER_SUFFIX_LENGTH; i++) {
+    result += ORDER_NUMBER_ALPHABET[bytes[i] % ORDER_NUMBER_ALPHABET.length];
+  }
+  return result;
+}
+
+/**
+ * PS-20260802-8F4X2K — configurable prefix (ORDER_NUMBER_PREFIX env var,
+ * default PS), UTC creation date, and a 6-character crypto-random
+ * alphanumeric suffix (32^6 ≈ 1.07 billion combinations per day). Never
+ * derived from or containing the database id. Collisions are made rare by
+ * this, not impossible — create() below is what actually guarantees
+ * uniqueness, by retrying on the (expected to be exceedingly rare) case
+ * where one occurs anyway.
+ */
+export function generateOrderNumber(date = new Date()) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${ORDER_NUMBER_PREFIX}-${y}${m}${d}-${randomOrderSuffix()}`;
 }
 
 const ORDER_RELATION_MAP = { user: 'userId' };
@@ -104,29 +131,45 @@ export async function count({ where, client = prisma } = {}) {
  * documented in CLAUDE.md.
  */
 export async function create({ items = [], shippingAddress, ...data }, { client = prisma } = {}) {
-  const orderNumber = data.orderNumber || generateOrderNumber();
-
-  const order = await client.order.create({
-    data: {
-      ...data,
-      ...flattenShippingAddress(shippingAddress),
-      orderNumber,
-      items: {
-        create: items.map(({ product, productId, name, price, quantity, size, color, image }) => ({
-          productId: productId || product,
-          name,
-          price,
-          quantity,
-          size,
-          color,
-          image,
-        })),
-      },
+  const baseData = {
+    ...data,
+    ...flattenShippingAddress(shippingAddress),
+    items: {
+      create: items.map(({ product, productId, name, price, quantity, size, color, image }) => ({
+        productId: productId || product,
+        name,
+        price,
+        quantity,
+        size,
+        color,
+        image,
+      })),
     },
-    include: DEFAULT_INCLUDE,
-  });
+  };
 
-  return reshapeOrder(serialize(withOrderFallbacks(order)));
+  // A caller-supplied orderNumber (e.g. a fixture) is used exactly once,
+  // with no retry — retrying would silently generate a different number
+  // than the one the caller explicitly asked for.
+  if (data.orderNumber) {
+    const order = await client.order.create({ data: baseData, include: DEFAULT_INCLUDE });
+    return reshapeOrder(serialize(withOrderFallbacks(order)));
+  }
+
+  // orderNumber has the only extra unique constraint on Order beyond its
+  // primary key, so a P2002 here can only mean a generated-number
+  // collision — retry with a freshly generated one rather than failing
+  // the whole checkout over odds this long.
+  for (let attempt = 1; attempt <= MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
+    try {
+      const order = await client.order.create({
+        data: { ...baseData, orderNumber: generateOrderNumber() },
+        include: DEFAULT_INCLUDE,
+      });
+      return reshapeOrder(serialize(withOrderFallbacks(order)));
+    } catch (error) {
+      if (error.code !== 'P2002' || attempt === MAX_ORDER_NUMBER_ATTEMPTS) throw error;
+    }
+  }
 }
 
 export async function updateById(id, data, { include = DEFAULT_INCLUDE, client = prisma } = {}) {

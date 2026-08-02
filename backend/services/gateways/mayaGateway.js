@@ -1,6 +1,15 @@
 import axios from 'axios';
-import logger from '../lib/logger.js';
-import Sentry from '../lib/sentry.js';
+import logger from '../../lib/logger.js';
+import Sentry from '../../lib/sentry.js';
+
+/**
+ * Maya's own implementation of the gateway interface paymentService.js
+ * defines — createCheckoutSession(order) and getPaymentStatus(reference)
+ * with the exact shapes documented there. Moved from the former
+ * services/mayaService.js verbatim except for the two return shapes,
+ * which are now gateway-agnostic (paymentReference instead of Maya's own
+ * checkoutId; a normalized status instead of Maya's PAYMENT_* vocabulary).
+ */
 
 const MAYA_API_URL = process.env.MAYA_SANDBOX === 'true'
   ? 'https://pg-sandbox.paymaya.com'
@@ -18,7 +27,23 @@ const getSecretAuthHeader = () => {
   return `Basic ${auth}`;
 };
 
-export const createCheckout = async (order) => {
+// Maya's own status vocabulary, normalized to the four-state one every
+// gateway module reports through paymentService.js. Anything Maya returns
+// that isn't one of the two explicit terminal states below is treated as
+// still pending — the same fallthrough applyPaymentResolution (routes/
+// orders.js) always had, just made an explicit table instead of an
+// implicit else-branch.
+const STATUS_MAP = {
+  PAYMENT_SUCCESS: 'succeeded',
+  PAYMENT_FAILED: 'failed',
+  PAYMENT_EXPIRED: 'expired',
+};
+
+function normalizeStatus(mayaStatus) {
+  return STATUS_MAP[mayaStatus] || 'pending';
+}
+
+export async function createCheckoutSession(order) {
   try {
     const checkoutData = {
       totalAmount: {
@@ -80,20 +105,20 @@ export const createCheckout = async (order) => {
     );
 
     return {
-      checkoutId: response.data.checkoutId,
+      paymentReference: response.data.checkoutId,
       redirectUrl: response.data.redirectUrl
     };
   } catch (error) {
-    logger.error({ err: error }, 'Maya checkout error');
+    logger.error({ err: error, orderNumber: order.orderNumber, gateway: 'maya' }, 'Maya checkout error');
     Sentry.captureException(error);
     throw new Error(error.response?.data?.message || 'Failed to create checkout session');
   }
-};
+}
 
-export const getCheckoutStatus = async (checkoutId) => {
+export async function getPaymentStatus(paymentReference) {
   try {
     const response = await axios.get(
-      `${MAYA_API_URL}/checkout/v1/checkouts/${checkoutId}`,
+      `${MAYA_API_URL}/checkout/v1/checkouts/${paymentReference}`,
       {
         headers: {
           'Authorization': getSecretAuthHeader()
@@ -101,20 +126,18 @@ export const getCheckoutStatus = async (checkoutId) => {
       }
     );
 
-    return response.data;
+    return {
+      status: normalizeStatus(response.data.paymentStatus),
+      raw: response.data,
+    };
   } catch (error) {
-    logger.error({ err: error }, 'Maya status check error');
+    logger.error({ err: error, paymentReference, gateway: 'maya' }, 'Maya status check error');
     Sentry.captureException(error);
     throw new Error('Failed to retrieve checkout status');
   }
-};
-
-export const verifyWebhook = (webhookData) => {
-  return webhookData && webhookData.status === 'PAYMENT_SUCCESS';
-};
+}
 
 export default {
-  createCheckout,
-  getCheckoutStatus,
-  verifyWebhook
+  createCheckoutSession,
+  getPaymentStatus,
 };

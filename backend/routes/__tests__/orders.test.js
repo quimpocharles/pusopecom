@@ -17,9 +17,9 @@ vi.mock('../../middleware/auth.js', () => ({
   },
 }));
 
-vi.mock('../../services/mayaService.js', () => ({
-  createCheckout: vi.fn(),
-  getCheckoutStatus: vi.fn(),
+vi.mock('../../services/paymentService.js', () => ({
+  createCheckoutSession: vi.fn(),
+  getPaymentStatus: vi.fn(),
 }));
 
 vi.mock('../../services/emailService.js', () => ({
@@ -27,7 +27,7 @@ vi.mock('../../services/emailService.js', () => ({
 }));
 
 const { default: ordersRouter } = await import('../orders.js');
-const mayaService = await import('../../services/mayaService.js');
+const paymentService = await import('../../services/paymentService.js');
 const emailService = await import('../../services/emailService.js');
 
 const app = express();
@@ -105,11 +105,11 @@ afterAll(async () => {
 describe('POST /orders — stock reservation atomicity', () => {
   it('creates an order and atomically decrements stock', async () => {
     const product = await makeProduct({ name: 'Decrement' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_1', redirectUrl: 'https://pay.example/chk_1' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_1', redirectUrl: 'https://pay.example/chk_1' });
 
     const res = await request(app).post('/api/orders').send(validOrderPayload(product));
     expect(res.status).toBe(201);
-    expect(res.body.data.orderNumber).toMatch(/^PP-/);
+    expect(res.body.data.orderNumber).toMatch(/^PS-\d{8}-[A-Z0-9]{6}$/);
     expect(res.body.data.checkoutUrl).toBe('https://pay.example/chk_1');
 
     const size = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
@@ -121,7 +121,7 @@ describe('POST /orders — stock reservation atomicity', () => {
 
   it('computes shipping fee server-side, ignoring any client-supplied value', async () => {
     const product = await makeProduct({ name: 'ShippingFee' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_2', redirectUrl: 'https://pay.example/chk_2' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_2', redirectUrl: 'https://pay.example/chk_2' });
 
     const payload = validOrderPayload(product);
     const res = await request(app).post('/api/orders').send({ ...payload, shippingFee: 0, total: 1 });
@@ -154,12 +154,12 @@ describe('POST /orders — stock reservation atomicity', () => {
     const scarceSize = await prisma.productSize.findFirst({ where: { productId: scarce.id, size: 'M' } });
     expect(scarceSize.stock).toBe(1);
 
-    expect(mayaService.createCheckout).not.toHaveBeenCalled();
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
   }, 15000);
 
   it('the actual race: two concurrent orders for the last unit — only one succeeds', async () => {
     const product = await makeProduct({ name: 'RaceCondition', sizes: { create: [{ size: 'M', stock: 1 }] } });
-    mayaService.createCheckout.mockResolvedValue({ checkoutId: 'chk_race', redirectUrl: 'https://pay.example/chk_race' });
+    paymentService.createCheckoutSession.mockResolvedValue({ paymentReference: 'chk_race', redirectUrl: 'https://pay.example/chk_race' });
 
     const [a, b] = await Promise.allSettled([
       request(app).post('/api/orders').send(validOrderPayload(product)),
@@ -175,11 +175,11 @@ describe('POST /orders — stock reservation atomicity', () => {
 
   it('releases the stock reservation when Maya checkout creation fails', async () => {
     const product = await makeProduct({ name: 'MayaFailure' });
-    mayaService.createCheckout.mockRejectedValueOnce(new Error('Maya is down'));
+    paymentService.createCheckoutSession.mockRejectedValueOnce(new Error('Maya is down'));
 
     const res = await request(app).post('/api/orders').send(validOrderPayload(product));
     expect(res.status).toBe(500);
-    expect(res.body.orderNumber).toMatch(/^PP-/);
+    expect(res.body.orderNumber).toMatch(/^PS-\d{8}-[A-Z0-9]{6}$/);
 
     const size = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
     expect(size.stock).toBe(10); // released, not left permanently decremented
@@ -229,14 +229,14 @@ describe('POST /orders — structural validation', () => {
 describe('Webhook signature/authenticity — the platform audit\'s critical fix', () => {
   it('a forged webhook body claiming PAYMENT_SUCCESS does NOT mark the order paid unless Maya\'s own API confirms it', async () => {
     const product = await makeProduct({ name: 'ForgedWebhook' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_forge', redirectUrl: 'https://pay.example/chk_forge' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_forge', redirectUrl: 'https://pay.example/chk_forge' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
     // The attacker's payload claims success, but the authenticated pull
     // against Maya (mocked here) says otherwise — this is the entire
     // point of not trusting req.body.status directly.
-    mayaService.getCheckoutStatus.mockResolvedValueOnce({ paymentStatus: 'PAYMENT_FAILED' });
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'failed' });
 
     const webhookRes = await request(app).post('/api/orders/webhooks/maya').send({
       requestReferenceNumber: orderNumber,
@@ -251,11 +251,11 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 
   it('a genuine webhook (real Maya status confirms success) marks the order paid, records a shipping event, and emails once', async () => {
     const product = await makeProduct({ name: 'RealWebhook' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_real', redirectUrl: 'https://pay.example/chk_real' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_real', redirectUrl: 'https://pay.example/chk_real' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
-    mayaService.getCheckoutStatus.mockResolvedValue({ paymentStatus: 'PAYMENT_SUCCESS' });
+    paymentService.getPaymentStatus.mockResolvedValue({ status: 'succeeded' });
 
     const first = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_SUCCESS' });
     expect(first.status).toBe(200);
@@ -277,14 +277,14 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 
   it('webhook PAYMENT_FAILED restores stock', async () => {
     const product = await makeProduct({ name: 'WebhookFailRestore' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_fail', redirectUrl: 'https://pay.example/chk_fail' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fail', redirectUrl: 'https://pay.example/chk_fail' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
     const beforeSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
     expect(beforeSize.stock).toBe(9);
 
-    mayaService.getCheckoutStatus.mockResolvedValueOnce({ paymentStatus: 'PAYMENT_FAILED' });
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'failed' });
     const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_FAILED' });
     expect(res.status).toBe(200);
 
@@ -293,7 +293,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
   }, 15000);
 
   it('silently acknowledges a webhook for an unknown order, without erroring', async () => {
-    const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: 'PP-NOSUCHORDER', status: 'PAYMENT_SUCCESS' });
+    const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: 'PS-NOSUCHORDER', status: 'PAYMENT_SUCCESS' });
     expect(res.status).toBe(200);
   });
 
@@ -306,11 +306,11 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 describe('POST /orders/:orderNumber/verify-payment', () => {
   it('resolves a pending order to paid via the authenticated Maya pull', async () => {
     const product = await makeProduct({ name: 'VerifyPaid' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_verify', redirectUrl: 'https://pay.example/chk_verify' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_verify', redirectUrl: 'https://pay.example/chk_verify' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
-    mayaService.getCheckoutStatus.mockResolvedValueOnce({ paymentStatus: 'PAYMENT_SUCCESS' });
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     const res = await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
     expect(res.status).toBe(200);
     expect(res.body.data.paymentStatus).toBe('paid');
@@ -318,22 +318,22 @@ describe('POST /orders/:orderNumber/verify-payment', () => {
 
   it('does not call Maya again once already resolved', async () => {
     const product = await makeProduct({ name: 'VerifyAlreadyResolved' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_ar', redirectUrl: 'https://pay.example/chk_ar' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_ar', redirectUrl: 'https://pay.example/chk_ar' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
-    mayaService.getCheckoutStatus.mockResolvedValueOnce({ paymentStatus: 'PAYMENT_SUCCESS' });
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
 
-    mayaService.getCheckoutStatus.mockClear();
+    paymentService.getPaymentStatus.mockClear();
     const res = await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
     expect(res.status).toBe(200);
     expect(res.body.data.paymentStatus).toBe('paid');
-    expect(mayaService.getCheckoutStatus).not.toHaveBeenCalled();
+    expect(paymentService.getPaymentStatus).not.toHaveBeenCalled();
   }, 15000);
 
   it('404s for an unknown order number', async () => {
-    const res = await request(app).post('/api/orders/PP-NOSUCHORDER/verify-payment');
+    const res = await request(app).post('/api/orders/PS-NOSUCHORDER/verify-payment');
     expect(res.status).toBe(404);
   });
 });
@@ -341,7 +341,7 @@ describe('POST /orders/:orderNumber/verify-payment', () => {
 describe('GET /orders/:orderNumber — access control', () => {
   it('a guest (no owning user) order is readable by anyone', async () => {
     const product = await makeProduct({ name: 'GuestOrder' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_guest', redirectUrl: 'https://pay.example/chk_guest' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_guest', redirectUrl: 'https://pay.example/chk_guest' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const { orderNumber } = createRes.body.data;
 
@@ -353,7 +353,7 @@ describe('GET /orders/:orderNumber — access control', () => {
 
   it('an owned order is forbidden to a different logged-in user, allowed to its owner and to an admin', async () => {
     const product = await makeProduct({ name: 'OwnedOrder' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_owned', redirectUrl: 'https://pay.example/chk_owned' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_owned', redirectUrl: 'https://pay.example/chk_owned' });
     const createRes = await request(app)
       .post('/api/orders')
       .set('x-test-userid', 'test-user')
@@ -374,7 +374,7 @@ describe('GET /orders/:orderNumber — access control', () => {
   }, 15000);
 
   it('404s for a non-existent order number', async () => {
-    const res = await request(app).get('/api/orders/PP-NOSUCHORDER');
+    const res = await request(app).get('/api/orders/PS-NOSUCHORDER');
     expect(res.status).toBe(404);
   });
 });
@@ -393,7 +393,7 @@ describe('GET /orders/user/:userId', () => {
 describe('admin order routes', () => {
   it('PATCH /:id/status updates status/tracking/courier', async () => {
     const product = await makeProduct({ name: 'AdminStatusUpdate' });
-    mayaService.createCheckout.mockResolvedValueOnce({ checkoutId: 'chk_admin', redirectUrl: 'https://pay.example/chk_admin' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin', redirectUrl: 'https://pay.example/chk_admin' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
 
