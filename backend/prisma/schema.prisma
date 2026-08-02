@@ -618,6 +618,126 @@ model SiteSettings {
 }
 
 // ---------------------------------------------------------------------------
+// Homepage Configuration & Content
+//
+// Production Readiness Audit (2026-08-02) found the homepage's content and
+// section layout entirely hardcoded in Home.jsx, with no configuration model
+// behind it at all — this is the foundation that closes that gap. Milestone 1
+// only: schema, repositories, and API routes. Nothing in Home.jsx reads from
+// any of this yet (that's Milestones 3-5); these models exist so the admin
+// and frontend work in later milestones has real data to build against.
+// ---------------------------------------------------------------------------
+
+// The fixed, known set of reorderable/toggleable sections in the homepage's
+// own body — deliberately excludes the Announcement Bar, which is global
+// Layout chrome rendered on every page, not a Home.jsx section, and so isn't
+// something "homepage section order" can meaningfully include. Its content
+// (not its position) is still configurable, via PromoMessage below.
+enum HomepageSectionKey {
+  hero
+  shopBySport
+  marquee
+  featuredProducts
+  featuredTeam
+  partners
+  faq
+}
+
+// One row per HomepageSectionKey, self-healing (see homepageSectionRepository
+// .list()) rather than requiring a manual seed migration — a key with no row
+// yet just means nobody has changed the display order or visibility Home.jsx
+// already implicitly used before this model existed.
+model HomepageSection {
+  id           String             @id @default(uuid())
+  key          HomepageSectionKey @unique
+  displayOrder Int
+  active       Boolean            @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("homepage_sections")
+}
+
+// The Hero's content (DOMAIN_MODEL.md's Campaign: "ties a Story, Media, a
+// Collection or Drop, and often a Promotion together around a specific
+// real-world moment"). Platform-level only for now — no Organization link.
+// Milestone 4 (Featured Organization) extends Organization/Team directly per
+// its own brief rather than routing through Campaign, so adding an
+// organizationId here now would be exactly the speculative coupling
+// CLAUDE.md's "no abstraction before the second real use case" warns against.
+// `name` is the internal/admin label for telling campaigns apart in a list;
+// `headline` etc. are the actual public-facing copy — the two are allowed to
+// differ (an admin might name it "Aug 2026 Restock" for a headline that
+// actually reads "Game Day Ready").
+model Campaign {
+  id          String  @id @default(uuid())
+  name        String
+  eyebrow     String?
+  headline    String
+  description String?
+  image       String?
+  ctaLabel    String?
+  ctaLink     String?
+  accentColor String?
+
+  featuredOnHomepage Boolean   @default(false)
+  startDate          DateTime?
+  endDate            DateTime?
+  active             Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Backs campaignRepository.findActiveHomepageCampaign()'s primary filter;
+  // the startDate/endDate bounds are checked in application code rather than
+  // indexed directly — a handful of campaign rows never justifies a partial
+  // or range index, and Prisma 5 can't express one declaratively anyway (see
+  // the OrganizationParticipation model's own comment on that same limit).
+  @@index([featuredOnHomepage, active])
+  @@map("campaigns")
+}
+
+model FAQItem {
+  id           String  @id @default(uuid())
+  question     String
+  answer       String
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, displayOrder])
+  @@map("faq_items")
+}
+
+// Announcement Bar and Marquee Bar are two different components today with
+// two visually different jobs, but identical content shape — a short,
+// orderable, togglable line of promotional text. One model, one placement
+// field, rather than an AnnouncementMessage table and a near-identical
+// MarqueeMessage table beside it.
+enum PromoPlacement {
+  announcement
+  marquee
+}
+
+model PromoMessage {
+  id           String         @id @default(uuid())
+  placement    PromoPlacement
+  text         String
+  link         String?
+  displayOrder Int            @default(0)
+  active       Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([placement, active, displayOrder])
+  @@map("promo_messages")
+}
+
+// ---------------------------------------------------------------------------
 // TryOnLog — Mongoose used a TTL index (expireAfterSeconds: 90 days) to
 // auto-expire rows. Postgres has no equivalent; replaced by the same daily
 // node-cron cleanup job that handles UserActivity below (see server.js).

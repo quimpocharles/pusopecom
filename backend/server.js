@@ -28,6 +28,10 @@ import settingsRoutes from './routes/settings.js';
 import activityRoutes from './routes/activity.js';
 import shippingRoutes from './routes/shipping.js';
 import pickupRoutes from './routes/pickup.js';
+import homepageSectionRoutes from './routes/homepageSections.js';
+import campaignRoutes from './routes/campaigns.js';
+import faqRoutes from './routes/faq.js';
+import promoMessageRoutes from './routes/promoMessages.js';
 
 // Create Express app
 const app = express();
@@ -138,6 +142,10 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin/pickup', pickupRoutes);
+app.use('/api/homepage-sections', homepageSectionRoutes);
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api/faq', faqRoutes);
+app.use('/api/promo-messages', promoMessageRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {
