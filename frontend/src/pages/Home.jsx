@@ -108,10 +108,7 @@ const Home = () => {
       {/* ── Landing: Latest Collection, promoted to the page's opening
           statement. Fills the first viewport and clears the fixed header
           itself (Layout gives Home zero top padding). ── */}
-      <section
-        className="relative min-h-[92vh] md:min-h-screen flex items-center pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden"
-        style={{ background: '#0a0a0a' }}
-      >
+      <section className="relative min-h-[92vh] md:min-h-screen flex items-center pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden bg-ink-900">
         {/* Subtle grid texture — faded via radial mask, barely visible */}
         <div
           className="absolute inset-0 pointer-events-none"
@@ -129,7 +126,7 @@ const Home = () => {
           <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-center">
             {/* Image */}
             <div className="order-1">
-              <div className="aspect-[4/5] border-2 border-white/15 overflow-hidden" style={{ background: '#1a1a1a' }}>
+              <div className="aspect-[4/5] border-2 border-white/15 overflow-hidden bg-[#1a1a1a]">
                 <img
                   src={collectionImage}
                   alt="Latest Collection"
@@ -144,25 +141,24 @@ const Home = () => {
             {/* Text */}
             <div className="order-2">
               <p
-                className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4"
-                style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
+                className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4 text-white/35"
+                style={{ letterSpacing: '0.09em' }}
               >
                 New Collection
               </p>
               <h1
-                className="font-bold mb-4 md:mb-6"
+                className="font-bold mb-4 md:mb-6 text-white"
                 style={{
                   fontSize: 'clamp(2.5rem, 6vw, 5rem)',
                   letterSpacing: '-0.035em',
                   lineHeight: 1.02,
-                  color: '#fff',
                 }}
               >
                 Game Day Ready
               </h1>
               <p
-                className="text-sm md:text-lg mb-6 md:mb-8 max-w-md"
-                style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+                className="text-sm md:text-lg mb-6 md:mb-8 max-w-md text-white/38"
+                style={{ lineHeight: 1.72 }}
               >
                 Introducing our 2025 collection of authentic jerseys, training gear, and accessories.
                 From courtside to streetwear — designed for fans who live and breathe Philippine sports.
@@ -268,14 +264,8 @@ const Home = () => {
 
       {/* ── Marquee bar ──────────────────────────────────────────── */}
       <div
-        className="overflow-x-hidden text-xs md:text-sm"
-        style={{
-          background: '#1a1a1a',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          padding: '10px 0',
-          color: 'rgba(255,255,255,0.35)',
-        }}
+        className="overflow-x-hidden text-xs md:text-sm bg-[#1a1a1a] text-white/35 border-t border-b border-white/6"
+        style={{ padding: '10px 0' }}
       >
         <div className="animate-marquee whitespace-nowrap flex">
           {[...Array(2)].map((_, i) => (
@@ -284,16 +274,16 @@ const Home = () => {
                 <SparklesIcon className="w-3 h-3 opacity-50" />
                 <span>Try jerseys virtually before you buy</span>
               </span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span className="text-white/12">✦</span>
               <span className="flex items-center gap-2">
                 <TruckIcon className="w-3 h-3 opacity-50" />
                 <span>Free shipping on orders over ₱2,000</span>
               </span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span className="text-white/12">✦</span>
               <span>Authentic licensed merchandise</span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span className="text-white/12">✦</span>
               <span>Support Philippine Sports 🇵🇭</span>
-              <span style={{ color: 'rgba(255,255,255,0.12)' }}>✦</span>
+              <span className="text-white/12">✦</span>
             </div>
           ))}
         </div>
@@ -301,11 +291,11 @@ const Home = () => {
 
       {/* Featured Products — clickable list with changing image */}
       {featuredProducts.length > 0 && (
-        <section className="py-12 md:py-28" style={{ background: '#1a1a1a' }}>
+        <section className="py-12 md:py-28 bg-[#1a1a1a]">
           <div className="container-custom">
             <p
-              className="text-xs md:text-sm font-semibold uppercase mb-4 md:mb-6"
-              style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
+              className="text-xs md:text-sm font-semibold uppercase mb-4 md:mb-6 text-white/35"
+              style={{ letterSpacing: '0.09em' }}
             >
               our featured gear
             </p>
@@ -318,19 +308,14 @@ const Home = () => {
                     <button
                       key={product._id}
                       onClick={() => setActiveFeatured(index)}
-                      className="block text-left w-full transition-all duration-300 text-base md:text-2xl lg:text-[calc(2.2rem*0.9)]"
-                      style={{ color: activeFeatured === index ? '#fff' : 'rgba(255,255,255,0.18)' }}
-                      onMouseEnter={e => { if (activeFeatured !== index) e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
-                      onMouseLeave={e => { if (activeFeatured !== index) e.currentTarget.style.color = 'rgba(255,255,255,0.18)'; }}
+                      className={`block text-left w-full transition-all duration-300 text-base md:text-2xl lg:text-[calc(2.2rem*0.9)] ${
+                        activeFeatured === index ? 'text-white' : 'text-white/18 hover:text-white/45'
+                      }`}
                     >
                       <span
-                        className="font-semibold leading-tight"
-                        style={activeFeatured === index ? {
-                          textDecoration: 'underline',
-                          textDecorationColor: 'rgba(255,255,255,0.35)',
-                          textUnderlineOffset: '4px',
-                          textDecorationThickness: '2px',
-                        } : {}}
+                        className={`font-semibold leading-tight ${
+                          activeFeatured === index ? 'underline decoration-white/35 decoration-2 underline-offset-4' : ''
+                        }`}
                       >
                         {product.name.replace(/ (2024|2025|2024-25)$/, '')}
                       </span>
@@ -340,8 +325,8 @@ const Home = () => {
 
                 {/* Description of active product */}
                 <p
-                  className="text-sm md:text-base mt-5 md:mt-8 mb-5 md:mb-8 max-w-md transition-all duration-300"
-                  style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+                  className="text-sm md:text-base mt-5 md:mt-8 mb-5 md:mb-8 max-w-md transition-all duration-300 text-white/38"
+                  style={{ lineHeight: 1.72 }}
                 >
                   {featuredProducts[activeFeatured]?.description}
                 </p>
@@ -357,10 +342,7 @@ const Home = () => {
 
               {/* Right — product image */}
               <div className="order-first md:order-last">
-                <div
-                  className="aspect-[4/5] border-2 border-white/15 overflow-hidden relative"
-                  style={{ background: '#1a1a1a' }}
-                >
+                <div className="aspect-[4/5] border-2 border-white/15 overflow-hidden relative bg-[#1a1a1a]">
                   {featuredProducts.map((product, index) => (
                     <img
                       key={product._id}
@@ -428,13 +410,13 @@ const Home = () => {
 
             {/* Text */}
             <div className="order-2">
-              <p className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4 tracking-[0.09em]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              <p className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4 tracking-[0.09em] text-white/55">
                 Featured Team &middot; {featuredTeamMonth}
               </p>
               <h2 className="font-bold mb-4 md:mb-6 text-white" style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
                 {featuredTeam.name}
               </h2>
-              <p className="text-sm md:text-lg mb-6 md:mb-8 max-w-md" style={{ lineHeight: 1.72, color: 'rgba(255,255,255,0.75)' }}>
+              <p className="text-sm md:text-lg mb-6 md:mb-8 max-w-md text-white/75" style={{ lineHeight: 1.72 }}>
                 {featuredTeam.blurb}
               </p>
               <Link
@@ -464,15 +446,14 @@ const Home = () => {
         .partners-track-l { animation: partnersMarqueeL 76s linear infinite; }
         .partners-track-r { animation: partnersMarqueeR 76s linear infinite; }
       `}</style>
-      <section style={{ background: '#0a0a0a', padding: '64px 0 72px', overflow: 'hidden' }}>
+      <section className="bg-ink-900" style={{ padding: '64px 0 72px', overflow: 'hidden' }}>
         {/* Label */}
         <p
-          className="text-center mb-10"
+          className="text-center mb-10 text-white/28"
           style={{
             fontSize: '11px',
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.28)',
             fontWeight: 600,
           }}
         >
@@ -492,6 +473,7 @@ const Home = () => {
               {Array.from({ length: 32 }, (_, i) => [gilasImage, pbaImage, pvlImage, smartOImage][i % 4]).map((src, i) => (
                 <div
                   key={i}
+                  className="border-2 border-white/15 bg-white/5"
                   style={{
                     flexShrink: 0,
                     display: 'flex',
@@ -501,8 +483,6 @@ const Home = () => {
                     minWidth: '172px',
                     margin: '0 10px',
                     padding: '0 32px',
-                    border: '2px solid rgba(255,255,255,0.15)',
-                    background: 'rgba(255,255,255,0.05)',
                   }}
                 >
                   <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
@@ -517,6 +497,7 @@ const Home = () => {
               {Array.from({ length: 30 }, (_, i) => [uaapImage, ncaaImage, sbpImage][i % 3]).map((src, i) => (
                 <div
                   key={i}
+                  className="border-2 border-white/15 bg-white/5"
                   style={{
                     flexShrink: 0,
                     display: 'flex',
@@ -526,8 +507,6 @@ const Home = () => {
                     minWidth: '172px',
                     margin: '0 10px',
                     padding: '0 32px',
-                    border: '2px solid rgba(255,255,255,0.15)',
-                    background: 'rgba(255,255,255,0.05)',
                   }}
                 >
                   <img src={src} alt="" style={{ height: '48px', width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.62 }} />
@@ -539,15 +518,15 @@ const Home = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-12 md:py-24" style={{ background: '#1a1a1a' }}>
+      <section className="py-12 md:py-24 bg-[#1a1a1a]">
         <div className="container-custom max-w-3xl">
           <h2
-            className="font-bold text-center mb-3 md:mb-4"
-            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#fff' }}
+            className="font-bold text-center mb-3 md:mb-4 text-white"
+            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em' }}
           >
             Frequently Asked Questions
           </h2>
-          <p className="text-sm md:text-base text-center mb-8 md:mb-12" style={{ color: 'rgba(255,255,255,0.38)' }}>
+          <p className="text-sm md:text-base text-center mb-8 md:mb-12 text-white/38">
             Everything you need to know about Puso Pilipinas
           </p>
 
@@ -578,22 +557,20 @@ const Home = () => {
                 a: 'Yes! We ship worldwide so our kababayans abroad can rep Philippine sports no matter where they are. International shipping rates and delivery times vary by destination and will be calculated at checkout.',
               },
             ].map((faq, index) => (
-              <div key={index} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div key={index} className="border-b border-white/8">
                 <button
                   onClick={() => setOpenFaq(openFaq === index ? null : index)}
                   className="w-full flex items-center justify-between py-5 md:py-6 text-left"
                   aria-expanded={openFaq === index}
                 >
                   <span
-                    className="font-medium text-sm md:text-base pr-4 transition-colors"
-                    style={{ color: openFaq === index ? '#fff' : 'rgba(255,255,255,0.7)' }}
+                    className={`font-medium text-sm md:text-base pr-4 transition-colors ${
+                      openFaq === index ? 'text-white' : 'text-white/70'
+                    }`}
                   >
                     {faq.q}
                   </span>
-                  <span
-                    className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center"
-                    style={{ color: 'rgba(255,255,255,0.38)' }}
-                  >
+                  <span className="flex-shrink-0 w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-white/38">
                     <svg
                       className={`w-4 h-4 md:w-5 md:h-5 transition-transform duration-300 ${openFaq === index ? 'rotate-45' : ''}`}
                       fill="none"
@@ -613,8 +590,8 @@ const Home = () => {
                   }}
                 >
                   <p
-                    className="text-sm md:text-base pb-5 md:pb-6"
-                    style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+                    className="text-sm md:text-base pb-5 md:pb-6 text-white/38"
+                    style={{ lineHeight: 1.72 }}
                   >
                     {faq.a}
                   </p>
