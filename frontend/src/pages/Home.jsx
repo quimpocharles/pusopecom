@@ -6,9 +6,8 @@ import pvlImage from '../assets/images/pvl.png';
 import ncaaImage from '../assets/images/ncaa.png';
 import sbpImage from '../assets/images/sbp.png';
 import smartOImage from '../assets/images/smart-o.png';
-import bahayImage from '../assets/images/bahay.webp';
-import tryOnPreviewFallback from '../assets/images/blueGilas.gif';
 import collectionImage from '../assets/images/dwight.jpg';
+import featuredTeamImage from '../assets/images/bahay.webp';
 import { Link } from 'react-router-dom';
 import {
   ChevronRightIcon,
@@ -21,7 +20,6 @@ import ProductCard from '../components/products/ProductCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import useCartStore from '../store/cartStore';
 import productService from '../services/productService';
-import settingsService from '../services/settingsService';
 import SEO from '../components/common/SEO';
 
 const Home = () => {
@@ -32,11 +30,6 @@ const Home = () => {
   const [activeCategory, setActiveCategory] = useState('basketball');
   const openCart = useCartStore((state) => state.openCart);
   const [openFaq, setOpenFaq] = useState(null);
-  const [tryOnSettings, setTryOnSettings] = useState({
-    title: 'Try on the Gilas Pilipinas shirt!',
-    image: '',
-    productUrl: '/products/gilas-pilipinas-t-shirt',
-  });
   const carouselRef = useRef(null);
 
   const categories = [
@@ -46,24 +39,20 @@ const Home = () => {
     { id: 'esports', label: 'E-Sports', icon: '🎮' },
   ];
 
-  // Fetch site settings for try-on section
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await settingsService.getSettings();
-        if (res.data?.tryOn) {
-          setTryOnSettings((prev) => ({
-            title: res.data.tryOn.title || prev.title,
-            image: res.data.tryOn.image || prev.image,
-            productUrl: res.data.tryOn.productUrl || prev.productUrl,
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to fetch settings:', error);
-      }
-    };
-    fetchSettings();
-  }, []);
+  // Featured Team — swapped by hand once a month. Update these five fields
+  // (image import above included) and nothing else needs to change. `color`
+  // is the institution's own identity color (DESIGN_TOKENS.md §
+  // institution.identity) — the one slot the platform's neutral palette
+  // deliberately leaves open for an Organization's own color to lead.
+  const featuredTeam = {
+    name: 'Ateneo de Manila University',
+    image: featuredTeamImage,
+    imageAlt: 'Ateneo de Manila University fans on game day',
+    blurb: 'From Katipunan to the Big Dome, Blue Eagle pride shows up every game day and never quiets down.',
+    teamQuery: 'Ateneo de Manila University',
+    color: '#0A2463',
+  };
+  const featuredTeamMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Fetch featured products
   useEffect(() => {
@@ -83,7 +72,7 @@ const Home = () => {
     const fetchByCategory = async () => {
       setCategoryLoading(true);
       try {
-        const res = await productService.getProducts({ sport: activeCategory, limit: 20 });
+        const res = await productService.getProducts({ sport: activeCategory, sort: 'most-bought', limit: 20 });
         setCategoryProducts(res.data);
       } catch (error) {
         console.error('Failed to fetch category products:', error);
@@ -116,12 +105,14 @@ const Home = () => {
         title="Puso Pilipinas — Philippine Sports Merchandise | Basketball, Volleyball, E-Sports"
         description="Shop authentic jerseys, apparel, and accessories for basketball, volleyball, football, and e-sports. Rep Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and more. Free shipping on select items."
       />
-      {/* ── Hero Section: Virtual Try-On Lead ───────────────────────── */}
+      {/* ── Landing: Latest Collection, promoted to the page's opening
+          statement. Fills the first viewport and clears the fixed header
+          itself (Layout gives Home zero top padding). ── */}
       <section
-        className="relative flex flex-col items-center text-center overflow-hidden"
+        className="relative min-h-[92vh] md:min-h-screen flex items-center pt-32 pb-16 md:pt-40 md:pb-20 overflow-hidden"
         style={{ background: '#0a0a0a' }}
       >
-        {/* Subtle grid lines */}
+        {/* Subtle grid texture — faded via radial mask, barely visible */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -133,245 +124,86 @@ const Home = () => {
             WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 100%)',
           }}
         />
-        {/* Radial glow at top */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 80% 55% at 50% -5%, rgba(255,255,255,0.055) 0%, transparent 70%)' }}
-        />
 
-        {/* ── Top content: badge · H1 · subline · CTA ── */}
-        <div className="relative z-10 flex flex-col items-center px-6 pt-28 pb-12 md:pt-36 md:pb-16 w-full">
-          {/* Badge */}
-          <div
-            className="inline-flex items-center gap-2 mb-6 md:mb-8"
-            style={{
-              background: 'linear-gradient(90deg, #0038A8 0%, #CE1126 18%, #FCD116 35%, #0038A8 50%, #CE1126 68%, #FCD116 85%, #0038A8 100%)',
-              backgroundSize: '200% 100%',
-              animation: 'pusoFlagSweep 6s linear infinite',
-              borderRadius: '100px',
-              padding: '5px 16px',
-            }}
-          >
-            <SparklesIcon className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.85)' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>
-               AI-Powered Virtual Try-On
-            </span>
-          </div>
-
-          {/* H1 */}
-          <h1
-            className="text-white font-black text-center"
-            style={{
-              fontSize: 'clamp(3.5rem, 9vw, 7rem)',
-              lineHeight: 1.0,
-              letterSpacing: '-0.0075em',
-              marginBottom: '20px',
-            }}
-          >
-            See it on you,<br />before you buy.
-          </h1>
-
-          {/* Subline tagline */}
-          <p
-            className="text-center"
-            style={{
-              fontSize: 'clamp(0.75rem, 1.4vw, 0.9rem)',
-              color: 'rgba(255,255,255,0.50)',
-              letterSpacing: '-0.03em',
-            }}
-          >
-            Virtually wear your favorite Pilipinas apparel — before checkout.
-          </p>
-
-        </div>
-
-        {/* ── Browser mockup ── */}
-        <div className="relative w-full" style={{ zIndex: 2 }}>
-          {/* Ground shadow on the section floor */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '78%',
-              maxWidth: '800px',
-              height: '90px',
-              background: 'radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.20) 0%, transparent 72%)',
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
-          />
-
-          {/* Floating mockup card */}
-          <div
-            className="relative flex justify-center"
-            style={{ padding: '0 clamp(12px, 4vw, 48px)', zIndex: 2 }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxWidth: '940px',
-                borderRadius: '18px',
-                overflow: 'hidden',
-              }}
-            >
-              {/* Browser chrome bar */}
-              <div
-                style={{
-                  background: '#1a1a1c',
-                  padding: '11px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '7px',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                {[0.18, 0.18, 0.18].map((op, i) => (
-                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: `rgba(255,255,255,${op})`, flexShrink: 0 }} />
-                ))}
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px 20px', fontSize: '11px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.01em', userSelect: 'none' }}>
-                    pusostore.com — Virtual Try-On
-                  </div>
-                </div>
-              </div>
-
-              {/* Screen content */}
-              <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0d0d0d' }}>
+        <div className="container-custom relative">
+          <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-center">
+            {/* Image */}
+            <div className="order-1">
+              <div className="aspect-[4/5] border-2 border-white/15 overflow-hidden" style={{ background: '#1a1a1a' }}>
                 <img
-                  src={tryOnSettings.image || tryOnPreviewFallback}
-                  alt="Virtual try-on demo — see yourself wearing Philippine sports jerseys"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
+                  src={collectionImage}
+                  alt="Latest Collection"
+                  className="w-full h-full object-cover"
+                  width={800}
+                  height={1000}
                   loading="eager"
                 />
-                {/* Glass overlay with admin-configurable title + CTA */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.42)',
-                    backdropFilter: 'blur(4px)',
-                    WebkitBackdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '24px',
-                    textAlign: 'center',
-                    gap: '20px',
-                  }}
-                >
-                  <Link
-                    to={tryOnSettings.productUrl}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '7px',
-                      background: '#fff',
-                      color: '#0a0a0a',
-                      fontWeight: 700,
-                      fontSize: 'clamp(12px, 1.4vw, 15px)',
-                      padding: 'clamp(10px, 1.2vw, 14px) clamp(20px, 2.5vw, 32px)',
-                      borderRadius: '12px',
-                      textDecoration: 'none',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
-                      transition: 'opacity 0.18s, transform 0.15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1';    e.currentTarget.style.transform = 'translateY(0)'; }}
-                  >
-                    ✦ {tryOnSettings.title}
-                    <ChevronRightIcon style={{ width: 14, height: 14, flexShrink: 0 }} />
-                  </Link>
-                </div>
               </div>
+            </div>
+
+            {/* Text */}
+            <div className="order-2">
+              <p
+                className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4"
+                style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
+              >
+                New Collection
+              </p>
+              <h1
+                className="font-bold mb-4 md:mb-6"
+                style={{
+                  fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+                  letterSpacing: '-0.035em',
+                  lineHeight: 1.02,
+                  color: '#fff',
+                }}
+              >
+                Game Day Ready
+              </h1>
+              <p
+                className="text-sm md:text-lg mb-6 md:mb-8 max-w-md"
+                style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
+              >
+                Introducing our 2025 collection of authentic jerseys, training gear, and accessories.
+                From courtside to streetwear — designed for fans who live and breathe Philippine sports.
+              </p>
+              <Link
+                to="/products"
+                className="inline-flex items-center gap-2 text-sm md:text-base font-semibold border-2 border-white/25 text-white/70 px-7 py-3.5 hover:text-white hover:border-white/60 transition-colors duration-150"
+              >
+                explore the collection
+                <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
+              </Link>
             </div>
           </div>
         </div>
-
-        {/* SEO trust line */}
-        <p
-          className="relative z-10 text-center px-6 pt-3 pb-6"
-          style={{
-            fontSize: '12px',
-            color: 'rgba(0,0,0,0.45)',
-            maxWidth: '600px',
-            margin: '0 auto',
-            lineHeight: 1.7,
-          }}
-        >
-          Authentic jerseys and gear for basketball, volleyball, football &amp; e-sports — Gilas Pilipinas, PBA, PVL, UAAP, NCAA, and beyond.
-        </p>
-
-        {/* Platform — full-width stage with rounded top corners, flat into next section */}
-        <div
-          aria-hidden="true"
-          className="absolute pointer-events-none"
-          style={{
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '35%',
-            background: '#f5f5f7',
-            borderRadius: 'clamp(20px, 4vw, 48px) clamp(20px, 4vw, 48px) 0 0',
-            zIndex: 1,
-          }}
-        />
-
-        <style>{`
-          @keyframes heroScrollBob {
-            0%, 100% { transform: translateX(-50%) translateY(0);  opacity: 0.6; }
-            50%       { transform: translateX(-50%) translateY(7px); opacity: 1;   }
-          }
-          @keyframes pusoFlagSweep {
-            0%   { background-position: 100% center; }
-            100% { background-position: 0%   center; }
-          }
-          @keyframes partnersMarqueeL {
-            from { transform: translateX(0); }
-            to   { transform: translateX(-50%); }
-          }
-          @keyframes partnersMarqueeR {
-            from { transform: translateX(-50%); }
-            to   { transform: translateX(0); }
-          }
-          .partners-track-l { animation: partnersMarqueeL 76s linear infinite; }
-          .partners-track-r { animation: partnersMarqueeR 76s linear infinite; }
-        `}</style>
       </section>
 
       {/* Shop by Sport - Tabbed Carousel */}
-      <section className="pt-4 pb-10 md:pt-6 md:pb-16 lg:pt-8 lg:pb-24 overflow-hidden" style={{ background: '#f5f5f7' }}>
+      <section className="pt-4 pb-10 md:pt-6 md:pb-16 lg:pt-8 lg:pb-24 overflow-hidden bg-paper">
         <div className="container-custom">
           <div className="text-center mb-8 md:mb-10">
-            <h2
-              className="text-xl md:text-display-sm mb-2 md:mb-4 font-semibold"
-              style={{ color: '#0a0a0a' }}
-            >
+            <h2 className="text-2xl md:text-editorial-headline mb-2 md:mb-4 font-bold text-ink-900">
               Shop by Sport
             </h2>
-            <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(0,0,0,0.45)' }}>
+            <p className="text-sm md:text-lg mb-6 md:mb-8 text-ink-500">
               Find gear for your favorite league
             </p>
 
-            {/* Category Tabs */}
-            <div
-              className="inline-flex rounded-xl p-1 md:p-1.5"
-              style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)' }}
-            >
+            {/* Category Tabs — flat text tabs, active state marked by an
+                underline/weight change, never a filled pill container
+                (COMPONENT_SPECIFICATION.md § Tabs). */}
+            <div className="inline-flex items-center gap-6 border-b-2 border-ink-200">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
                   aria-pressed={activeCategory === cat.id}
-                  className="px-3 py-2 md:px-6 md:py-3 rounded-xl font-semibold text-xs md:text-sm transition-all duration-300 flex items-center gap-1.5 md:gap-2"
-                  style={
+                  className={`pb-3 -mb-0.5 border-b-2 font-semibold text-xs md:text-sm uppercase tracking-wide transition-colors duration-150 flex items-center gap-1.5 md:gap-2 ${
                     activeCategory === cat.id
-                      ? { background: '#0a0a0a', color: '#fff' }
-                      : { color: 'rgba(0,0,0,0.45)' }
-                  }
+                      ? 'border-ink-900 text-ink-900'
+                      : 'border-transparent text-ink-500 hover:text-ink-900'
+                  }`}
                 >
                   <span>{cat.icon}</span>
                   <span>{cat.label}</span>
@@ -385,11 +217,10 @@ const Home = () => {
             {/* Scroll Right Button */}
             <button
               onClick={() => scrollCarousel('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 rounded-full flex items-center justify-center transition-all hidden md:flex"
-              style={{ background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(0,0,0,0.12)' }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-12 h-12 border-2 border-ink-900 bg-white flex items-center justify-center transition-colors hover:bg-ink-900 hover:text-white text-ink-900 hidden md:flex"
               aria-label="Scroll products"
             >
-              <ChevronRightIcon className="w-6 h-6" style={{ color: '#0a0a0a' }} />
+              <ChevronRightIcon className="w-6 h-6" />
             </button>
 
             {/* Carousel Container */}
@@ -413,19 +244,8 @@ const Home = () => {
                 ))
               ) : (
                 <div className="w-full text-center py-12">
-                  <p style={{ color: 'rgba(0,0,0,0.45)' }}>No {activeCategory} products available yet</p>
-                  <Link
-                    to="/products"
-                    className="mt-4 inline-flex items-center gap-2 font-semibold active:scale-[0.97] transition-transform"
-                    style={{
-                      background: '#0a0a0a',
-                      color: '#fff',
-                      borderRadius: '12px',
-                      padding: '12px 28px',
-                      fontSize: '14px',
-                      textDecoration: 'none',
-                    }}
-                  >
+                  <p className="text-ink-500 mb-4">No {activeCategory} products available yet</p>
+                  <Link to="/products" className="btn-primary">
                     Browse All Products
                   </Link>
                 </div>
@@ -437,8 +257,7 @@ const Home = () => {
           <div className="text-center mt-8">
             <Link
               to={`/products?sport=${activeCategory}`}
-              className="inline-flex items-center gap-2 font-semibold transition-opacity hover:opacity-70"
-              style={{ color: 'rgba(0,0,0,0.55)', textDecoration: 'none' }}
+              className="inline-flex items-center gap-2 font-semibold text-ink-700 hover:text-ink-900 transition-colors"
             >
               View All {activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Products
               <ChevronRightIcon className="w-5 h-5" />
@@ -479,74 +298,6 @@ const Home = () => {
           ))}
         </div>
       </div>
-
-      {/* Latest Collection — image left, text right */}
-      <section className="py-12 md:py-28" style={{ background: '#0a0a0a' }}>
-        <div className="container-custom">
-          <div className="grid md:grid-cols-2 gap-6 md:gap-16 items-center">
-            {/* Image */}
-            <div className="order-1">
-              <div
-                className="aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden"
-                style={{ background: '#1a1a1a' }}
-              >
-                <img
-                  src={collectionImage}
-                  alt="Latest Collection"
-                  className="w-full h-full object-cover"
-                  width={800}
-                  height={1000}
-                  loading="lazy"
-                />
-              </div>
-            </div>
-
-            {/* Text */}
-            <div className="order-2">
-              <p
-                className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4"
-                style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.09em' }}
-              >
-                New Collection
-              </p>
-              <h2
-                className="font-bold mb-4 md:mb-6"
-                style={{
-                  fontSize: 'clamp(2rem, 5vw, 4rem)',
-                  letterSpacing: '-0.035em',
-                  lineHeight: 1.05,
-                  color: '#fff',
-                }}
-              >
-                Game Day Ready
-              </h2>
-              <p
-                className="text-sm md:text-lg mb-6 md:mb-8"
-                style={{ color: 'rgba(255,255,255,0.38)', lineHeight: 1.72 }}
-              >
-                Introducing our 2025 collection of authentic jerseys, training gear, and accessories.
-                From courtside to streetwear — designed for fans who live and breathe Philippine sports.
-              </p>
-              <Link
-                to="/products"
-                className="inline-flex items-center gap-2 text-sm md:text-base font-semibold active:scale-[0.97] transition-all"
-                style={{
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  color: 'rgba(255,255,255,0.7)',
-                  borderRadius: '12px',
-                  padding: '13px 30px',
-                  textDecoration: 'none',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; }}
-              >
-                explore the collection
-                <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Featured Products — clickable list with changing image */}
       {featuredProducts.length > 0 && (
@@ -597,16 +348,7 @@ const Home = () => {
 
                 <Link
                   to={`/products/${featuredProducts[activeFeatured]?.slug}`}
-                  className="inline-flex items-center gap-2 text-sm md:text-base font-bold active:scale-[0.97] transition-all"
-                  style={{
-                    background: '#fff',
-                    color: '#0a0a0a',
-                    borderRadius: '12px',
-                    padding: '13px 30px',
-                    textDecoration: 'none',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  className="inline-flex items-center gap-2 text-sm md:text-base font-bold bg-white text-ink-900 border-2 border-white px-7 py-3.5 hover:bg-ink-900 hover:text-white transition-colors duration-150"
                 >
                   shop now
                   <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
@@ -616,7 +358,7 @@ const Home = () => {
               {/* Right — product image */}
               <div className="order-first md:order-last">
                 <div
-                  className="aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden relative"
+                  className="aspect-[4/5] border-2 border-white/15 overflow-hidden relative"
                   style={{ background: '#1a1a1a' }}
                 >
                   {featuredProducts.map((product, index) => (
@@ -639,7 +381,89 @@ const Home = () => {
         </section>
       )}
 
+      {/* Featured Team — rotates monthly (EDITORIAL_LAYOUT_SYSTEM.md §
+          Organization Spotlight: identity leads at masthead scale, a
+          current moment follows at secondary weight). Background is the
+          featured institution's own color, not a platform neutral — the
+          one deliberate use of DESIGN_TOKENS.md's institution.identity
+          slot, reserved exactly for a moment like this. Still reads as its
+          own editorial page against the near-black sections around it,
+          just via hue instead of light-vs-dark contrast. */}
+      <section className="relative py-16 md:py-28 overflow-hidden" style={{ background: featuredTeam.color }}>
+        {/* Texture — sporty diagonal stripes + a grain layer for a grungy
+            finish, both CSS-only (no image asset), same technique as the
+            landing section's grid overlay. Kept faint on purpose: texture,
+            not decoration competing with the photo or the type. */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 2px, transparent 2px, transparent 14px)',
+          }}
+        />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            opacity: 0.15,
+            mixBlendMode: 'overlay',
+          }}
+        />
+
+        <div className="container-custom relative">
+          <div className="grid md:grid-cols-2 gap-8 md:gap-16 items-center">
+            {/* Image */}
+            <div className="order-1">
+              <div className="aspect-[4/5] border-2 border-white/20 overflow-hidden">
+                <img
+                  src={featuredTeam.image}
+                  alt={featuredTeam.imageAlt}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: 'center top' }}
+                  width={500}
+                  height={915}
+                  loading="lazy"
+                />
+              </div>
+            </div>
+
+            {/* Text */}
+            <div className="order-2">
+              <p className="text-xs md:text-sm font-semibold uppercase mb-3 md:mb-4 tracking-[0.09em]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                Featured Team &middot; {featuredTeamMonth}
+              </p>
+              <h2 className="font-bold mb-4 md:mb-6 text-white" style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
+                {featuredTeam.name}
+              </h2>
+              <p className="text-sm md:text-lg mb-6 md:mb-8 max-w-md" style={{ lineHeight: 1.72, color: 'rgba(255,255,255,0.75)' }}>
+                {featuredTeam.blurb}
+              </p>
+              <Link
+                to={`/products?team=${encodeURIComponent(featuredTeam.teamQuery)}`}
+                className="inline-flex items-center gap-2 text-sm md:text-base font-semibold border-2 border-white text-white px-7 py-3.5 hover:bg-white transition-colors duration-150"
+                onMouseEnter={(e) => { e.currentTarget.style.color = featuredTeam.color; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#fff'; }}
+              >
+                Shop {featuredTeam.name.split(' ')[0]} Gear
+                <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Our Partners ─────────────────────────────────────────── */}
+      <style>{`
+        @keyframes partnersMarqueeL {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        @keyframes partnersMarqueeR {
+          from { transform: translateX(-50%); }
+          to   { transform: translateX(0); }
+        }
+        .partners-track-l { animation: partnersMarqueeL 76s linear infinite; }
+        .partners-track-r { animation: partnersMarqueeR 76s linear infinite; }
+      `}</style>
       <section style={{ background: '#0a0a0a', padding: '64px 0 72px', overflow: 'hidden' }}>
         {/* Label */}
         <p
@@ -677,8 +501,7 @@ const Home = () => {
                     minWidth: '172px',
                     margin: '0 10px',
                     padding: '0 32px',
-                    borderRadius: '100px',
-                    border: '1px solid rgba(255,255,255,0.11)',
+                    border: '2px solid rgba(255,255,255,0.15)',
                     background: 'rgba(255,255,255,0.05)',
                   }}
                 >
@@ -703,8 +526,7 @@ const Home = () => {
                     minWidth: '172px',
                     margin: '0 10px',
                     padding: '0 32px',
-                    borderRadius: '100px',
-                    border: '1px solid rgba(255,255,255,0.11)',
+                    border: '2px solid rgba(255,255,255,0.15)',
                     background: 'rgba(255,255,255,0.05)',
                   }}
                 >
@@ -800,205 +622,6 @@ const Home = () => {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Instafeed / Social Section */}
-      {false && (() => {
-        const feedImages = [
-          { src: bahayImage, alt: 'Game day Ateneo fans', bg: '#0A2463', pos: 'center 70%' },
-          { src: 'https://placehold.co/400x400/1E3A8A/F59E0B?text=PBA+Action', alt: 'PBA action', bg: '#1E3A8A' },
-          { src: 'https://placehold.co/400x500/EC4899/FFFFFF?text=PVL+Match', alt: 'PVL volleyball', bg: '#EC4899' },
-          { src: 'https://placehold.co/400x400/16A34A/FFFFFF?text=UAAP+Fans', alt: 'UAAP fans', bg: '#16A34A' },
-          { src: 'https://placehold.co/400x400/DC2626/FFFFFF?text=Jersey+Drop', alt: 'New jersey', bg: '#DC2626' },
-          { src: 'https://placehold.co/400x500/0D9488/FFFFFF?text=Azkals+⚽', alt: 'Azkals football', bg: '#0D9488' },
-          { src: 'https://placehold.co/400x400/7C3AED/FFFFFF?text=Fan+Zone', alt: 'Fan zone', bg: '#7C3AED' },
-          { src: 'https://placehold.co/400x500/F59E0B/1E3A8A?text=Merch+🏆', alt: 'Merchandise', bg: '#F59E0B' },
-        ];
-        const topRow = feedImages.slice(0, 4);
-        const bottomRow = feedImages.slice(4, 8);
-        return (
-          <section className="bg-primary-50 py-10 md:py-0 overflow-x-hidden">
-            {/* Mobile layout */}
-            <div className="md:hidden">
-              {/* Top row circles */}
-              <div className="flex justify-center gap-2 px-3">
-                {topRow.map((img, i) => (
-                  <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
-                    <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
-                    <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" style={img.pos ? { objectPosition: img.pos } : undefined} width={400} height={400} loading="lazy" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Center text */}
-              <div className="text-center px-6 py-8">
-                <a href="https://instagram.com/pusopilipinas" target="_blank" rel="noopener noreferrer"
-                  className="text-xs font-semibold text-primary-600 underline underline-offset-4">
-                  @pusopilipinas
-                </a>
-                <h2 className="text-2xl font-bold text-gray-900 mt-2 mb-2">
-                  Let's get social
-                </h2>
-                <p className="text-sm text-gray-600 mb-5">
-                  Stay in the loop and connect with us on your favorite social platforms.
-                </p>
-                <a
-                  href="https://instagram.com/pusopilipinas"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-secondary inline-flex items-center gap-2 w-full justify-center text-sm"
-                >
-                  follow us
-                  <ChevronRightIcon className="w-4 h-4" />
-                </a>
-              </div>
-
-              {/* Bottom row circles */}
-              <div className="flex justify-center gap-2 px-3">
-                {bottomRow.map((img, i) => (
-                  <div key={i} className="relative w-[22%] flex-shrink-0 aspect-square group">
-                    <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: img.bg }} />
-                    <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" style={img.pos ? { objectPosition: img.pos } : undefined} width={400} height={400} loading="lazy" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Desktop layout */}
-            <div className="hidden md:grid relative" style={{
-              gridTemplateColumns: '0.8fr 1fr 2.4fr 1fr 0.8fr',
-              gridTemplateRows: '1fr 1fr',
-              gap: '16px',
-              minHeight: '520px',
-            }}>
-              {/* Row 1 images */}
-              <div className="group relative -ml-[20%]" style={{ gridColumn: 1, gridRow: 1 }}>
-                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[0].bg }} />
-                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                  <img src={topRow[0].src} alt={topRow[0].alt} className="w-full h-full object-cover" style={topRow[0].pos ? { objectPosition: topRow[0].pos } : undefined} width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative" style={{ gridColumn: 2, gridRow: 1 }}>
-                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[1].bg }} />
-                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
-                  <img src={topRow[1].src} alt={topRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative" style={{ gridColumn: 4, gridRow: 1 }}>
-                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[2].bg }} />
-                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                  <img src={topRow[2].src} alt={topRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative -mr-[20%]" style={{ gridColumn: 5, gridRow: 1 }}>
-                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: topRow[3].bg }} />
-                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
-                  <img src={topRow[3].src} alt={topRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-
-              {/* Row 2 images */}
-              <div className="group relative -ml-[20%]" style={{ gridColumn: 1, gridRow: 2 }}>
-                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[0].bg }} />
-                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
-                  <img src={bottomRow[0].src} alt={bottomRow[0].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative" style={{ gridColumn: 2, gridRow: 2 }}>
-                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[1].bg }} />
-                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                  <img src={bottomRow[1].src} alt={bottomRow[1].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative" style={{ gridColumn: 4, gridRow: 2 }}>
-                <div className="absolute inset-0 rounded-[2rem] transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[2].bg }} />
-                <div className="absolute inset-0 z-10 rounded-[2rem] overflow-hidden">
-                  <img src={bottomRow[2].src} alt={bottomRow[2].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-              <div className="group relative -mr-[20%]" style={{ gridColumn: 5, gridRow: 2 }}>
-                <div className="absolute inset-0 rounded-full transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: bottomRow[3].bg }} />
-                <div className="absolute inset-0 z-10 rounded-full overflow-hidden">
-                  <img src={bottomRow[3].src} alt={bottomRow[3].alt} className="w-full h-full object-cover" width={400} height={400} loading="lazy" />
-                </div>
-              </div>
-
-              {/* Center text */}
-              <div className="flex flex-col items-center justify-center text-center px-8" style={{ gridColumn: 3, gridRow: '1 / 3' }}>
-                <a href="https://instagram.com/pusopilipinas" target="_blank" rel="noopener noreferrer"
-                  className="text-sm font-semibold text-primary-600 underline underline-offset-4">
-                  @pusopilipinas
-                </a>
-                <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mt-4 mb-4">
-                  Let's get social
-                </h2>
-                <p className="text-gray-600 mb-8 max-w-sm">
-                  Stay in the loop and connect with us on your favorite social platforms.
-                </p>
-                <a
-                  href="https://instagram.com/pusopilipinas"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-secondary inline-flex items-center gap-2"
-                >
-                  follow us
-                  <ChevronRightIcon className="w-5 h-5" />
-                </a>
-              </div>
-            </div>
-          </section>
-        );
-      })()}
-
-      {/* Newsletter */}
-      <section
-        className="py-12 md:py-16 lg:py-24"
-        style={{ background: '#0a0a0a', borderTop: '1px solid rgba(255,255,255,0.06)' }}
-      >
-        <div className="container-custom max-w-2xl text-center">
-          <h2
-            className="font-bold mb-3 md:mb-4"
-            style={{ fontSize: 'clamp(1.5rem, 3.5vw, 2.5rem)', letterSpacing: '-0.03em', color: '#fff' }}
-          >
-            Join the Puso Pilipinas Family
-          </h2>
-          <p className="text-sm md:text-lg mb-6 md:mb-8" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            Get exclusive deals, early access to new releases, and 10% off your first order.
-          </p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <label htmlFor="newsletter-email" className="sr-only">Email address</label>
-            <input
-              id="newsletter-email"
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 md:px-5 md:py-3.5 rounded-xl text-sm md:text-base focus:outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: '#fff',
-              }}
-            />
-            <button
-              type="submit"
-              className="font-semibold text-sm md:text-base transition-all duration-200 active:scale-[0.98] whitespace-nowrap"
-              style={{
-                background: '#fff',
-                color: '#0a0a0a',
-                borderRadius: '12px',
-                padding: '12px 28px',
-              }}
-            >
-              Subscribe
-            </button>
-          </form>
-          <p className="text-xs md:text-sm mt-3 md:mt-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            No spam. Unsubscribe anytime.
-          </p>
         </div>
       </section>
     </Layout>
