@@ -72,6 +72,8 @@ Not pages, but components that appear on nearly every page — fixing these has 
 **Should be removed:** Nothing.
 **Implemented (2026-08-01):** Done, plus a `merch.*` badge category (New/Sale/Virtual Try-On) this audit didn't anticipate, and a sold-out marquee treatment replacing a plain dim overlay.
 
+**Correction (2026-08-02):** This entry's "Aligns" line called the Buy Now interaction "genuinely good, considered product behavior — nothing here needs to change functionally." It wasn't: the button opened the cart drawer but never actually added the item for any color-variant product (its size logic only read `product.sizes`, which is empty wherever sizes live under `colors[].sizes[]` instead). Relabeled "Add to Cart" and reworked into a QuickAddModal (`components/cart/QuickAddModal.jsx`) that surfaces a real size/color picker before adding.
+
 ---
 
 ## Part 3 — Customer-Facing Pages
