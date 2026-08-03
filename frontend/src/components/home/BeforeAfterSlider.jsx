@@ -47,7 +47,7 @@ const BeforeAfterSlider = ({
         <img
           src={afterImage}
           alt="After — wearing the official jersey"
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover object-top pointer-events-none"
           draggable={false}
           width={800}
           height={1000}
@@ -66,7 +66,7 @@ const BeforeAfterSlider = ({
           <img
             src={beforeImage}
             alt="Before — without the jersey"
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover object-top"
             draggable={false}
             width={800}
             height={1000}
