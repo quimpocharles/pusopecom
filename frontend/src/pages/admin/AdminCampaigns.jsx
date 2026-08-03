@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, PhotoIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import campaignService from '../../services/campaignService';
 import productService from '../../services/productService';
-import api from '../../services/api';
+import ImageField from '../../components/admin/ImageField';
 
 const PLACEMENTS = [
   { value: 'hero', label: 'Hero (landing statement)' },
@@ -12,6 +12,7 @@ const PLACEMENTS = [
 const emptyForm = {
   placement: 'tryOn',
   name: '',
+  eyebrow: '',
   headline: '',
   subheadline: '',
   description: '',
@@ -20,6 +21,7 @@ const emptyForm = {
   image: '',
   beforeImage: '',
   afterImage: '',
+  accentColor: '',
   featuredOnHomepage: false,
   startDate: '',
   endDate: '',
@@ -111,47 +113,6 @@ const FeaturedProductPicker = ({ value, onChange }) => {
   );
 };
 
-const ImageField = ({ label, value, onChange }) => {
-  const [uploading, setUploading] = useState(false);
-
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-      const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      onChange(res.data.data.url);
-    } catch (err) {
-      console.error('Upload failed:', err);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://res.cloudinary.com/..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-        <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg cursor-pointer text-xs font-medium text-gray-700 transition-colors whitespace-nowrap">
-          <PhotoIcon className="w-4 h-4" />
-          {uploading ? 'Uploading...' : 'Upload'}
-          <input type="file" accept="image/*" onChange={handleUpload} className="hidden" disabled={uploading} />
-        </label>
-      </div>
-      {value && <img src={value} alt="" className="mt-2 w-24 h-auto rounded-lg border border-gray-200" />}
-    </div>
-  );
-};
-
 const AdminCampaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -195,6 +156,7 @@ const AdminCampaigns = () => {
     setForm({
       placement: campaign.placement,
       name: campaign.name,
+      eyebrow: campaign.eyebrow || '',
       headline: campaign.headline || '',
       subheadline: campaign.subheadline || '',
       description: campaign.description || '',
@@ -203,6 +165,7 @@ const AdminCampaigns = () => {
       image: campaign.image || '',
       beforeImage: campaign.beforeImage || '',
       afterImage: campaign.afterImage || '',
+      accentColor: campaign.accentColor || '',
       featuredOnHomepage: campaign.featuredOnHomepage,
       startDate: toDateInput(campaign.startDate),
       endDate: toDateInput(campaign.endDate),
@@ -419,6 +382,20 @@ const AdminCampaigns = () => {
                 <p className="text-xs text-gray-400 mt-1">For telling campaigns apart in this list — not shown to fans.</p>
               </div>
 
+              {form.placement === 'hero' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Eyebrow</label>
+                  <input
+                    type="text"
+                    value={form.eyebrow}
+                    onChange={(e) => setForm({ ...form, eyebrow: e.target.value })}
+                    placeholder="New Collection"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Small label shown above the headline.</p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Headline</label>
                 <input
@@ -476,7 +453,28 @@ const AdminCampaigns = () => {
               </div>
 
               {form.placement === 'hero' && (
-                <ImageField label="Image" value={form.image} onChange={(v) => setForm({ ...form, image: v })} />
+                <>
+                  <ImageField label="Image" value={form.image} onChange={(v) => setForm({ ...form, image: v })} />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Accent Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={form.accentColor || '#ffffff'}
+                        onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
+                        className="w-10 h-9 border border-gray-300 rounded-lg cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={form.accentColor}
+                        onChange={(e) => setForm({ ...form, accentColor: e.target.value })}
+                        placeholder="Leave blank for the default white"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">CTA button hover color for this campaign.</p>
+                  </div>
+                </>
               )}
 
               {form.placement === 'tryOn' && (

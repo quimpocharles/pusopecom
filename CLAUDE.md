@@ -127,6 +127,32 @@ Full detail: `docs/ENGINEERING_HANDBOOK.md`.
 
 ---
 
+## CMS-First Rule (Homepage & Site Content)
+
+**Business content must never be hardcoded.** This was audited and completed (2026-08) — the homepage, header, and footer used to be a mix of live Admin Dashboard data and JSX/asset-import content a developer had to edit and redeploy to change. That gap is closed; do not reopen it.
+
+The only things allowed to live in code are what CLAUDE.md's own boundary already implies — presentation, not content:
+
+- design system (tokens, typography, spacing)
+- layouts and reusable UI components
+- icons and animations (an icon's *shape* is code; which icons appear and in what order is CMS data)
+- utility constants (thresholds, feature flags, non-editorial config)
+
+Everything else — headlines, descriptions, images, CTA text/links, colors tied to a campaign or institution, nav labels/destinations, footer copy, FAQ, logos — is Customer/Organization/Marketing-facing content and belongs in the database, editable from the Admin Dashboard.
+
+**Before any new homepage/site-content feature is considered done, it needs all six layers**, in this order:
+
+1. **Database model** (Prisma)
+2. **Repository** (`repositories/*.js`)
+3. **API** (admin-gated CRUD + a public read)
+4. **Admin page** (`pages/admin/*.jsx`) — if the backend exists but nothing in the Admin Dashboard can reach it, the feature is incomplete, not "backend-done." This was the exact gap the 2026-08 audit found: `Campaign` (placement=hero), `FAQItem`, and `PromoMessage` all had full backend CRUD with zero frontend consumption.
+5. **Frontend service** (`services/*.js`)
+6. **Frontend component** consuming the service — never a hardcoded fallback for content the CMS is supposed to own. An empty/unconfigured CMS section should render as absent (or, for Hero/AI Try-On specifically, fall back to the one approved default the section was launched with) — never as stale content nobody can find or edit again.
+
+Content models already wired end-to-end this way: `Campaign` (Hero + AI Try-On placements), `FeaturedTeam`, `PartnerLogo`, `FAQItem`, `PromoMessage` (Announcement Bar + Marquee), `NavigationLink`, `HomepageSection` (section order/visibility), and `FooterSettings`/`FooterLink`/`SocialLink`/`PaymentIcon`. Use these as the reference pattern — repository shape, admin-gated route conventions, `active`/schedule-window filtering — before adding a new one.
+
+---
+
 ## Terminology
 
 Use these words exactly as defined. If a term isn't here, check `docs/DOMAIN_MODEL.md` before inventing usage.

@@ -10,21 +10,25 @@ import {
   Cog6ToothIcon,
   MapPinIcon,
   TruckIcon,
+  ArchiveBoxIcon,
   ArrowLeftIcon,
   Bars3Icon,
   XMarkIcon,
-  SparklesIcon
+  SparklesIcon,
+  RectangleGroupIcon
 } from '@heroicons/react/24/outline';
 
 const navItems = [
   { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
   { label: 'Products', to: '/admin/products', icon: CubeIcon },
   { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon },
+  { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon },
   { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon },
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
   { label: 'Shipping Analytics', to: '/admin/reports/shipping', icon: TruckIcon },
+  { label: 'Report Archive', to: '/admin/reports/archive', icon: ArchiveBoxIcon },
   { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon },
   { label: 'Venue Pick-Up', to: '/admin/settings/pickup', icon: MapPinIcon },
 ];

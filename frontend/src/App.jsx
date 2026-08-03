@@ -23,6 +23,16 @@ const AdminProductForm = lazy(() => import('./pages/admin/AdminProductForm'));
 const AdminLeagues = lazy(() => import('./pages/admin/AdminLeagues'));
 const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
+const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
+const AdminReportArchive = lazy(() => import('./pages/admin/AdminReportArchive'));
+const AdminFAQ = lazy(() => import('./pages/admin/AdminFAQ'));
+const AdminPromoMessages = lazy(() => import('./pages/admin/AdminPromoMessages'));
+const AdminHomepageSections = lazy(() => import('./pages/admin/AdminHomepageSections'));
+const AdminFeaturedTeam = lazy(() => import('./pages/admin/AdminFeaturedTeam'));
+const AdminPartnerLogos = lazy(() => import('./pages/admin/AdminPartnerLogos'));
+const AdminNavigation = lazy(() => import('./pages/admin/AdminNavigation'));
+const AdminFooter = lazy(() => import('./pages/admin/AdminFooter'));
+const AdminHomepageBuilder = lazy(() => import('./pages/admin/AdminHomepageBuilder'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
@@ -73,11 +83,21 @@ function App() {
             <Route path="leagues" element={<AdminLeagues />} />
             <Route path="campaigns" element={<AdminCampaigns />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="orders/:orderNumber" element={<AdminOrderDetail />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="settings/pickup" element={<AdminPickup />} />
             <Route path="reports/shipping" element={<AdminShippingReports />} />
+            <Route path="reports/archive" element={<AdminReportArchive />} />
+            <Route path="homepage/faq" element={<AdminFAQ />} />
+            <Route path="homepage/announcements" element={<AdminPromoMessages />} />
+            <Route path="homepage/sections" element={<AdminHomepageSections />} />
+            <Route path="homepage/featured-team" element={<AdminFeaturedTeam />} />
+            <Route path="homepage/partners" element={<AdminPartnerLogos />} />
+            <Route path="homepage/navigation" element={<AdminNavigation />} />
+            <Route path="homepage/footer" element={<AdminFooter />} />
+            <Route path="homepage" element={<AdminHomepageBuilder />} />
           </Route>
         </Routes>
       </Suspense>

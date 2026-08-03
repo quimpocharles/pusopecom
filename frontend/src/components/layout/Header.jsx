@@ -4,19 +4,29 @@ import { ShoppingBagIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
 import useAuthStore from '../../store/authStore';
 import { useState, useRef, useEffect } from 'react';
-
-const navLinks = [
-  { label: 'Shop',       href: '/products' },
-  { label: 'Basketball', href: '/products?sport=basketball' },
-  { label: 'Volleyball', href: '/products?sport=volleyball' },
-  { label: 'Football',   href: '/products?sport=football' },
-];
+import navigationLinkService from '../../services/navigationLinkService';
 
 const Header = () => {
   const navigate  = useNavigate();
   const location  = useLocation();
   const cartCount = useCartStore((state) => state.getCartCount());
   const { user, isAuthenticated, logout } = useAuthStore();
+
+  // Nav links — fully CMS-driven via NavigationLink (Admin > Homepage >
+  // Navigation). No hardcoded fallback: an empty CMS means an empty nav,
+  // same "don't pretend to be current" rule as the other homepage sections.
+  const [navLinks, setNavLinks] = useState([]);
+  useEffect(() => {
+    const fetchNavLinks = async () => {
+      try {
+        const res = await navigationLinkService.getLinks();
+        setNavLinks(res.data);
+      } catch (error) {
+        console.error('Failed to fetch navigation links:', error);
+      }
+    };
+    fetchNavLinks();
+  }, []);
 
   // Always a manual toggle — the hamburger is always visible, and the nav
   // panel only ever opens by clicking it (no more auto-shown home-hero list).
@@ -87,11 +97,33 @@ const Header = () => {
             navOpen ? 'max-h-96 border-x-2 border-b-2 border-ink-900 py-2' : 'max-h-0 border-0'
           }`}
         >
-          {navLinks.map((link) => (
-            <Link key={link.label} to={link.href} onClick={() => setNavOpen(false)} className={itemCls}>
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isExternal = /^https?:\/\//.test(link.destination);
+            const highlightCls = link.highlight ? 'text-primary-600 font-semibold' : '';
+            return isExternal ? (
+              <a
+                key={link._id}
+                href={link.destination}
+                target={link.openInNewTab ? '_blank' : undefined}
+                rel={link.openInNewTab ? 'noopener noreferrer' : undefined}
+                onClick={() => setNavOpen(false)}
+                className={`${itemCls} ${highlightCls}`}
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={link._id}
+                to={link.destination}
+                target={link.openInNewTab ? '_blank' : undefined}
+                rel={link.openInNewTab ? 'noopener noreferrer' : undefined}
+                onClick={() => setNavOpen(false)}
+                className={`${itemCls} ${highlightCls}`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
           <div className="h-px w-full bg-ink-200 my-1" />
           {isAuthenticated ? (
             <>
