@@ -60,3 +60,45 @@ describe('routes/promoMessages.js', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('routes/promoMessages.js — scheduling and pin', () => {
+  const createdIds = [];
+
+  afterAll(async () => {
+    await prisma.promoMessage.deleteMany({ where: { id: { in: createdIds } } });
+  });
+
+  it('excludes an expired message and one scheduled for the future, includes one in-window', async () => {
+    const expired = await request(app).post('/api/promo-messages').send({
+      placement: 'announcement', text: 'Expired promo', endDate: '2020-01-01',
+    });
+    const future = await request(app).post('/api/promo-messages').send({
+      placement: 'announcement', text: 'Future promo', startDate: '2099-01-01',
+    });
+    const current = await request(app).post('/api/promo-messages').send({
+      placement: 'announcement', text: 'Current promo', startDate: '2020-01-01', endDate: '2099-01-01',
+    });
+    createdIds.push(expired.body.data._id, future.body.data._id, current.body.data._id);
+
+    const res = await request(app).get('/api/promo-messages').query({ placement: 'announcement' });
+    const ids = res.body.data.map((m) => m._id);
+    expect(ids).not.toContain(expired.body.data._id);
+    expect(ids).not.toContain(future.body.data._id);
+    expect(ids).toContain(current.body.data._id);
+  }, 15000);
+
+  it('sorts a pinned message before others regardless of displayOrder', async () => {
+    const first = await request(app).post('/api/promo-messages').send({
+      placement: 'marquee', text: 'Regular, order 0', displayOrder: 0,
+    });
+    const pinned = await request(app).post('/api/promo-messages').send({
+      placement: 'marquee', text: 'Pinned, order 5', displayOrder: 5, pinned: true,
+    });
+    createdIds.push(first.body.data._id, pinned.body.data._id);
+
+    const res = await request(app).get('/api/promo-messages').query({ placement: 'marquee' });
+    const pinnedIndex = res.body.data.findIndex((m) => m._id === pinned.body.data._id);
+    const firstIndex = res.body.data.findIndex((m) => m._id === first.body.data._id);
+    expect(pinnedIndex).toBeLessThan(firstIndex);
+  }, 15000);
+});
