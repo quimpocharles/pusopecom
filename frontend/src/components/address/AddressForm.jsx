@@ -28,17 +28,24 @@ const AddressForm = ({ register, errors, setValue, watch, prefix = '' }) => {
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
 
+  // select-philippines-address fetches from a third-party GitHub Pages JSON
+  // endpoint and, on any failure (network hiccup, rate limit, blocked
+  // request), its catch block resolves to e.message — a string, not an
+  // array — which would otherwise crash every .map() below with no error
+  // boundary to catch it. Only accept real arrays.
+  const asArray = (value) => (Array.isArray(value) ? value : []);
+
   // Load regions on mount
   useEffect(() => {
     if (isPH) {
-      regions().then(setRegionList);
+      regions().then((result) => setRegionList(asArray(result)));
     }
   }, [isPH]);
 
   // Load provinces when region changes
   useEffect(() => {
     if (selectedRegion) {
-      provinces(selectedRegion).then(setProvinceList);
+      provinces(selectedRegion).then((result) => setProvinceList(asArray(result)));
       setSelectedProvince('');
       setSelectedCity('');
       setCityList([]);
@@ -52,7 +59,7 @@ const AddressForm = ({ register, errors, setValue, watch, prefix = '' }) => {
   // Load cities when province changes
   useEffect(() => {
     if (selectedProvince) {
-      cities(selectedProvince).then(setCityList);
+      cities(selectedProvince).then((result) => setCityList(asArray(result)));
       setSelectedCity('');
       setBarangayList([]);
       setValue(p('city'), '');
@@ -63,7 +70,7 @@ const AddressForm = ({ register, errors, setValue, watch, prefix = '' }) => {
   // Load barangays when city changes
   useEffect(() => {
     if (selectedCity) {
-      barangays(selectedCity).then(setBarangayList);
+      barangays(selectedCity).then((result) => setBarangayList(asArray(result)));
       setValue(p('barangay'), '');
     }
   }, [selectedCity]);
