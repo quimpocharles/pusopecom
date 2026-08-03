@@ -1,6 +1,6 @@
 # PusoStore — AI Context
 
-This document exists to bring an AI coding assistant up to speed the way a senior engineer joining the founding team would be — not a tutorial, a briefing. It condenses eleven prior documents (`docs/`) into one dense reference. Where you need the full reasoning behind something here, the source document is named; read it before overriding what's stated here.
+This document exists to bring an AI coding assistant up to speed the way a senior engineer joining the founding team would be — not a tutorial, a briefing. It condenses twelve prior documents (`docs/`) into one dense reference. Where you need the full reasoning behind something here, the source document is named; read it before overriding what's stated here.
 
 Format note: this document breaks from the prose style of the other eleven on purpose. Those are written for people reading once, in order, for understanding. This one is written for repeated lookup under time pressure — tables and terse statements are the right tool for that job here, not a stylistic lapse.
 
@@ -150,6 +150,23 @@ Everything else — headlines, descriptions, images, CTA text/links, colors tied
 6. **Frontend component** consuming the service — never a hardcoded fallback for content the CMS is supposed to own. An empty/unconfigured CMS section should render as absent (or, for Hero/AI Try-On specifically, fall back to the one approved default the section was launched with) — never as stale content nobody can find or edit again.
 
 Content models already wired end-to-end this way: `Campaign` (Hero + AI Try-On placements), `FeaturedTeam`, `PartnerLogo`, `FAQItem`, `PromoMessage` (Announcement Bar + Marquee), `NavigationLink`, `HomepageSection` (section order/visibility), and `FooterSettings`/`FooterLink`/`SocialLink`/`PaymentIcon`. Use these as the reference pattern — repository shape, admin-gated route conventions, `active`/schedule-window filtering — before adding a new one.
+
+---
+
+## My PUSO (Customer Portal)
+
+Full detail: `docs/MY_PUSO_MANIFESTO.md`. My PUSO is the customer portal's real name and its real identity — a fan's personal home inside PusoStore, not an account settings page. Four concepts govern it, replacing what would otherwise be a flat settings-style tab bar:
+
+| Concept | Is | Is not |
+|---|---|---|
+| **Home** | A living feed of what changed since the fan's last visit | A dashboard of statistics about them |
+| **Locker** | A fan's growing personal collection — Merchandise today, Tickets/Memberships/Digital Collectibles/Rewards later, same shape | "Purchases" or order history |
+| **Fit Check** | The AI Try-On feature, treated as identity and self-expression | A utility tool buried in account settings |
+| **Following** | The mechanism (built on the existing `Favorite` domain concept) that makes fandom, not shopping, a reason to return | "Organizations," a management page |
+
+Settings (Profile, Addresses, Security, Connected Accounts, Notification Preferences) still exists — it stays a secondary utility reached from the avatar, never competing with the four concepts above for top-level attention.
+
+**Every feature proposed for My PUSO must pass the test in the manifesto's §7 before it ships**: does it give the fan a reason to come back tomorrow; does it fit inside Home, Locker, Fit Check, or Following without inventing a fifth concept; does it treat the fan as a supporter of Philippine sports first and a customer second. A feature that fails any of these doesn't belong in My PUSO, even if it's a reasonable feature elsewhere on the platform.
 
 ---
 
