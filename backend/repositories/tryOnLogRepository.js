@@ -15,6 +15,26 @@ export async function find({ where, orderBy, skip, take, include, client = prism
 }
 
 /**
+ * Customer Portal try-on history. Only logs created after the userId column
+ * was added (see the migration adding it) will ever match — there is
+ * nothing to backfill historical rows from, so a brand-new account's
+ * history genuinely starts empty rather than at some fabricated count.
+ */
+export async function findByUser({ userId, success, skip, take, client = prisma } = {}) {
+  const logs = await client.tryOnLog.findMany({
+    where: { userId, ...(success !== undefined && { success }) },
+    orderBy: { createdAt: 'desc' },
+    skip,
+    take,
+  });
+  return serialize(logs.map(withProductFallback));
+}
+
+export async function countByUser(userId, { success, client = prisma } = {}) {
+  return client.tryOnLog.count({ where: { userId, ...(success !== undefined && { success }) } });
+}
+
+/**
  * Replaces MongoDB's TTL index (`expireAfterSeconds: 90 days`) — Postgres
  * has no equivalent, so this is called from a daily node-cron job (see
  * server.js), the same pattern already used there for the daily sales
@@ -54,4 +74,4 @@ export async function mostTried(limit = 5, { client = prisma } = {}) {
   );
 }
 
-export default { create, find, deleteOlderThan, mostTried };
+export default { create, find, findByUser, countByUser, deleteOlderThan, mostTried };

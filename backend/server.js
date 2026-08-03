@@ -42,6 +42,8 @@ import footerRoutes from './routes/footer.js';
 import campaignRoutes from './routes/campaigns.js';
 import faqRoutes from './routes/faq.js';
 import promoMessageRoutes from './routes/promoMessages.js';
+import accountRoutes from './routes/account.js';
+import { authenticate } from './middleware/auth.js';
 
 // Create Express app
 const app = express();
@@ -166,6 +168,7 @@ app.use('/api/footer', footerRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/promo-messages', promoMessageRoutes);
+app.use('/api/account', authenticate, accountRoutes);
 
 // Sitemap endpoint
 app.get('/api/sitemap.xml', async (req, res) => {

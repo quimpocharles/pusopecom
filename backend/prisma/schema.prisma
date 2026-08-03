@@ -154,6 +154,9 @@ model User {
   // status/shipping change. Never set for actor=system/webhook/customer
   // events (see OrderEvent below).
   orderEvents           OrderEvent[]
+  wishlist              Wishlist[]
+  notifications         Notification[]
+  tryOnLogs             TryOnLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -210,13 +213,14 @@ model Product {
   totalSold    Int             @default(0)
   totalViews   Int             @default(0)
 
-  sizes      ProductSize[]
-  colors     ProductColor[]
-  orderItems OrderItem[]
-  reviews    Review[]
-  tryOnLogs  TryOnLog[]
-  activities UserActivity[]
-  campaigns  Campaign[] // campaigns featuring this product (e.g. the AI Try-On section's featuredProduct)
+  sizes        ProductSize[]
+  colors       ProductColor[]
+  orderItems   OrderItem[]
+  reviews      Review[]
+  tryOnLogs    TryOnLog[]
+  activities   UserActivity[]
+  campaigns    Campaign[] // campaigns featuring this product (e.g. the AI Try-On section's featuredProduct)
+  wishlistedBy Wishlist[]
 
   // Organization-first migration (ADR-001/002, single pilot Organization —
   // see docs/decisions/0000-decision-log.md and the plan this shipped
@@ -400,9 +404,9 @@ enum OrderEventActor {
 }
 
 model OrderEvent {
-  id      String         @id @default(uuid())
+  id      String          @id @default(uuid())
   orderId String
-  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   type    OrderEventType
   actor   OrderEventActor
 
@@ -801,9 +805,9 @@ model Campaign {
 // ---------------------------------------------------------------------------
 
 model FeaturedTeam {
-  id       String  @id @default(uuid())
-  team     String // the institution's name — also used for the ?team= shop-link filter
-  headline String? // optional H2 override; falls back to `team` when blank
+  id          String  @id @default(uuid())
+  team        String // the institution's name — also used for the ?team= shop-link filter
+  headline    String? // optional H2 override; falls back to `team` when blank
   description String?
 
   // No separate background-image slot: the current design only ever uses a
@@ -911,7 +915,7 @@ model FooterSettings {
   companyDescription String?
   // Frontend always prepends "© {currentYear} " — this is just the name/
   // rights-reserved text, so nobody has to remember to bump the year by hand.
-  copyrightText String?
+  copyrightText      String?
 
   updatedAt DateTime @updatedAt
 
@@ -1023,9 +1027,9 @@ model PromoMessage {
 // ---------------------------------------------------------------------------
 
 model ReportRecipient {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  active    Boolean  @default(true)
+  id     String  @id @default(uuid())
+  email  String  @unique
+  active Boolean @default(true)
 
   createdAt DateTime @default(now())
 
@@ -1133,9 +1137,9 @@ enum DashboardWidgetKey {
 }
 
 model DashboardWidget {
-  id           String              @id @default(uuid())
-  key          DashboardWidgetKey  @unique
-  active       Boolean             @default(true)
+  id           String             @id @default(uuid())
+  key          DashboardWidgetKey @unique
+  active       Boolean            @default(true)
   displayOrder Int
 
   createdAt DateTime @default(now())
@@ -1169,12 +1173,71 @@ model TryOnLog {
   provider   String?
   durationMs Int?
 
+  // Added for the Customer Portal's per-user try-on history — every row
+  // before this migration has userId: null with nothing to backfill from
+  // (try-ons were never attributed to an account at all). onDelete: SetNull
+  // so a deleted account doesn't erase aggregate try-on history/analytics.
+  // sessionId mirrors UserActivity's guest-attribution convention.
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId])
   @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
   @@map("try_on_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Wishlist — Customer Portal. Saved Commerce Items, i.e. purchase intent,
+// not identity (that's Favorite/following an Organization — not built,
+// no feature exists for it yet). Simple join, idempotent add via the
+// unique constraint below rather than the route needing to check first.
+// ---------------------------------------------------------------------------
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlists")
+}
+
+// ---------------------------------------------------------------------------
+// Notification — Customer Portal inbox. Starts with a single producer
+// (order status changes, see routes/orders.js) — `type` stays a single-value
+// enum rather than a free string to match this codebase's existing
+// discriminator convention (ActivityType, OrderEventType, etc.); new
+// producers extend it the same way those were extended.
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  order
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 // ---------------------------------------------------------------------------

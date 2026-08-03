@@ -12,6 +12,7 @@ import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/ship
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import * as paymentService from '../services/paymentService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
+import * as accountCache from '../lib/accountCache.js';
 
 const router = express.Router();
 
@@ -286,6 +287,8 @@ router.post('/',
         }
         throw error;
       }
+
+      if (req.user) await accountCache.invalidateDashboard(req.user._id);
 
       // Gateway checkout session creation is an external call —
       // deliberately outside the DB transaction above, both because an
@@ -697,6 +700,8 @@ router.patch('/:id/status',
           metadata: { orderStatus, trackingNumber, courier },
         });
       }
+
+      if (before.user) await accountCache.invalidateDashboard(before.user);
 
       res.json({
         success: true,

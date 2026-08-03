@@ -140,6 +140,26 @@ export async function recordVerificationDecision(
   return result.count > 0;
 }
 
+/**
+ * Customer Portal "organizations" — the customer's own purchase history,
+ * not a follow/favorite relationship (that feature doesn't exist yet; see
+ * the Wishlist/Notification/OrganizationFollow scoping decision this
+ * shipped under). Two queries, not N+1: one to collect the distinct
+ * organization ids behind the user's order items, one to fetch those
+ * organizations.
+ */
+export async function findPurchasedByUser(userId, { client = prisma } = {}) {
+  const items = await client.orderItem.findMany({
+    where: { order: { userId }, product: { organizationId: { not: null } } },
+    select: { product: { select: { organizationId: true } } },
+  });
+  const orgIds = [...new Set(items.map((i) => i.product.organizationId).filter(Boolean))];
+  if (orgIds.length === 0) return [];
+
+  const orgs = await client.organization.findMany({ where: { id: { in: orgIds } } });
+  return serialize(orgs).map(withVerifierFallback);
+}
+
 export default {
   findById,
   findBySlug,
@@ -155,4 +175,5 @@ export default {
   endParticipation,
   requestVerification,
   recordVerificationDecision,
+  findPurchasedByUser,
 };

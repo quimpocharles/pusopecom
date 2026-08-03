@@ -7,6 +7,8 @@ import { generateTryOn as replicateGenerateTryOn } from '../services/replicateSe
 import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedService.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
+import * as accountCache from '../lib/accountCache.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -37,7 +39,14 @@ function currentProvider() {
 }
 
 // Virtual try-on endpoint
-router.post('/', upload.single('userImage'), async (req, res) => {
+// optionalAuth added for the Customer Portal's per-user try-on history —
+// the shared frontend api client already attaches the bearer token to every
+// request when logged in, so this attributes try-ons to an account with no
+// frontend change needed. Guest behavior is unchanged (req.user stays
+// undefined). sessionId (guest attribution, mirrors activity.js's
+// convention) isn't sent by the frontend to this endpoint yet — stays
+// undefined until that's wired up separately.
+router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
   const provider = currentProvider();
   let genStart;
 
@@ -105,14 +114,18 @@ router.post('/', upload.single('userImage'), async (req, res) => {
         const [found] = await productRepository.find({ where: { name: productName }, take: 1 });
         if (found) resolvedProductId = found._id;
       }
-      return tryOnLogRepository.create({
+      const logged = await tryOnLogRepository.create({
         productId: resolvedProductId || undefined,
         productName: productName || 'Unknown',
         productImage: productImageUrl,
         success: result.success,
         provider,
-        durationMs
+        durationMs,
+        userId: req.user?._id,
+        sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
       });
+      if (req.user) await accountCache.invalidateDashboard(req.user._id);
+      return logged;
     })().catch(err => logger.error({ err }, 'TryOnLog write error'));
 
     if (result.success) {
@@ -139,8 +152,12 @@ router.post('/', upload.single('userImage'), async (req, res) => {
       productImage: req.body?.productImageUrl,
       success: false,
       provider,
-      durationMs
-    }).catch(err => logger.error({ err }, 'TryOnLog write error'));
+      durationMs,
+      userId: req.user?._id,
+      sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
+    })
+      .then(() => req.user && accountCache.invalidateDashboard(req.user._id))
+      .catch(err => logger.error({ err }, 'TryOnLog write error'));
 
     const isRateLimit = error.message?.toLowerCase().includes('rate limit');
     res.status(isRateLimit ? 429 : 500).json({
