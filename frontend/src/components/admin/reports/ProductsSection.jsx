@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import ReportCard from './ReportCard';
 import HorizontalBarList from './HorizontalBarList';
+import ExportButtons from './ExportButtons';
 import reportService from '../../../services/reportService';
 
 const formatPeso = (val) => `₱${Number(val).toLocaleString()}`;
@@ -43,7 +44,10 @@ const ProductsSection = ({ dateParams }) => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-gray-900">Product Performance</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-900">Product Performance</h2>
+        <ExportButtons reportKey="products" dateParams={dateParams} />
+      </div>
 
       {/* Stock overview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

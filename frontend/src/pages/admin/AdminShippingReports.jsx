@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import DateRangeSelector, { getDateRange } from '../../components/admin/reports/DateRangeSelector';
+import ExportButtons from '../../components/admin/reports/ExportButtons';
 import api from '../../services/api';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -102,6 +103,10 @@ const AdminShippingReports = () => {
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState(null);
 
+  const dateParams = {};
+  if (dateRange.startDate) dateParams.startDate = dateRange.startDate;
+  if (dateRange.endDate) dateParams.endDate = dateRange.endDate;
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -144,29 +149,6 @@ const AdminShippingReports = () => {
     .map((row, i) => ({ name: row.label, value: rowCounts[i], color: CHART_COLORS[i] }))
     .filter((d) => d.value > 0);
 
-  // ── CSV export ────────────────────────────────────────────────────────────
-
-  const handleExport = () => {
-    const rawEvents = reportData?.rawEvents ?? [];
-    const today     = new Date().toISOString().split('T')[0];
-    const header    = ['Order ID', 'Date', 'Shipping Method', 'Order Total (PHP)', 'Region'];
-    const rows      = rawEvents.map((e) => [
-      e.orderId,
-      new Date(e.createdAt).toISOString().split('T')[0],
-      e.shippingMethod,
-      e.orderTotal,
-      e.region ?? '',
-    ]);
-    const csv  = [header, ...rows].map((r) => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `puso-shipping-report-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -183,13 +165,7 @@ const AdminShippingReports = () => {
       {/* Filters + export */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <DateRangeSelector selected={selectedPreset} onSelect={handleSelect} />
-        <button
-          onClick={handleExport}
-          disabled={loading || !reportData || totalOrders === 0}
-          className="px-4 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-        >
-          Export CSV
-        </button>
+        <ExportButtons reportKey="shipping" dateParams={dateParams} />
       </div>
 
       {/* Error */}

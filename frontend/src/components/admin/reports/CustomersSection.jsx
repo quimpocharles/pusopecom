@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ReportCard from './ReportCard';
 import HorizontalBarList from './HorizontalBarList';
+import ExportButtons from './ExportButtons';
 import reportService from '../../../services/reportService';
 
 const formatPeso = (val) => `₱${Number(val).toLocaleString()}`;
@@ -44,7 +45,10 @@ const CustomersSection = ({ dateParams }) => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-gray-900">Customer Insights</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-900">Customer Insights</h2>
+        <ExportButtons reportKey="customers" dateParams={dateParams} />
+      </div>
 
       {/* New vs Returning */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

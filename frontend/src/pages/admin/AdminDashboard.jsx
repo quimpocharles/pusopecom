@@ -8,6 +8,7 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import StatsCard from '../../components/admin/StatsCard';
+import PinnedWidgets from '../../components/admin/dashboard/PinnedWidgets';
 import orderService from '../../services/orderService';
 import authService from '../../services/authService';
 
@@ -69,6 +70,8 @@ const AdminDashboard = () => {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+
+      <PinnedWidgets />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
