@@ -288,7 +288,7 @@ router.post('/',
         throw error;
       }
 
-      if (req.user) await accountCache.invalidateDashboard(req.user._id);
+      if (req.user) await accountCache.invalidateHome(req.user._id);
 
       // Gateway checkout session creation is an external call —
       // deliberately outside the DB transaction above, both because an
@@ -701,7 +701,7 @@ router.patch('/:id/status',
         });
       }
 
-      if (before.user) await accountCache.invalidateDashboard(before.user);
+      if (before.user) await accountCache.invalidateHome(before.user);
 
       res.json({
         success: true,

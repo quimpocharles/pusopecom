@@ -157,6 +157,7 @@ model User {
   wishlist              Wishlist[]
   notifications         Notification[]
   tryOnLogs             TryOnLog[]
+  following             Follow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -501,6 +502,8 @@ model Organization {
   // with.
   affiliations AthleteAffiliation[] @relation("AffiliationAthlete")
   affiliates   AthleteAffiliation[] @relation("AffiliationOrganization")
+
+  followedBy Follow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1209,6 +1212,28 @@ model Wishlist {
   @@unique([userId, productId])
   @@index([userId])
   @@map("wishlists")
+}
+
+// ---------------------------------------------------------------------------
+// Follow — My PUSO's Following. Backs docs/MY_PUSO_MANIFESTO.md's Following
+// concept: a customer following an Organization (school/team/league/future
+// athlete) is identity, not purchase intent — the same distinction
+// CLAUDE.md's Terminology table already draws for Favorite. Mirrors
+// Wishlist's shape exactly (same idempotent-upsert pattern in the
+// repository) since both are simple customer↔entity join tables.
+// ---------------------------------------------------------------------------
+
+model Follow {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@map("follows")
 }
 
 // ---------------------------------------------------------------------------

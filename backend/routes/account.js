@@ -7,6 +7,7 @@ import * as wishlistRepository from '../repositories/wishlistRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as organizationRepository from '../repositories/organizationRepository.js';
+import * as followRepository from '../repositories/followRepository.js';
 import * as accountRepository from '../repositories/accountRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as recommendationService from '../services/recommendationService.js';
@@ -33,19 +34,21 @@ const paginationMeta = (page, limit, total) => ({
   pages: Math.ceil(total / limit),
 });
 
-// GET /api/account/dashboard — single-request aggregation, cached ~60s.
-router.get('/dashboard', async (req, res) => {
+// GET /api/account/home — My PUSO's Home: a live-composed feed of what
+// changed since the fan's last visit (see accountRepository.getHomeFeed and
+// docs/MY_PUSO_MANIFESTO.md), cached ~60s.
+router.get('/home', async (req, res) => {
   try {
-    const summary = await accountCache.getOrSetDashboard(req.user._id, () =>
-      accountRepository.getDashboardSummary(req.user._id)
+    const home = await accountCache.getOrSetHome(req.user._id, () =>
+      accountRepository.getHomeFeed(req.user._id)
     );
     const recommendations = await recommendationService.getRecommendations(req.user._id);
 
-    res.json({ success: true, data: { ...summary, recommendations } });
+    res.json({ success: true, data: { ...home, recommendations } });
   } catch (error) {
-    logger.error({ err: error }, 'Get dashboard error');
+    logger.error({ err: error }, 'Get home feed error');
     Sentry.captureException(error);
-    res.status(500).json({ success: false, message: 'Failed to load dashboard' });
+    res.status(500).json({ success: false, message: 'Failed to load home' });
   }
 });
 
@@ -147,7 +150,7 @@ router.get('/wishlist', async (req, res) => {
 router.post('/wishlist/:productId', async (req, res) => {
   try {
     const item = await wishlistRepository.add(req.user._id, req.params.productId);
-    await accountCache.invalidateDashboard(req.user._id);
+    await accountCache.invalidateHome(req.user._id);
     res.status(201).json({ success: true, data: item });
   } catch (error) {
     if (error.code === 'P2003') {
@@ -165,12 +168,61 @@ router.delete('/wishlist/:productId', async (req, res) => {
     if (!removed) {
       return res.status(404).json({ success: false, message: 'Not in wishlist' });
     }
-    await accountCache.invalidateDashboard(req.user._id);
+    await accountCache.invalidateHome(req.user._id);
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Remove from wishlist error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to remove from wishlist' });
+  }
+});
+
+// GET /api/account/following — My PUSO's Following (docs/MY_PUSO_MANIFESTO.md
+// § Following). Mirrors the wishlist route trio exactly.
+router.get('/following', async (req, res) => {
+  try {
+    const { page, limit, skip } = paginationParams(req);
+
+    const [items, total] = await Promise.all([
+      followRepository.find({ userId: req.user._id, skip, take: limit }),
+      followRepository.count(req.user._id),
+    ]);
+
+    res.json({ success: true, data: items, pagination: paginationMeta(page, limit, total) });
+  } catch (error) {
+    logger.error({ err: error }, 'Get following error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load following' });
+  }
+});
+
+router.post('/following/:organizationId', async (req, res) => {
+  try {
+    const item = await followRepository.follow(req.user._id, req.params.organizationId);
+    await accountCache.invalidateHome(req.user._id);
+    res.status(201).json({ success: true, data: item });
+  } catch (error) {
+    if (error.code === 'P2003') {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+    logger.error({ err: error }, 'Follow organization error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to follow organization' });
+  }
+});
+
+router.delete('/following/:organizationId', async (req, res) => {
+  try {
+    const removed = await followRepository.unfollow(req.user._id, req.params.organizationId);
+    if (!removed) {
+      return res.status(404).json({ success: false, message: 'Not following this organization' });
+    }
+    await accountCache.invalidateHome(req.user._id);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error }, 'Unfollow organization error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to unfollow organization' });
   }
 });
 
@@ -245,7 +297,7 @@ router.put('/profile', async (req, res) => {
     const user = await userRepository.updateById(req.user._id, updates);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    await accountCache.invalidateDashboard(req.user._id);
+    await accountCache.invalidateHome(req.user._id);
     res.json({ success: true, data: { _id: user._id, firstName: user.firstName, lastName: user.lastName, phone: user.phone } });
   } catch (error) {
     logger.error({ err: error }, 'Update account profile error');
@@ -282,7 +334,7 @@ router.patch('/notifications/read', async (req, res) => {
       ? await notificationRepository.markRead(req.user._id, ids)
       : await notificationRepository.markAllRead(req.user._id);
 
-    await accountCache.invalidateDashboard(req.user._id);
+    await accountCache.invalidateHome(req.user._id);
     res.json({ success: true, data: { updated: count } });
   } catch (error) {
     logger.error({ err: error }, 'Mark notifications read error');

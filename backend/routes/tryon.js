@@ -124,7 +124,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
         userId: req.user?._id,
         sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
       });
-      if (req.user) await accountCache.invalidateDashboard(req.user._id);
+      if (req.user) await accountCache.invalidateHome(req.user._id);
       return logged;
     })().catch(err => logger.error({ err }, 'TryOnLog write error'));
 
@@ -156,7 +156,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       userId: req.user?._id,
       sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
     })
-      .then(() => req.user && accountCache.invalidateDashboard(req.user._id))
+      .then(() => req.user && accountCache.invalidateHome(req.user._id))
       .catch(err => logger.error({ err }, 'TryOnLog write error'));
 
     const isRateLimit = error.message?.toLowerCase().includes('rate limit');

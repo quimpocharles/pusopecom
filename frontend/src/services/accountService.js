@@ -1,8 +1,8 @@
 import api from './api';
 
 export const accountService = {
-  getDashboard: async () => {
-    const response = await api.get('/account/dashboard');
+  getHome: async () => {
+    const response = await api.get('/account/home');
     return response.data;
   },
 
@@ -43,6 +43,21 @@ export const accountService = {
 
   getOrganizations: async () => {
     const response = await api.get('/account/organizations');
+    return response.data;
+  },
+
+  getFollowing: async (params = {}) => {
+    const response = await api.get('/account/following', { params });
+    return response.data;
+  },
+
+  followOrganization: async (organizationId) => {
+    const response = await api.post(`/account/following/${organizationId}`);
+    return response.data;
+  },
+
+  unfollowOrganization: async (organizationId) => {
+    const response = await api.delete(`/account/following/${organizationId}`);
     return response.data;
   },
 

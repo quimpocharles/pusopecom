@@ -8,12 +8,12 @@ import logger from './logger.js';
 // in-memory. A 60s TTL bounds staleness for whatever isn't explicitly
 // invalidated below, without needing a hook at every possible mutation site
 // in the app — only the handful of routes that actually change
-// dashboard-visible data (orders.js, tryon.js, routes/account.js itself)
-// call invalidateDashboard.
+// Home-feed-visible data (orders.js, tryon.js, routes/account.js itself)
+// call invalidateHome.
 const TTL_SECONDS = 60;
-const key = (userId) => `acct:dashboard:${userId}`;
+const key = (userId) => `acct:home:${userId}`;
 
-export async function getOrSetDashboard(userId, computeFn) {
+export async function getOrSetHome(userId, computeFn) {
   if (!redis) return computeFn();
 
   const cacheKey = key(userId);
@@ -35,7 +35,7 @@ export async function getOrSetDashboard(userId, computeFn) {
   return fresh;
 }
 
-export async function invalidateDashboard(userId) {
+export async function invalidateHome(userId) {
   if (!redis || !userId) return;
   try {
     await redis.del(key(userId));
@@ -44,4 +44,4 @@ export async function invalidateDashboard(userId) {
   }
 }
 
-export default { getOrSetDashboard, invalidateDashboard };
+export default { getOrSetHome, invalidateHome };

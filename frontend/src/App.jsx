@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, lazy, Suspense } from 'react';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import Home from './pages/Home';
@@ -13,12 +13,12 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const CompleteProfile = lazy(() => import('./pages/CompleteProfile'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation'));
-const AccountLayout = lazy(() => import('./pages/account/AccountLayout'));
-const AccountOverview = lazy(() => import('./pages/account/AccountOverview'));
-const AccountOrders = lazy(() => import('./pages/account/AccountOrders'));
-const AccountWishlist = lazy(() => import('./pages/account/AccountWishlist'));
-const AccountTryOns = lazy(() => import('./pages/account/AccountTryOns'));
-const AccountNotifications = lazy(() => import('./pages/account/AccountNotifications'));
+const PortalLayout = lazy(() => import('./pages/account/PortalLayout'));
+const PortalHome = lazy(() => import('./pages/account/PortalHome'));
+const Locker = lazy(() => import('./pages/account/Locker'));
+const FitCheck = lazy(() => import('./pages/account/FitCheck'));
+const Following = lazy(() => import('./pages/account/Following'));
+const PortalSettings = lazy(() => import('./pages/account/PortalSettings'));
 const AccountProfile = lazy(() => import('./pages/account/AccountProfile'));
 const AccountAddresses = lazy(() => import('./pages/account/AccountAddresses'));
 const AccountPassword = lazy(() => import('./pages/account/AccountPassword'));
@@ -78,16 +78,18 @@ function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:orderNumber" element={<OrderConfirmation />} />
-          <Route path="/account" element={<AccountLayout />}>
-            <Route index element={<AccountOverview />} />
-            <Route path="orders" element={<AccountOrders />} />
-            <Route path="wishlist" element={<AccountWishlist />} />
-            <Route path="try-ons" element={<AccountTryOns />} />
-            <Route path="notifications" element={<AccountNotifications />} />
-            <Route path="profile" element={<AccountProfile />} />
-            <Route path="addresses" element={<AccountAddresses />} />
-            <Route path="password" element={<AccountPassword />} />
-            <Route path="security" element={<AccountSecurity />} />
+          <Route path="/account" element={<PortalLayout />}>
+            <Route index element={<PortalHome />} />
+            <Route path="locker" element={<Locker />} />
+            <Route path="fit-check" element={<FitCheck />} />
+            <Route path="following" element={<Following />} />
+            <Route path="settings" element={<PortalSettings />}>
+              <Route index element={<Navigate to="profile" replace />} />
+              <Route path="profile" element={<AccountProfile />} />
+              <Route path="addresses" element={<AccountAddresses />} />
+              <Route path="password" element={<AccountPassword />} />
+              <Route path="security" element={<AccountSecurity />} />
+            </Route>
           </Route>
           <Route path="/privacy" element={<DataPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />

@@ -4,12 +4,15 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Panel, Badge, Modal, Pagination, EmptyState, ErrorState } from '../../components/ui';
 import accountService from '../../services/accountService';
 
-// TryOnLog only ever stored the product's own image and a success/fail
-// flag — the generated result image itself was never persisted anywhere
-// (routes/tryon.js returns it once, directly in the response). So this
-// shows what a try-on attempt was actually for and whether it succeeded,
-// not a saved "result" image that doesn't exist.
-const AccountTryOns = () => {
+// docs/MY_PUSO_MANIFESTO.md: Fit Check, promoted to a primary destination —
+// same functionality as before (this pass is the rename/reposition, not a
+// feature expansion; downloads/favorites/generation-progress/body-profile
+// are explicitly future work). TryOnLog only ever stored the product's own
+// image and a success/fail flag — the generated result image itself was
+// never persisted anywhere (routes/tryon.js returns it once, directly in
+// the response) — so this shows what an attempt was for and whether it
+// succeeded, not a saved "result" image that doesn't exist.
+const FitCheck = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Number(searchParams.get('page')) || 1;
 
@@ -39,12 +42,12 @@ const AccountTryOns = () => {
   }, [page]);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState description="Failed to load your try-on history." onRetry={load} />;
+  if (error) return <ErrorState description="Failed to load your Fit Check history." onRetry={load} />;
   if (tryOns.length === 0) {
     return (
       <EmptyState
-        title="No try-ons yet"
-        description="Use Virtual Try-On on any eligible product to see your history here."
+        title="No Fit Checks yet"
+        description="Use Fit Check on any eligible product to see your history here."
         actionLabel="Browse Products"
         onAction={() => (window.location.href = '/products')}
       />
@@ -110,4 +113,4 @@ const AccountTryOns = () => {
   );
 };
 
-export default AccountTryOns;
+export default FitCheck;
