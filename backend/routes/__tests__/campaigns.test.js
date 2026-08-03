@@ -60,10 +60,14 @@ describe('routes/campaigns.js', () => {
     expect(res.status).toBe(400);
   });
 
-  it('GET /active?placement=hero returns null when nothing is flagged featuredOnHomepage', async () => {
+  it('GET /active?placement=hero does not return this campaign before it is flagged featuredOnHomepage', async () => {
+    // Asserting the response is outright null would be fragile against a
+    // shared dev database that may legitimately have its own real active
+    // hero campaign already — the actual guarantee this test proves is that
+    // *this* still-unflagged campaign specifically isn't the one returned.
     const res = await request(app).get('/api/campaigns/active?placement=hero');
     expect(res.status).toBe(200);
-    expect(res.body.data).toBeNull();
+    expect(res.body.data?._id).not.toBe(createdId);
   });
 
   it('GET /active?placement=hero returns the campaign once flagged and in-window (defaults placement=hero)', async () => {
@@ -75,9 +79,17 @@ describe('routes/campaigns.js', () => {
   });
 
   it('GET /active?placement=tryOn does not return a placement=hero campaign', async () => {
+    // Same reasoning as above: a real active tryOn campaign may genuinely
+    // exist in the shared dev database (it does — this is what broke CI).
+    // The invariant under test is placement isolation, not "nothing active
+    // exists" — so assert the hero-flagged campaign specifically doesn't
+    // leak into a tryOn query, not that the query returns nothing at all.
     const res = await request(app).get('/api/campaigns/active?placement=tryOn');
     expect(res.status).toBe(200);
-    expect(res.body.data).toBeNull();
+    expect(res.body.data?._id).not.toBe(createdId);
+    if (res.body.data) {
+      expect(res.body.data.placement).toBe('tryOn');
+    }
   });
 
   it('DELETE /:id soft-deletes (active: false), not a real row delete', async () => {
