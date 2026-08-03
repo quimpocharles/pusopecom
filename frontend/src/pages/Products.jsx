@@ -91,6 +91,7 @@ const Products = () => {
   const gender = searchParams.get('gender') || '';
   const sport = searchParams.get('sport') || '';
   const league = searchParams.get('league') || '';
+  const team = searchParams.get('team') || '';
   const category = searchParams.get('category') || '';
   const sale = searchParams.get('sale') || '';
   const search = searchParams.get('search') || '';
@@ -110,6 +111,7 @@ const Products = () => {
           ...(gender && { gender }),
           ...(sport && { sport }),
           ...(league && { league }),
+          ...(team && { team }),
           ...(category && { category }),
           ...(sale && { sale }),
           ...(search && { search }),
@@ -128,7 +130,7 @@ const Products = () => {
     };
 
     fetchProducts();
-  }, [gender, sport, league, category, sale, search, sort, page]);
+  }, [gender, sport, league, team, category, sale, search, sort, page]);
 
   const toggleFilter = (key, value) => {
     const newParams = new URLSearchParams(searchParams);
