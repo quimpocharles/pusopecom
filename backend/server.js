@@ -91,7 +91,13 @@ const redisStore = (prefix) =>
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  // 100 was sized for the old, mostly-static site. The homepage CMS build
+  // put ~9 independent public content reads (footer, nav, campaigns, FAQ,
+  // promo messages, featured team, partner logos, homepage sections) on
+  // every single page load, plus a set of admin list pages that each poll
+  // their own endpoint — one page view alone now spends a meaningful slice
+  // of the old budget, so normal browsing/admin use was tripping this.
+  max: 600,
   message: 'Too many requests from this IP, please try again later.',
   skip: () => isDev,
   store: redisStore('rl:general:')
