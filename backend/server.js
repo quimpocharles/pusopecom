@@ -13,7 +13,13 @@ import redis from './lib/redis.js';
 import * as productRepository from './repositories/productRepository.js';
 import * as tryOnLogRepository from './repositories/tryOnLogRepository.js';
 import * as userActivityRepository from './repositories/userActivityRepository.js';
-import { generateAndSendDailySalesReport } from './services/dailySalesService.js';
+import * as reportScheduleRepository from './repositories/reportScheduleRepository.js';
+import {
+  generateAndSendDailyBusinessReport,
+  generateAndSendWeeklyBusinessReport,
+  generateAndSendMonthlyBusinessReport,
+  generateAndSendQuarterlyBusinessReport,
+} from './services/dailyBusinessReportService.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -29,6 +35,10 @@ import activityRoutes from './routes/activity.js';
 import shippingRoutes from './routes/shipping.js';
 import pickupRoutes from './routes/pickup.js';
 import homepageSectionRoutes from './routes/homepageSections.js';
+import featuredTeamRoutes from './routes/featuredTeam.js';
+import partnerLogoRoutes from './routes/partnerLogos.js';
+import navigationLinkRoutes from './routes/navigationLinks.js';
+import footerRoutes from './routes/footer.js';
 import campaignRoutes from './routes/campaigns.js';
 import faqRoutes from './routes/faq.js';
 import promoMessageRoutes from './routes/promoMessages.js';
@@ -143,6 +153,10 @@ app.use('/api/activity', activityRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin/pickup', pickupRoutes);
 app.use('/api/homepage-sections', homepageSectionRoutes);
+app.use('/api/featured-team', featuredTeamRoutes);
+app.use('/api/partner-logos', partnerLogoRoutes);
+app.use('/api/navigation-links', navigationLinkRoutes);
+app.use('/api/footer', footerRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/promo-messages', promoMessageRoutes);
@@ -194,12 +208,56 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Schedule daily sales report at 11:59 PM Philippine time (UTC+8)
-cron.schedule('59 23 * * *', async () => {
+// Business Report cadences — all fixed at 5:00 AM Philippine time (the
+// spec's hard requirement for Daily; Weekly/Monthly/Quarterly reuse the
+// same time rather than each getting its own admin-configurable slot, see
+// the ReportSchedule model's own comment for why). Each cadence checks
+// ReportSchedule before running — an admin can turn any one of them off
+// from Admin > Reports without touching this file. Recipients come from
+// ReportRecipient, not a single ADMIN_EMAIL — see dailyBusinessReportService.js.
+
+// Daily, every day — reports on the prior calendar day (yesterday's data
+// is fully settled by 5 AM; running at 11:59 PM the old sales-report job
+// used to would still catch same-day late-night activity).
+cron.schedule('0 5 * * *', async () => {
   try {
-    await generateAndSendDailySalesReport();
+    if (!(await reportScheduleRepository.isActive('daily'))) return;
+    await generateAndSendDailyBusinessReport();
   } catch (error) {
-    logger.error({ err: error }, 'Daily sales report failed');
+    logger.error({ err: error }, 'Daily business report failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Weekly, every Monday — covers the 7 days just completed.
+cron.schedule('0 5 * * 1', async () => {
+  try {
+    if (!(await reportScheduleRepository.isActive('weekly'))) return;
+    await generateAndSendWeeklyBusinessReport();
+  } catch (error) {
+    logger.error({ err: error }, 'Weekly business report failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Monthly, 1st of the month — covers the full previous calendar month.
+cron.schedule('0 5 1 * *', async () => {
+  try {
+    if (!(await reportScheduleRepository.isActive('monthly'))) return;
+    await generateAndSendMonthlyBusinessReport();
+  } catch (error) {
+    logger.error({ err: error }, 'Monthly business report failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Quarterly, 1st of Jan/Apr/Jul/Oct — covers the full previous calendar quarter.
+cron.schedule('0 5 1 1,4,7,10 *', async () => {
+  try {
+    if (!(await reportScheduleRepository.isActive('quarterly'))) return;
+    await generateAndSendQuarterlyBusinessReport();
+  } catch (error) {
+    logger.error({ err: error }, 'Quarterly business report failed');
     Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });

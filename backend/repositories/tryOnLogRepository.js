@@ -26,4 +26,32 @@ export async function deleteOlderThan(days, { client = prisma } = {}) {
   return result.count;
 }
 
-export default { create, find, deleteOlderThan };
+/**
+ * Top N most-tried-on products, all-time — backs the "Most Tried-On
+ * Products" dashboard widget. A real SQL groupBy rather than fetch-all-
+ * then-reduce-in-JS (unlike routes/reports.js's own reports): this can run
+ * on every dashboard load, not just an admin opening a report page, so it
+ * doesn't get the same "small enough dataset, simplicity wins" pass — same
+ * reasoning as orderRepository.getTopSellingProducts, which this mirrors.
+ */
+export async function mostTried(limit = 5, { client = prisma } = {}) {
+  const groups = await client.tryOnLog.groupBy({
+    by: ['productId'],
+    where: { productId: { not: null } },
+    _count: true,
+    orderBy: { _count: { productId: 'desc' } },
+    take: limit,
+  });
+
+  return Promise.all(
+    groups.map(async (g) => {
+      const sample = await client.tryOnLog.findFirst({
+        where: { productId: g.productId },
+        select: { productName: true, productImage: true },
+      });
+      return { productName: sample?.productName, productImage: sample?.productImage, count: g._count.productId };
+    })
+  );
+}
+
+export default { create, find, deleteOlderThan, mostTried };

@@ -286,116 +286,143 @@ export const sendOrderConfirmationEmail = async (email, order) => {
   });
 };
 
-// ── Daily sales email ──────────────────────────────────────────────────────────
-export const sendDailySalesEmail = async (adminEmail, report) => {
-  const dateStr = report.date.toLocaleDateString('en-PH', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+// ── Daily Business Report email ─────────────────────────────────────────────────
+const money = (n) => `&#8369;${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
-  const topProductsRows = report.topProducts.length > 0
-    ? report.topProducts.map((p, i) => `
-        <tr>
-          <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-size:13px;color:rgba(255,255,255,0.40);">${i + 1}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-size:13px;color:rgba(255,255,255,0.80);">${p.name}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:center;color:rgba(255,255,255,0.80);">${p.quantity}</td>
-          <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">
-            &#8369;${p.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-          </td>
-        </tr>
-      `).join('')
-    : `<tr><td colspan="4" style="padding:12px 10px;text-align:center;font-size:13px;color:rgba(255,255,255,0.25);">No products sold today</td></tr>`;
+const sectionLabel = (text) =>
+  `<p style="margin:28px 0 12px;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:rgba(255,255,255,0.35);">${text}</p>`;
 
-  const orderStatusRows = Object.entries(report.ordersByStatus).map(([status, count]) => `
+const statCard = (num, lbl, color = WHITE) => `
+  <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;border:1px solid ${BORDER};">
+    <div style="font-size:24px;font-weight:700;color:${color};">${num}</div>
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.35);margin-top:4px;">${lbl}</div>
+  </td>`;
+
+const statRow = (...cards) => {
+  const cells = cards.flatMap((c, i) => (i === 0 ? [c] : [`<td style="width:10px;"></td>`, c]));
+  return `<tr>${cells.join('')}</tr>`;
+};
+
+// A simple two-column "label — right-aligned value" table, used for every
+// breakdown section (products/organizations/payments/shipping/try-on) so
+// the report doesn't need a bespoke table shape per section.
+const breakdownTable = (rows, labelHeader, valueHeader) => {
+  if (rows.length === 0) {
+    return `<p style="margin:0 0 8px;font-size:13px;color:rgba(255,255,255,0.25);">No data</p>`;
+  }
+  const body = rows.map(([label, val]) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-transform:capitalize;color:rgba(255,255,255,0.65);">${status}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">${count}</td>
-    </tr>
-  `).join('');
+      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;color:rgba(255,255,255,0.65);">${label}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">${val}</td>
+    </tr>`).join('');
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <thead><tr style="background:#1a1a1a;">
+        <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);">${labelHeader}</th>
+        <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);">${valueHeader}</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+};
 
-  const paymentStatusRows = Object.entries(report.paymentsByStatus).map(([status, count]) => `
-    <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-transform:capitalize;color:rgba(255,255,255,0.65);">${status}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">${count}</td>
-    </tr>
-  `).join('');
+// Weekly/Monthly/Quarterly cover more than one day — a single "Monday,
+// August 3, 2026" label would misrepresent what the report actually
+// covers, so a multi-day period gets an explicit range instead.
+function formatPeriodLabel(report) {
+  const start = report.periodStart ?? report.date;
+  const end = report.periodEnd ?? new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const isSingleDay = end.getTime() - start.getTime() <= 24 * 60 * 60 * 1000;
 
-  const statCard = (num, lbl, color = WHITE) => `
-    <td style="background:#1a1a1a;border-radius:8px;padding:16px;text-align:center;border:1px solid ${BORDER};">
-      <div style="font-size:26px;font-weight:700;color:${color};">${num}</div>
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.35);margin-top:4px;">${lbl}</div>
-    </td>`;
+  if (isSingleDay) {
+    return start.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  const lastDayCovered = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const fmt = (d) => d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(lastDayCovered)}`;
+}
+
+export const sendDailyBusinessReportEmail = async (recipients, report, title = 'Daily Business Report') => {
+  const dateStr = formatPeriodLabel(report);
 
   const content = `
-    ${h2('Daily Sales Summary')}
+    ${h2(title)}
     ${p(dateStr, 'font-size:13px;')}
-
     ${divider()}
 
-    <!-- Stat grid -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>
-        ${statCard(`&#8369;${report.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Total Revenue', '#34d399')}
-        <td style="width:10px;"></td>
-        ${statCard(report.totalOrders, 'Paid Orders')}
-      </tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${statRow(
+        statCard(money(report.sales.grossRevenue), 'Gross Revenue', '#34d399'),
+        statCard(report.sales.orders, 'Orders')
+      )}
       <tr><td colspan="3" style="height:10px;"></td></tr>
-      <tr>
-        ${statCard(report.totalItemsSold, 'Items Sold')}
-        <td style="width:10px;"></td>
-        ${statCard(`&#8369;${report.avgOrderValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Avg Order Value')}
-      </tr>
+      ${statRow(
+        statCard(money(report.sales.netRevenue), 'Net Revenue'),
+        statCard(money(report.sales.avgOrderValue), 'Avg Order Value')
+      )}
+      <tr><td colspan="3" style="height:10px;"></td></tr>
+      ${statRow(
+        statCard(money(report.sales.shippingRevenue), 'Shipping Revenue'),
+        statCard(money(report.sales.refundedAmount), 'Refunded', report.sales.refundedAmount > 0 ? '#f87171' : WHITE)
+      )}
     </table>
+
+    ${sectionLabel('Top Selling Products')}
+    ${breakdownTable(report.products.topSelling.map((x) => [`${x.name} &times;${x.quantity}`, money(x.revenue)]), 'Product', 'Revenue')}
+
+    ${sectionLabel('Product Health')}
+    ${breakdownTable([
+      ['No Sales Yesterday', report.products.noSalesCount],
+      ['Low Stock', report.products.lowStock],
+      ['Out of Stock', report.products.outOfStock],
+    ], 'Metric', 'Count')}
+
+    ${sectionLabel('Sales by Organization')}
+    ${breakdownTable(report.organizations.byOrganization.map((x) => [x.name, money(x.revenue)]), 'Organization', 'Revenue')}
+
+    ${sectionLabel('Sales by League')}
+    ${breakdownTable(report.organizations.byLeague.map((x) => [x.name, money(x.revenue)]), 'League', 'Revenue')}
+
+    ${sectionLabel('Customers')}
+    ${breakdownTable([
+      ['New Customers', report.customers.newCustomers],
+      ['Returning Customers', report.customers.returningCustomers],
+      ['Repeat Purchase Rate', `${report.customers.repeatPurchaseRate}%`],
+    ], 'Metric', 'Value')}
+
+    ${sectionLabel('Payments')}
+    ${breakdownTable([
+      ['Successful', report.payments.successful],
+      ['Failed', report.payments.failed],
+      ['Pending', report.payments.pending],
+      ['Refunded', report.payments.refunded],
+    ], 'Status', 'Count')}
+    ${breakdownTable(report.payments.byMethod.map((x) => [x.method, x.count]), 'Method', 'Count')}
+
+    ${sectionLabel('Shipping')}
+    ${breakdownTable([
+      ['Awaiting Shipment', report.shipping.awaitingShipment],
+      ['In Transit', report.shipping.inTransit],
+      ['Delivered', report.shipping.delivered],
+    ], 'Status', 'Orders')}
+
+    ${sectionLabel('AI Try-On')}
+    ${breakdownTable([
+      ['Sessions', report.tryOn.sessions],
+      ['Successful Generations', report.tryOn.successful],
+      ['Failed Generations', report.tryOn.failed],
+      ['Success Rate', `${report.tryOn.successRate}%`],
+    ], 'Metric', 'Value')}
+    ${breakdownTable(report.tryOn.mostTriedOn.map((x) => [x.productName ?? 'Unknown', x.count]), 'Product', 'Sessions')}
 
     ${divider()}
-
-    <!-- Top products -->
-    <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:rgba(255,255,255,0.35);">Top Selling Products</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <thead>
-        <tr style="background:#1a1a1a;">
-          <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);font-weight:600;">#</th>
-          <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);font-weight:600;">Product</th>
-          <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);font-weight:600;">Qty</th>
-          <th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.30);font-weight:600;">Revenue</th>
-        </tr>
-      </thead>
-      <tbody>${topProductsRows}</tbody>
-    </table>
-
-    ${divider()}
-
-    <!-- Status tables -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="vertical-align:top;width:48%;">
-          <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:rgba(255,255,255,0.35);">Orders by Status</p>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${orderStatusRows}</table>
-        </td>
-        <td style="width:4%;"></td>
-        <td style="vertical-align:top;width:48%;">
-          <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:rgba(255,255,255,0.35);">Payment Status</p>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${paymentStatusRows}</table>
-        </td>
-      </tr>
-    </table>
-
-    ${divider()}
-
-    <!-- New customers -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="background:#1a1a1a;border-radius:8px;padding:14px 16px;border:1px solid ${BORDER};">
-          <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);">New Customers Today &nbsp;</span>
-          <span style="font-size:20px;font-weight:700;color:${WHITE};">${report.newCustomers}</span>
-        </td>
-      </tr>
-    </table>
+    ${p('Checkout Abandonment, Refund Requests, and Support Issues are not shown — not yet tracked by the platform.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
   `;
 
   await transporter.sendMail({
     from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
-    to: adminEmail,
-    subject: `Daily Sales Report — ${dateStr}`,
+    to: recipients.join(', '),
+    subject: `${title} — ${dateStr}`,
     html: getEmailTemplate(content),
   });
 };
@@ -404,5 +431,5 @@ export default {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOrderConfirmationEmail,
-  sendDailySalesEmail,
+  sendDailyBusinessReportEmail,
 };
