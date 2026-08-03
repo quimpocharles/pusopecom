@@ -4,6 +4,7 @@ import { XMarkIcon, ChevronDownIcon, MagnifyingGlassIcon, EllipsisHorizontalIcon
 import Layout from '../components/layout/Layout';
 import ProductCard from '../components/products/ProductCard';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import Pagination from '../components/ui/Pagination';
 import useCartStore from '../store/cartStore';
 import productService from '../services/productService';
 import activityService from '../services/activityService';
@@ -477,74 +478,17 @@ const Products = () => {
               ))}
             </div>
 
-            {/* Pagination */}
-            {pagination.pages > 1 && (
-              <div className="flex justify-center items-center gap-1.5 mt-10 flex-wrap">
-                {(() => {
-                  const currentPage = Number(page);
-                  const totalPages = pagination.pages;
-
-                  const goTo = (p) => {
-                    const newParams = new URLSearchParams(searchParams);
-                    newParams.set('page', p.toString());
-                    setSearchParams(newParams);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  };
-
-                  // Build page number list with ellipsis
-                  const pageNums = [];
-                  for (let p = 1; p <= totalPages; p++) {
-                    if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
-                      pageNums.push(p);
-                    } else if (pageNums[pageNums.length - 1] !== '...') {
-                      pageNums.push('...');
-                    }
-                  }
-
-                  // Understated and numeric, tabular figures so the numbers
-                  // line up; current page is type weight + underline, never
-                  // a filled colored circle (COMPONENT_SPECIFICATION.md § Pagination).
-                  const btnBase = 'w-9 h-9 text-editorial-label tabular-nums transition-colors duration-150 flex items-center justify-center';
-                  const btnActive = 'font-bold text-ink-900 underline underline-offset-4 decoration-2';
-                  const btnInactive = 'font-medium text-ink-700 hover:text-ink-900';
-                  const btnDisabled = 'text-ink-200 cursor-not-allowed';
-
-                  return (
-                    <>
-                      <button
-                        onClick={() => currentPage > 1 && goTo(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className={`${btnBase} ${currentPage === 1 ? btnDisabled : btnInactive} px-3`}
-                      >
-                        ‹
-                      </button>
-
-                      {pageNums.map((p, i) =>
-                        p === '...' ? (
-                          <span key={`ellipsis-${i}`} className="w-9 h-9 flex items-center justify-center text-ink-500 text-editorial-label">…</span>
-                        ) : (
-                          <button
-                            key={p}
-                            onClick={() => goTo(p)}
-                            className={`${btnBase} ${currentPage === p ? btnActive : btnInactive}`}
-                          >
-                            {p}
-                          </button>
-                        )
-                      )}
-
-                      <button
-                        onClick={() => currentPage < totalPages && goTo(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className={`${btnBase} ${currentPage === totalPages ? btnDisabled : btnInactive} px-3`}
-                      >
-                        ›
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
+            <Pagination
+              page={Number(page)}
+              totalPages={pagination.pages || 0}
+              onPageChange={(p) => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.set('page', p.toString());
+                setSearchParams(newParams);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="mt-10"
+            />
           </>
         ) : (
           <div className="text-center py-20">

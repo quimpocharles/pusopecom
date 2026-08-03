@@ -13,7 +13,16 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const CompleteProfile = lazy(() => import('./pages/CompleteProfile'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation'));
-const Account = lazy(() => import('./pages/Account'));
+const AccountLayout = lazy(() => import('./pages/account/AccountLayout'));
+const AccountOverview = lazy(() => import('./pages/account/AccountOverview'));
+const AccountOrders = lazy(() => import('./pages/account/AccountOrders'));
+const AccountWishlist = lazy(() => import('./pages/account/AccountWishlist'));
+const AccountTryOns = lazy(() => import('./pages/account/AccountTryOns'));
+const AccountNotifications = lazy(() => import('./pages/account/AccountNotifications'));
+const AccountProfile = lazy(() => import('./pages/account/AccountProfile'));
+const AccountAddresses = lazy(() => import('./pages/account/AccountAddresses'));
+const AccountPassword = lazy(() => import('./pages/account/AccountPassword'));
+const AccountSecurity = lazy(() => import('./pages/account/AccountSecurity'));
 const DataPolicy = lazy(() => import('./pages/DataPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
@@ -69,7 +78,17 @@ function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:orderNumber" element={<OrderConfirmation />} />
-          <Route path="/account" element={<Account />} />
+          <Route path="/account" element={<AccountLayout />}>
+            <Route index element={<AccountOverview />} />
+            <Route path="orders" element={<AccountOrders />} />
+            <Route path="wishlist" element={<AccountWishlist />} />
+            <Route path="try-ons" element={<AccountTryOns />} />
+            <Route path="notifications" element={<AccountNotifications />} />
+            <Route path="profile" element={<AccountProfile />} />
+            <Route path="addresses" element={<AccountAddresses />} />
+            <Route path="password" element={<AccountPassword />} />
+            <Route path="security" element={<AccountSecurity />} />
+          </Route>
           <Route path="/privacy" element={<DataPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           {/* Unlinked design-system primitive demo — Phase 1 of the design system migration plan, not part of any real user flow. */}
