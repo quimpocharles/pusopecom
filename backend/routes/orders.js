@@ -4,6 +4,7 @@ import Sentry from '../lib/sentry.js';
 import { body, validationResult } from 'express-validator';
 import prisma from '../lib/prisma.js';
 import * as orderRepository from '../repositories/orderRepository.js';
+import * as orderEventRepository from '../repositories/orderEventRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
@@ -47,8 +48,14 @@ async function releaseStock(order) {
  * `gatewayStatus` is the normalized, gateway-agnostic status paymentService
  * returns ('succeeded'|'failed'|'expired'|'pending') — never a
  * gateway-specific string like Maya's 'PAYMENT_SUCCESS'.
+ *
+ * `source` is who prompted this resolution check — 'customer' (browser
+ * poll) or 'webhook' — recorded as the audit event's actor so the Admin
+ * Order Timeline can show which path actually noticed the outcome first.
+ * Only meaningful when `applied` is true; tryResolvePayment's guard means
+ * whichever caller loses the race never gets to attribute the event.
  */
-async function applyPaymentResolution(order, gatewayStatus) {
+async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
   const logContext = { orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod };
 
   if (gatewayStatus === 'succeeded') {
@@ -58,6 +65,14 @@ async function applyPaymentResolution(order, gatewayStatus) {
     const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' });
     if (applied) {
       logger.info(logContext, 'Payment verified — order marked paid');
+
+      await orderEventRepository.create({
+        orderId: order._id,
+        type: 'payment_succeeded',
+        actor: source,
+        message: `Payment confirmed via ${order.paymentMethod}`,
+        metadata: { paymentId: order.mayaPaymentId, gateway: order.paymentMethod },
+      });
 
       try {
         await shippingEventRepository.create({
@@ -87,6 +102,14 @@ async function applyPaymentResolution(order, gatewayStatus) {
     if (applied) {
       logger.info({ ...logContext, reason: gatewayStatus }, 'Payment did not succeed — order marked failed, stock released');
       await releaseStock(order);
+
+      await orderEventRepository.create({
+        orderId: order._id,
+        type: gatewayStatus === 'expired' ? 'payment_expired' : 'payment_failed',
+        actor: source,
+        message: `Payment ${gatewayStatus} via ${order.paymentMethod} — stock released`,
+        metadata: { paymentId: order.mayaPaymentId, gateway: order.paymentMethod },
+      });
     }
     return 'failed';
   }
@@ -224,7 +247,7 @@ router.post('/',
             );
           }
 
-          return orderRepository.create(
+          const createdOrder = await orderRepository.create(
             {
               userId: req.user?._id,
               email,
@@ -239,6 +262,19 @@ router.post('/',
             },
             { client: tx }
           );
+
+          await orderEventRepository.create(
+            {
+              orderId: createdOrder._id,
+              type: 'created',
+              actor: req.user ? 'customer' : 'system',
+              message: `Order placed with ${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`,
+              metadata: { total, itemCount: orderItems.length },
+            },
+            { client: tx }
+          );
+
+          return createdOrder;
         }, { timeout: 15000 }); // 2 round trips per item plus the order create — see releaseStock's matching note
       } catch (error) {
         if (error instanceof productRepository.InsufficientStockError) {
@@ -260,6 +296,14 @@ router.post('/',
         const { paymentReference, redirectUrl } = await paymentService.createCheckoutSession(order);
 
         await orderRepository.updateById(order._id, { mayaPaymentId: paymentReference, mayaCheckoutUrl: redirectUrl });
+
+        await orderEventRepository.create({
+          orderId: order._id,
+          type: 'payment_pending',
+          actor: 'system',
+          message: `Checkout session created via ${order.paymentMethod}`,
+          metadata: { paymentId: paymentReference, gateway: order.paymentMethod },
+        });
 
         logger.info(
           { orderNumber: order.orderNumber, paymentId: paymentReference, gateway: order.paymentMethod, customerId: req.user?._id },
@@ -286,6 +330,13 @@ router.post('/',
         Sentry.captureException(gatewayError);
         await releaseStock(order);
         await orderRepository.updateById(order._id, { paymentStatus: 'failed' });
+        await orderEventRepository.create({
+          orderId: order._id,
+          type: 'payment_failed',
+          actor: 'system',
+          message: `Gateway checkout session creation failed (${order.paymentMethod}) — stock released`,
+          metadata: { gateway: order.paymentMethod, error: gatewayError.message },
+        });
 
         return res.status(500).json({
           success: false,
@@ -462,7 +513,7 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 
     // Poll the gateway for checkout status
     const { status } = await paymentService.getPaymentStatus(order.mayaPaymentId, order.paymentMethod);
-    const paymentStatus = await applyPaymentResolution(order, status);
+    const paymentStatus = await applyPaymentResolution(order, status, 'customer');
 
     res.json({ success: true, data: { paymentStatus } });
   } catch (error) {
@@ -570,15 +621,39 @@ router.post('/webhooks/maya', async (req, res) => {
       return res.json({ success: true });
     }
 
+    await orderEventRepository.create({
+      orderId: order._id,
+      type: 'webhook_received',
+      actor: 'webhook',
+      message: `Webhook received from ${order.paymentMethod}`,
+    });
+
     const { status } = await paymentService.getPaymentStatus(order.mayaPaymentId, order.paymentMethod);
     logger.info({ orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod, status }, 'Webhook verified against gateway');
-    await applyPaymentResolution(order, status);
+    await applyPaymentResolution(order, status, 'webhook');
 
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error, orderNumber: req.body?.requestReferenceNumber }, 'Webhook error');
     Sentry.captureException(error);
     res.status(500).json({ success: false });
+  }
+});
+
+// Get an order's audit trail (Admin only) — backs the Admin Order Timeline.
+router.get('/:orderNumber/events', authenticate, isAdmin, async (req, res) => {
+  try {
+    const order = await orderRepository.findByOrderNumber(req.params.orderNumber);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const events = await orderEventRepository.findByOrder(order._id);
+    res.json({ success: true, data: events });
+  } catch (error) {
+    logger.error({ err: error, orderNumber: req.params.orderNumber }, 'Get order events error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve order history' });
   }
 });
 
@@ -590,11 +665,38 @@ router.patch('/:id/status',
     try {
       const { orderStatus, trackingNumber, courier } = req.body;
 
+      const before = await orderRepository.findById(req.params.id);
+      if (!before) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+
       const order = await orderRepository.updateById(req.params.id, {
         orderStatus,
         ...(trackingNumber !== undefined && { trackingNumber }),
         ...(courier !== undefined && { courier })
       });
+
+      const changes = [];
+      if (orderStatus && orderStatus !== before.orderStatus) {
+        changes.push(`status: ${before.orderStatus} → ${orderStatus}`);
+      }
+      if (courier !== undefined && courier !== before.courier) {
+        changes.push(`courier: ${before.courier || '—'} → ${courier || '—'}`);
+      }
+      if (trackingNumber !== undefined && trackingNumber !== before.trackingNumber) {
+        changes.push(`tracking: ${before.trackingNumber || '—'} → ${trackingNumber || '—'}`);
+      }
+
+      if (changes.length > 0) {
+        await orderEventRepository.create({
+          orderId: order._id,
+          type: 'status_updated',
+          actor: 'admin',
+          actorUserId: req.user._id,
+          message: changes.join('; '),
+          metadata: { orderStatus, trackingNumber, courier },
+        });
+      }
 
       res.json({
         success: true,

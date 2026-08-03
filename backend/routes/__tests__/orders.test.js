@@ -432,3 +432,87 @@ describe('admin order routes', () => {
     expect(res.body.data).toHaveProperty('lowStockProducts');
   });
 });
+
+describe('GET /orders/:orderNumber/events — the Admin Order Timeline', () => {
+  it('records created + payment_pending on a successful order, ascending by time', async () => {
+    const product = await makeProduct({ name: 'EventsCreated' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_evt1', redirectUrl: 'https://pay.example/chk_evt1' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    const res = await request(app).get(`/api/orders/${orderNumber}/events`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((e) => e.type)).toEqual(['created', 'payment_pending']);
+    expect(res.body.data[0].actor).toBe('system'); // guest, no req.user
+    for (let i = 1; i < res.body.data.length; i++) {
+      expect(new Date(res.body.data[i].createdAt).getTime()).toBeGreaterThanOrEqual(new Date(res.body.data[i - 1].createdAt).getTime());
+    }
+  }, 15000);
+
+  it('records a payment_failed event when gateway checkout creation fails', async () => {
+    const product = await makeProduct({ name: 'EventsGatewayFail' });
+    paymentService.createCheckoutSession.mockRejectedValueOnce(new Error('Maya is down'));
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body;
+
+    const res = await request(app).get(`/api/orders/${orderNumber}/events`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((e) => e.type)).toEqual(['created', 'payment_failed']);
+  }, 15000);
+
+  it('records webhook_received + payment_succeeded with actor "webhook" on a genuine webhook', async () => {
+    const product = await makeProduct({ name: 'EventsWebhookSuccess' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_evt2', redirectUrl: 'https://pay.example/chk_evt2' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_SUCCESS' });
+
+    const res = await request(app).get(`/api/orders/${orderNumber}/events`);
+    expect(res.body.data.map((e) => e.type)).toEqual(['created', 'payment_pending', 'webhook_received', 'payment_succeeded']);
+    expect(res.body.data.at(-1).actor).toBe('webhook');
+  }, 15000);
+
+  it('records a status_updated event attributed to the admin who made the change', async () => {
+    const product = await makeProduct({ name: 'EventsAdminUpdate' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_evt3', redirectUrl: 'https://pay.example/chk_evt3' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+
+    await request(app)
+      .patch(`/api/orders/${order.id}/status`)
+      .set('x-test-userid', 'test-user')
+      .set('x-test-role', 'admin')
+      .send({ orderStatus: 'shipped', courier: 'LBC', trackingNumber: 'TRACK1' });
+
+    const res = await request(app).get(`/api/orders/${orderNumber}/events`);
+    const statusEvent = res.body.data.find((e) => e.type === 'status_updated');
+    expect(statusEvent.actor).toBe('admin');
+    expect(statusEvent.actorUser._id).toBe('test-user');
+    expect(statusEvent.message).toMatch(/status: processing → shipped/);
+  }, 15000);
+
+  it('does not record a status_updated event when nothing actually changed', async () => {
+    const product = await makeProduct({ name: 'EventsAdminNoop' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_evt4', redirectUrl: 'https://pay.example/chk_evt4' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+
+    await request(app)
+      .patch(`/api/orders/${order.id}/status`)
+      .set('x-test-userid', 'test-user')
+      .set('x-test-role', 'admin')
+      .send({ orderStatus: order.orderStatus });
+
+    const res = await request(app).get(`/api/orders/${orderNumber}/events`);
+    expect(res.body.data.some((e) => e.type === 'status_updated')).toBe(false);
+  }, 15000);
+
+  it('404s for an unknown order number', async () => {
+    const res = await request(app).get('/api/orders/PS-NOSUCHORDER/events');
+    expect(res.status).toBe(404);
+  });
+});

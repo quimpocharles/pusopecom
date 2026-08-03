@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowDownTrayIcon, PencilIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
 
@@ -201,8 +202,13 @@ const AdminOrders = () => {
 
                   return (
                     <tr key={order._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        {order.orderNumber}
+                      <td className="px-6 py-4 text-sm font-medium">
+                        <Link
+                          to={`/admin/orders/${order.orderNumber}`}
+                          className="text-primary-600 hover:text-primary-800 hover:underline"
+                        >
+                          {order.orderNumber}
+                        </Link>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {order.user ? `${order.user.firstName} ${order.user.lastName}` : order.email}

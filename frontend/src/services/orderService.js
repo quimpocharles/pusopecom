@@ -27,6 +27,11 @@ export const orderService = {
     return response.data;
   },
 
+  getOrderEvents: async (orderNumber) => {
+    const response = await api.get(`/orders/${orderNumber}/events`);
+    return response.data;
+  },
+
   updateOrderStatus: async (orderId, { orderStatus, trackingNumber, courier }) => {
     const response = await api.patch(`/orders/${orderId}/status`, {
       orderStatus,
