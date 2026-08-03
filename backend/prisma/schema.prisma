@@ -150,6 +150,10 @@ model User {
   // Organization's status. No code path may set Organization.verifiedByUserId
   // without a real admin id; see organizationRepository.recordVerificationDecision.
   verifiedOrganizations Organization[]
+  // Reverse side of OrderEvent.actorUser — which admin made a given
+  // status/shipping change. Never set for actor=system/webhook/customer
+  // events (see OrderEvent below).
+  orderEvents           OrderEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -353,10 +357,70 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  events OrderEvent[]
+
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
   @@index([paymentStatus, orderStatus, userId, createdAt])
   @@map("orders")
+}
+
+// ---------------------------------------------------------------------------
+// OrderEvent — the Payment & Order Audit Log. Every transition an Order goes
+// through (created, gateway resolution, webhook contact, admin status edits)
+// appends a row here rather than only overwriting Order's own columns, so
+// "what happened to this order and when" survives independently of the
+// order's current state — the record Admin Order Timeline reads from.
+//
+// Deliberately one table with a `type` discriminator and a free-form
+// `message`/`metadata`, not a table per event kind — the audit log's job is
+// narrating a sequence of things that happened to one Order, not modeling
+// each kind's own business rules (those already live where the transition
+// itself happens, e.g. tryResolvePayment's atomic guard).
+// ---------------------------------------------------------------------------
+
+enum OrderEventType {
+  created
+  payment_pending
+  payment_succeeded
+  payment_failed
+  payment_expired
+  status_updated
+  webhook_received
+}
+
+// Who/what caused the event — 'admin' is the only case where actorUserId is
+// ever populated, mirroring Organization.verifiedByUserId's own discipline
+// that human-attributable actions carry a real user id, not just a label.
+enum OrderEventActor {
+  system
+  webhook
+  customer
+  admin
+}
+
+model OrderEvent {
+  id      String         @id @default(uuid())
+  orderId String
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type    OrderEventType
+  actor   OrderEventActor
+
+  actorUserId String?
+  actorUser   User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  message  String
+  // Free-form, event-specific detail (e.g. gateway name + raw status for a
+  // payment event, or the courier/tracking diff for a status_updated event)
+  // — never PII beyond what the parent Order already stores.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  // Backs orderEventRepository.findByOrder's timeline query — always
+  // fetched for one order, ordered chronologically.
+  @@index([orderId, createdAt])
+  @@map("order_events")
 }
 
 // Was Order.items[] (orderItemSchema). name/price/image are intentionally a
@@ -727,6 +791,176 @@ model Campaign {
   @@map("campaigns")
 }
 
+// ---------------------------------------------------------------------------
+// FeaturedTeam — the homepage's rotating "Featured Team" spotlight. Was a
+// hardcoded object literal in Home.jsx ("swapped by hand once a month");
+// this replaces it so it's admin-editable. Same active + schedule-window
+// pattern as Campaign (findActive picks the single current one), rather
+// than a HomepageSection-style always-all-visible list — only one
+// Featured Team is ever shown at a time.
+// ---------------------------------------------------------------------------
+
+model FeaturedTeam {
+  id       String  @id @default(uuid())
+  team     String // the institution's name — also used for the ?team= shop-link filter
+  headline String? // optional H2 override; falls back to `team` when blank
+  description String?
+
+  // No separate background-image slot: the current design only ever uses a
+  // solid background color (plus CSS-only texture overlays) behind the
+  // photo, and adding a background-image treatment would be a new visual
+  // feature, not wiring up an existing one — out of scope for this pass.
+  backgroundColor String? // hex; institution's own identity color
+  textColor       String? // hex; defaults to white in the frontend when unset
+
+  featuredImage    String?
+  featuredImageAlt String?
+
+  ctaLabel String? // defaults to "Shop {team} Gear" when blank
+  ctaUrl   String? // defaults to /products?team={team} when blank
+
+  displayMonth String? // admin-typed label (e.g. "August 2026"); defaults to the current month when blank
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  // Same nullable-both-sides schedule window as Campaign/PromoMessage.
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, startDate, endDate])
+  @@map("featured_teams")
+}
+
+// ---------------------------------------------------------------------------
+// PartnerLogo — the homepage's "Our Partners" scrolling strip. Was a
+// hardcoded array of bundled image imports in Home.jsx; this replaces it.
+// Unlike FeaturedTeam/Campaign, every active logo shows at once (it's a
+// list section like FAQ, not a single-winner section) — visibility is a
+// plain active flag, no schedule window, since a partner logo isn't a
+// time-boxed promotional moment.
+// ---------------------------------------------------------------------------
+
+model PartnerLogo {
+  id             String  @id @default(uuid())
+  name           String // internal/display name, e.g. "Gilas Pilipinas"
+  organization   String?
+  league         String?
+  logoUrl        String
+  destinationUrl String?
+
+  // Priority groups logos into the marquee's two rows (higher priority ==
+  // row 1); displayOrder sorts within whichever row a logo lands in. Two
+  // separate fields because they answer different questions — "how
+  // prominent" vs "what order" — matching the spec's own field list.
+  priority     Int     @default(0)
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, priority, displayOrder])
+  @@map("partner_logos")
+}
+
+// ---------------------------------------------------------------------------
+// NavigationLink — the site header's nav bar. Was a hardcoded array in
+// Header.jsx. `parentId` is a dropdown-ready self-relation — nothing
+// renders a dropdown yet (that's a real new frontend feature, out of scope
+// for "wire the existing CMS"), but the shape doesn't need a redesign to
+// support one later; today's frontend only ever queries top-level
+// (parentId = null) links.
+// ---------------------------------------------------------------------------
+
+model NavigationLink {
+  id           String  @id @default(uuid())
+  label        String
+  destination  String
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+  openInNewTab Boolean @default(false)
+  highlight    Boolean @default(false)
+
+  parentId String?
+  parent   NavigationLink?  @relation("NavigationDropdown", fields: [parentId], references: [id], onDelete: Cascade)
+  children NavigationLink[] @relation("NavigationDropdown")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, displayOrder])
+  @@index([parentId])
+  @@map("navigation_links")
+}
+
+// ---------------------------------------------------------------------------
+// Footer — was entirely hardcoded JSX in Footer.jsx. Four models rather
+// than one: company description/copyright is a singleton (same
+// find-or-create convention as SiteSettings), while link groups, social
+// links, and payment icons are each independent lists an admin adds to
+// freely — forcing them into one shape would either lose the group-label
+// distinction footer links need or invent structure the others don't.
+// ---------------------------------------------------------------------------
+
+model FooterSettings {
+  id String @id @default(uuid())
+
+  companyDescription String?
+  // Frontend always prepends "© {currentYear} " — this is just the name/
+  // rights-reserved text, so nobody has to remember to bump the year by hand.
+  copyrightText String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("footer_settings")
+}
+
+model FooterLink {
+  id           String  @id @default(uuid())
+  groupLabel   String // e.g. "Shop", "Legal" — which footer column this link sits in
+  label        String
+  destination  String
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, groupLabel, displayOrder])
+  @@map("footer_links")
+}
+
+model SocialLink {
+  id           String  @id @default(uuid())
+  platform     String // e.g. "facebook", "instagram" — the frontend maps this to a hardcoded icon shape (icons are explicitly exempt from the CMS-everything rule)
+  url          String
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, displayOrder])
+  @@map("social_links")
+}
+
+model PaymentIcon {
+  id           String  @id @default(uuid())
+  label        String // e.g. "Maya", "GCash", "Visa"
+  iconUrl      String? // optional Cloudinary image; falls back to a text label when unset, matching the current text-only design
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, displayOrder])
+  @@map("payment_icons")
+}
+
 model FAQItem {
   id           String  @id @default(uuid())
   question     String
@@ -759,11 +993,155 @@ model PromoMessage {
   displayOrder Int            @default(0)
   active       Boolean        @default(true)
 
+  // Pinned messages sort first within their placement, ahead of
+  // displayOrder — the "always show this one first" case a flash-sale or
+  // outage notice needs, distinct from just reordering the whole list.
+  pinned Boolean @default(false)
+
+  // Same nullable-both-sides schedule window as Campaign
+  // (startDate/endDate null = no bound on that side) — findActiveByPlacement
+  // applies it the same way campaignRepository.findActiveHomepageCampaign
+  // does, so an expired message stops showing with no code change needed.
+  startDate DateTime?
+  endDate   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([placement, active, displayOrder])
   @@map("promo_messages")
+}
+
+// ---------------------------------------------------------------------------
+// ReportRecipient — who the Daily Business Report (and future scheduled
+// reports) get emailed to. Replaces the single ADMIN_EMAIL env var the
+// original daily sales job used. Deliberately no role/permission scoping —
+// the Reporting module's RBAC (Finance/Operations/Marketing/etc.) was
+// explicitly deferred; every active recipient gets the same report today.
+// Revisit this table, not a new one, when that's built — the shape (email +
+// active flag) is the same one a role column would extend, not replace.
+// ---------------------------------------------------------------------------
+
+model ReportRecipient {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@map("report_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// ReportRun — the Report Archive. Every time a scheduled report generates
+// (currently only the Daily Business Report), this records what happened,
+// independent of the ReportRecipient list, which can change later. `data`
+// is a frozen snapshot in the exact shape
+// dailyBusinessReportService.generateDailyBusinessReport() returns —
+// Download regenerates a CSV/XLSX file from this saved snapshot rather than
+// storing a binary blob, so "what got sent on that day" never drifts from
+// what the DB looks like now. `type` is a real enum with one member today
+// on purpose — the Reporting module names other future report types
+// (Weekly/Monthly/Quarterly business reports, per spec) that reuse this
+// same table rather than getting their own, so the enum is the extension
+// point, not a new model per report type.
+// ---------------------------------------------------------------------------
+
+enum ReportRunType {
+  daily_business_report
+  weekly_business_report
+  monthly_business_report
+  quarterly_business_report
+}
+
+enum ReportRunStatus {
+  sent
+  failed
+  skipped // no active recipients configured — nothing was generated or sent
+}
+
+model ReportRun {
+  id     String          @id @default(uuid())
+  type   ReportRunType   @default(daily_business_report)
+  status ReportRunStatus
+
+  // The real-world day this report covers (e.g. "yesterday" for the daily
+  // report) — distinct from createdAt, which is when the run itself
+  // happened and could differ slightly (a retried/regenerated run).
+  reportDate DateTime
+
+  data         Json? // null for skipped/failed runs — nothing was computed
+  recipients   String[] // snapshot of who actually received it; empty for skipped/failed
+  errorMessage String? // set only when status = failed
+
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt(sort: Desc)])
+  @@map("report_runs")
+}
+
+// ---------------------------------------------------------------------------
+// ReportSchedule — lets an admin turn each cadence of the Business Report
+// on/off. The cadence's actual timing (daily 5 AM, weekly Monday 5 AM,
+// monthly 1st 5 AM, quarterly 1st-of-quarter 5 AM) stays defined in code
+// (server.js's cron.schedule calls) rather than becoming admin-editable —
+// the spec fixes "5:00 AM Philippine Time" as a hard requirement for the
+// daily report, not a configurable one, and giving every cadence an
+// arbitrary custom time would mean building real dynamic cron
+// (re)registration, a materially bigger and riskier change than an on/off
+// toggle warrants today. One row per frequency, self-healing like
+// HomepageSection below — a frequency with no row yet just means nobody
+// has toggled it, and defaults to active.
+// ---------------------------------------------------------------------------
+
+enum ReportFrequency {
+  daily
+  weekly
+  monthly
+  quarterly
+}
+
+model ReportSchedule {
+  id        String          @id @default(uuid())
+  frequency ReportFrequency @unique
+  active    Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("report_schedules")
+}
+
+// ---------------------------------------------------------------------------
+// DashboardWidget — which summary cards an admin has pinned to
+// /admin (the Dashboard Widgets section of the Reporting spec). Same
+// self-healing, one-row-per-key pattern as HomepageSection: a key with no
+// row yet just means nobody has changed its default (pinned) state.
+// Platform-wide, not per-admin-user — the same reasoning as
+// ReportRecipient's flat shape: real per-user dashboard preferences are a
+// RBAC-adjacent feature explicitly deferred, not built partially here.
+// ---------------------------------------------------------------------------
+
+enum DashboardWidgetKey {
+  todaysRevenue
+  todaysOrders
+  lowStock
+  pendingShipments
+  failedPayments
+  mostViewedProducts
+  mostTriedOnProducts
+}
+
+model DashboardWidget {
+  id           String              @id @default(uuid())
+  key          DashboardWidgetKey  @unique
+  active       Boolean             @default(true)
+  displayOrder Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("dashboard_widgets")
 }
 
 // ---------------------------------------------------------------------------

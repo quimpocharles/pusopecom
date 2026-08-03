@@ -1,0 +1,12 @@
+-- CreateTable
+CREATE TABLE "report_recipients" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "report_recipients_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "report_recipients_email_key" ON "report_recipients"("email");
