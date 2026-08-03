@@ -27,12 +27,27 @@ const uploadToCloudinary = (buffer) => {
         transformation: [
           { width: 1200, height: 1200, crop: 'limit', quality: 'auto', fetch_format: 'auto' },
         ],
+        // cloudinary@1.41.3's call_api() creates an internal Q deferred for
+        // every upload but never exposes it when options.stream is set — on
+        // any upload error (e.g. a DNS failure reaching Cloudinary) that
+        // deferred is rejected with nothing ever attached to consume it, and
+        // Q's own unhandled-rejection tracker forwards that straight to
+        // process's real 'unhandledRejection' event, independently of our
+        // own callback/stream handling below. server.js exits the whole
+        // process on that event, so a single failed upload was taking the
+        // server down. disable_promises skips that internal bookkeeping
+        // entirely — verified via a direct repro against the real SDK.
+        disable_promises: true,
       },
       (error, result) => {
         if (error) reject(error);
         else resolve(result);
       }
     );
+    // The stream itself can also emit 'error' independently of the callback
+    // above — an EventEmitter's unhandled 'error' event throws synchronously
+    // with no listener here, so this still needs its own handler.
+    stream.on('error', reject);
     stream.end(buffer);
   });
 };
@@ -99,9 +114,10 @@ router.post('/video', authenticate, isAdmin, videoUpload.single('video'), async 
     }
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'puso-shop/ads', resource_type: 'video' },
+        { folder: 'puso-shop/ads', resource_type: 'video', disable_promises: true },
         (error, result) => { if (error) reject(error); else resolve(result); }
       );
+      stream.on('error', reject); // see the matching comment on uploadToCloudinary above
       stream.end(req.file.buffer);
     });
     res.json({ success: true, data: { url: result.secure_url, publicId: result.public_id } });
