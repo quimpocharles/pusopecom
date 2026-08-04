@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/ui';
 import MomentCard from '../../components/portal/MomentCard';
+import FitCheckQuotaBar from '../../components/portal/FitCheckQuotaBar';
 import accountService from '../../services/accountService';
 
 // My PUSO's Home — a living feed, not a dashboard of statistics. Every
@@ -36,9 +37,12 @@ const PortalHome = () => {
 
   return (
     <div className="space-y-6">
-      <p className="text-gray-500">
-        Welcome back, <span className="font-semibold text-gray-900">{data.profile?.firstName}</span>.
-      </p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-gray-500">
+          Welcome back, <span className="font-semibold text-gray-900">{data.profile?.firstName}</span>.
+        </p>
+        <FitCheckQuotaBar />
+      </div>
 
       <div className="space-y-3">
         {data.feed.map((moment) => (

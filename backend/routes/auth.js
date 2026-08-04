@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { body, validationResult } from 'express-validator';
 import * as userRepository from '../repositories/userRepository.js';
+import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
@@ -55,7 +56,7 @@ router.post('/register',
         });
       }
 
-      const { email, password, firstName, lastName, phone } = req.body;
+      const { email, password, firstName, lastName, phone, sessionId } = req.body;
 
       const existingUser = await userRepository.findByEmail(email);
       if (existingUser) {
@@ -75,6 +76,14 @@ router.post('/register',
         phone,
         verificationToken
       });
+
+      // Fit Check's "register before your guest results expire" promise —
+      // re-parent any Fit Checks this browser generated as a guest into
+      // the new gallery. Best-effort: a failure here shouldn't fail
+      // registration itself.
+      tryOnLogRepository.migrateGuestSession(sessionId, user._id).catch((err) =>
+        logger.error({ err }, 'Fit Check guest session migration failed')
+      );
 
       await sendVerificationEmail(email, firstName, verificationToken);
 
@@ -478,6 +487,12 @@ router.post('/google', async (req, res) => {
         authProvider: 'google',
         emailVerified: true // Google already verified the email
       });
+
+      // Same guest-session migration as /register — only on first-time
+      // account creation, never on a returning user's Google login.
+      tryOnLogRepository.migrateGuestSession(req.body.sessionId, user._id).catch((err) =>
+        logger.error({ err }, 'Fit Check guest session migration failed')
+      );
     }
 
     const authResponse = generateAuthResponse(user);

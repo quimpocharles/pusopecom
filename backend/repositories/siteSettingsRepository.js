@@ -25,18 +25,31 @@ function toNestedShape(row) {
       buttonText: row.tryOnAdButtonText,
       buttonUrl: row.tryOnAdButtonUrl,
     },
+    // Distinct from tryOn/tryOnAd above on purpose — those are homepage
+    // teaser *content* (an admin-editable headline/video for the section),
+    // this is Fit Check *operational config* (daily allowances). Different
+    // domain concepts that happen to both live on the same settings
+    // singleton — kept in their own nested group rather than blurred
+    // together, matching CLAUDE.md's "vocabulary matches the domain" rule.
+    fitCheck: {
+      dailyLimitGuest: row.fitCheckDailyLimitGuest,
+      dailyLimitRegistered: row.fitCheckDailyLimitRegistered,
+      dailyLimitPremium: row.fitCheckDailyLimitPremium,
+      guestRetentionHours: row.fitCheckGuestRetentionHours,
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-function flattenPartialUpdate(existingNested, { tryOn, tryOnAd } = {}) {
+function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {}) {
   // Mirrors the original route's Object.assign(settings.tryOn, req.body.tryOn)
   // — a partial merge per sub-object, not a wholesale replace, so a caller
   // updating only `tryOn.title` doesn't blow away `tryOn.image`.
   const merged = {
     tryOn: { ...existingNested.tryOn, ...tryOn },
     tryOnAd: { ...existingNested.tryOnAd, ...tryOnAd },
+    fitCheck: { ...existingNested.fitCheck, ...fitCheck },
   };
   return {
     tryOnTitle: merged.tryOn.title,
@@ -45,6 +58,10 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd } = {}) {
     tryOnAdVideoUrl: merged.tryOnAd.videoUrl,
     tryOnAdButtonText: merged.tryOnAd.buttonText,
     tryOnAdButtonUrl: merged.tryOnAd.buttonUrl,
+    fitCheckDailyLimitGuest: merged.fitCheck.dailyLimitGuest,
+    fitCheckDailyLimitRegistered: merged.fitCheck.dailyLimitRegistered,
+    fitCheckDailyLimitPremium: merged.fitCheck.dailyLimitPremium,
+    fitCheckGuestRetentionHours: merged.fitCheck.guestRetentionHours,
   };
 }
 

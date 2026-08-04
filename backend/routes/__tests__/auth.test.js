@@ -88,6 +88,72 @@ describe('routes/auth.js', () => {
     }, 20000);
   });
 
+  describe('Fit Check guest session migration', () => {
+    it('re-parents a guest\'s Fit Checks into the new account on registration', async () => {
+      const suffix = Date.now();
+      const sessionId = `test-guest-session-${suffix}`;
+      const product = await prisma.product.create({
+        data: {
+          name: 'Auth Migration Test Jersey',
+          slug: `auth-migration-test-jersey-${suffix}`,
+          description: 'fixture',
+          price: 500,
+          category: 'jersey',
+          sport: 'basketball',
+          images: [],
+          active: true,
+        },
+      });
+      const guestTryOn = await prisma.tryOnLog.create({
+        data: { sessionId, productId: product.id, productName: product.name, success: true, provider: 'test' },
+      });
+
+      const email = uniqueEmail('guest-migration');
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: 'correct-horse-battery', firstName: 'Bea', lastName: 'Reyes', sessionId });
+      expect(res.status).toBe(201);
+
+      // Migration runs fire-and-forget after the response — poll briefly
+      // rather than assuming it's already committed.
+      let migrated = null;
+      for (let i = 0; i < 20; i++) {
+        migrated = await prisma.tryOnLog.findUnique({ where: { id: guestTryOn.id } });
+        if (migrated.userId) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+
+      expect(migrated.userId).toBe(res.body.user.id);
+      expect(migrated.sessionId).toBeNull();
+
+      await prisma.tryOnLog.delete({ where: { id: guestTryOn.id } });
+      await prisma.product.delete({ where: { id: product.id } });
+    }, 15000);
+
+    it('never re-parents a row a different account already claimed', async () => {
+      const suffix = Date.now();
+      const sessionId = `test-guest-session-claimed-${suffix}`;
+
+      const otherUser = await prisma.user.create({
+        data: { email: uniqueEmail('other-owner'), firstName: 'Other', lastName: 'Owner' },
+      });
+      const alreadyClaimed = await prisma.tryOnLog.create({
+        data: { sessionId, userId: otherUser.id, productName: 'Already Claimed', success: true, provider: 'test' },
+      });
+
+      const email = uniqueEmail('guest-migration-conflict');
+      await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: 'correct-horse-battery', firstName: 'Cruz', lastName: 'Santos', sessionId });
+
+      await new Promise((r) => setTimeout(r, 300)); // let the fire-and-forget migration attempt run
+      const untouched = await prisma.tryOnLog.findUnique({ where: { id: alreadyClaimed.id } });
+      expect(untouched.userId).toBe(otherUser.id); // still the original owner, not silently reassigned
+
+      await prisma.tryOnLog.delete({ where: { id: alreadyClaimed.id } });
+    }, 15000);
+  });
+
   describe('forgot-password -> reset-password', () => {
     it('resets the password, clears the lockout, and lets the new password log in', async () => {
       const email = uniqueEmail('reset-flow');

@@ -3,6 +3,9 @@ import { XMarkIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react
 import api from '../../services/api';
 import useCartStore from '../../store/cartStore';
 import settingsService from '../../services/settingsService';
+import useAuthStore from '../../store/authStore';
+import { getSessionId } from '../../services/activityService';
+import FitCheckQuotaBar from '../portal/FitCheckQuotaBar';
 import { useCameraCapture } from '../../hooks/useCameraCapture';
 import { optimizeImage } from '../../utils/imageOptimization';
 import { validateImage } from '../../utils/imageValidation';
@@ -21,6 +24,8 @@ import TryOnPreparingScreen from './tryOn/TryOnPreparingScreen';
  * tryOn/TryOn*Screen presentational components) rather than living here.
  */
 const VirtualTryOn = ({ product, isOpen, onClose }) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   // Unchanged from before this pass — the actual AI generation pipeline's
   // own state and flow.
   const [userImage, setUserImage] = useState(null);
@@ -30,6 +35,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState('');
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
 
   // Acquisition flow state — everything before an image is handed to
   // handleGenerate().
@@ -197,6 +203,10 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       formData.append('productImageUrl', product.images[0]);
       formData.append('productName', product.name);
       if (product._id) formData.append('productId', product._id);
+      // Guest identity for Fit Check's daily quota — ignored server-side
+      // for a logged-in request, but required to key a guest's own
+      // allowance rather than every guest sharing one global bucket.
+      if (!isAuthenticated) formData.append('sessionId', getSessionId());
 
       const response = await api.post('/tryon', formData, {
         headers: {
@@ -218,6 +228,9 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       );
     } finally {
       setLoading(false);
+      // Refetch — every real attempt consumes today's allowance whether it
+      // succeeds or fails, so the count shown needs to move either way.
+      setQuotaRefreshKey((k) => k + 1);
     }
   };
 
@@ -408,6 +421,8 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             <XMarkIcon className="w-6 h-6" />
           </button>
         </div>
+
+        <FitCheckQuotaBar refreshKey={quotaRefreshKey} className="py-3 border-b" />
 
         {/* Main Content */}
         <div className="p-4">

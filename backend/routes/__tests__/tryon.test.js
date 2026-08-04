@@ -10,11 +10,29 @@ vi.mock('../../config/cloudinary.js', () => ({
   default: { uploader: { upload: vi.fn() } },
 }));
 
+// Real quota enforcement is covered separately (lib/__tests__/fitCheckQuota.test.js
+// and the dedicated tests below) — mocked here to a generous default so the
+// rest of this file's tests (none of which send a real per-test sessionId)
+// don't all collide on one shared "guest" Redis key and 429 each other out.
+class FakeQuotaExceededError extends Error {
+  constructor(status) {
+    super("You've reached today's Fit Check limit.");
+    this.name = 'QuotaExceededError';
+    this.status = status;
+  }
+}
+vi.mock('../../lib/fitCheckQuota.js', () => ({
+  consume: vi.fn().mockResolvedValue({ limit: 5, used: 1, remaining: 4, resetsInSeconds: 3600 }),
+  getStatus: vi.fn().mockResolvedValue({ limit: 5, used: 0, remaining: 5, resetsInSeconds: 3600 }),
+  QuotaExceededError: FakeQuotaExceededError,
+}));
+
 const { default: tryonRouter } = await import('../tryon.js');
 const replicateService = await import('../../services/replicateService.js');
 const wavespeedService = await import('../../services/wavespeedService.js');
 const axios = (await import('axios')).default;
 const cloudinary = (await import('../../config/cloudinary.js')).default;
+const fitCheckQuota = await import('../../lib/fitCheckQuota.js');
 
 const app = express();
 app.use('/api/tryon', tryonRouter);
@@ -272,5 +290,55 @@ describe('POST /tryon — Replicate path (no WAVESPEED_API_KEY)', () => {
       .attach('userImage', png, 'me.png');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/failed to fetch product image/i);
+  });
+});
+
+describe('POST /tryon — daily allowance', () => {
+  beforeEach(() => {
+    process.env.WAVESPEED_API_KEY = 'test-key';
+  });
+
+  it('429s and never calls the AI provider when the quota is already exhausted', async () => {
+    fitCheckQuota.consume.mockRejectedValueOnce(
+      new fitCheckQuota.QuotaExceededError({ limit: 5, used: 5, remaining: 0, resetsInSeconds: 3600 })
+    );
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', uniqueName('quota-exceeded'))
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(429);
+    expect(res.body.quota).toMatchObject({ limit: 5, remaining: 0 });
+    expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
+  });
+
+  it('passes the guest sessionId (not userId) through to the quota check for an unauthenticated request', async () => {
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+
+    await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', uniqueName('guest-quota'))
+      .field('sessionId', 'test-guest-session-123')
+      .attach('userImage', png, 'me.png');
+
+    expect(fitCheckQuota.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: undefined, sessionId: 'test-guest-session-123' })
+    );
+  });
+});
+
+describe('GET /tryon/quota', () => {
+  it('returns the current allowance status for a guest sessionId', async () => {
+    fitCheckQuota.getStatus.mockResolvedValueOnce({ limit: 1, used: 1, remaining: 0, resetsInSeconds: 1800 });
+
+    const res = await request(app).get('/api/tryon/quota').query({ sessionId: 'test-guest-session-456' });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ limit: 1, used: 1, remaining: 0, resetsInSeconds: 1800 });
+    expect(fitCheckQuota.getStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: undefined, sessionId: 'test-guest-session-456' })
+    );
   });
 });

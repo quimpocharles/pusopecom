@@ -118,25 +118,25 @@ const authLimiter = rateLimit({
 
 app.use('/api/auth/', authLimiter);
 
-// Try-on rate limits (Replicate API is expensive)
-const tryonUserLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // per user (IP)
-  message: "You've reached the try-on limit. Please try again in an hour.",
-  skip: () => isDev,
-  store: redisStore('rl:tryon-user:')
-});
-
+// Try-on rate limits (the AI providers are expensive). The old per-user
+// hourly cap (tryonUserLimiter, 10/hour) is gone — Fit Check's tiered
+// daily allowance (lib/fitCheckQuota.js) is now the real per-user product
+// limit, and a second, differently-shaped limiter on top of it would just
+// be a confusing dual cap. The global hourly ceiling stays: a platform-wide
+// cost safety net is a different concern from any one user's own quota.
+// skip also excludes anything but the generation POST — GET /api/tryon/quota
+// is a cheap, frequently-polled status read that shouldn't spend this
+// shared budget.
 const tryonGlobalLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 500, // across all users
   keyGenerator: () => 'global_tryon',
-  message: 'Virtual try-on is temporarily unavailable due to high demand. Please try again later.',
-  skip: () => isDev,
+  message: 'Fit Check is temporarily unavailable due to high demand. Please try again later.',
+  skip: (req) => isDev || req.method !== 'POST',
   store: redisStore('rl:tryon-global:')
 });
 
-app.use('/api/tryon', tryonGlobalLimiter, tryonUserLimiter);
+app.use('/api/tryon', tryonGlobalLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

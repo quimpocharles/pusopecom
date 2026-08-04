@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { Modal, Pagination, EmptyState, ErrorState } from '../../components/ui';
 import FitCheckCard from '../../components/portal/FitCheckCard';
+import FitCheckQuotaBar from '../../components/portal/FitCheckQuotaBar';
 import BeforeAfterSlider from '../../components/home/BeforeAfterSlider';
 import accountService from '../../services/accountService';
 
@@ -83,6 +84,8 @@ const FitCheck = () => {
 
   return (
     <div className="space-y-6">
+      <FitCheckQuotaBar className="py-4 border border-gray-100 rounded-xl bg-gray-50" />
+
       <div className="flex gap-2 flex-wrap">
         {FILTERS.map((f) => (
           <button

@@ -9,6 +9,7 @@ import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedSe
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as accountCache from '../lib/accountCache.js';
+import * as fitCheckQuota from '../lib/fitCheckQuota.js';
 import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -71,21 +72,42 @@ async function uploadGeneratedImage(imageRef) {
   return { url: result.secure_url, publicId: result.public_id };
 }
 
+// GET /api/tryon/quota — read-only allowance status, powers the "3/5
+// Remaining, Resets in 14h 12m" display shown throughout the experience.
+// Unauthenticated-friendly on purpose: a guest's own 1/day allowance needs
+// to be visible before they've ever logged in, so this can't live behind
+// the authenticate-gated /api/account/* router the way the rest of the
+// Fit Check gallery does.
+router.get('/quota', optionalAuth, async (req, res) => {
+  try {
+    const status = await fitCheckQuota.getStatus({
+      userId: req.user?._id,
+      sessionId: req.user ? undefined : req.query.sessionId,
+      tier: req.user?.subscriptionTier,
+    });
+    res.json({ success: true, data: status });
+  } catch (error) {
+    logger.error({ err: error }, 'Get Fit Check quota error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load Fit Check quota' });
+  }
+});
+
 // Virtual try-on endpoint
 // optionalAuth added for the Customer Portal's per-user try-on history —
 // the shared frontend api client already attaches the bearer token to every
 // request when logged in, so this attributes try-ons to an account with no
 // frontend change needed. Guest behavior is unchanged (req.user stays
 // undefined). sessionId (guest attribution, mirrors activity.js's
-// convention) isn't sent by the frontend to this endpoint yet — stays
-// undefined until that's wired up separately.
+// convention) is now sent by the frontend for guest requests — see
+// VirtualTryOn.jsx — and also powers the daily quota check below.
 router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
   const { provider, aiModel } = currentProviderAndModel();
   const costUsd = aiModel ? MODEL_COST_USD[aiModel] ?? null : null;
   let genStart;
 
   try {
-    const { productImageUrl, productName, productId } = req.body;
+    const { productImageUrl, productName, productId, sessionId } = req.body;
 
     if (!req.file) {
       return res.status(400).json({
@@ -99,6 +121,25 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
         success: false,
         message: 'Product image URL is required'
       });
+    }
+
+    // Daily allowance — checked and consumed atomically (one Redis INCR)
+    // before the AI call, so a request that's over quota never reaches the
+    // paid provider at all. Sponsored-campaign overrides and bonus grants
+    // are explicitly future phases (see docs/... Fit Check roadmap) — this
+    // is the base tier-limit check only.
+    let quotaStatus;
+    try {
+      quotaStatus = await fitCheckQuota.consume({
+        userId: req.user?._id,
+        sessionId: req.user ? undefined : sessionId,
+        tier: req.user?.subscriptionTier,
+      });
+    } catch (quotaError) {
+      if (quotaError instanceof fitCheckQuota.QuotaExceededError) {
+        return res.status(429).json({ success: false, message: quotaError.message, quota: quotaError.status });
+      }
+      throw quotaError;
     }
 
     let result;

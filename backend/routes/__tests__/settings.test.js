@@ -29,6 +29,30 @@ describe('routes/settings.js', () => {
     expect(res.body.data).not.toHaveProperty('tryOnTitle');
   });
 
+  it('GET / includes fitCheck, distinct from tryOn/tryOnAd (config, not homepage teaser content)', async () => {
+    const res = await request(app).get('/api/settings');
+    expect(res.body.data.fitCheck).toMatchObject({
+      dailyLimitGuest: expect.any(Number),
+      dailyLimitRegistered: expect.any(Number),
+      dailyLimitPremium: expect.any(Number),
+      guestRetentionHours: expect.any(Number),
+    });
+  });
+
+  it('PUT / updates fitCheck without touching tryOn/tryOnAd, and vice versa', async () => {
+    const before = await request(app).get('/api/settings');
+
+    const res = await request(app).put('/api/settings').send({ fitCheck: { dailyLimitRegistered: 7 } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.fitCheck.dailyLimitRegistered).toBe(7);
+    expect(res.body.data.fitCheck.dailyLimitGuest).toBe(before.body.data.fitCheck.dailyLimitGuest);
+    expect(res.body.data.tryOn).toEqual(before.body.data.tryOn);
+
+    // restore, so this test doesn't permanently change real settings —
+    // lib/fitCheckQuota.js's default assumption (5/day) depends on this.
+    await request(app).put('/api/settings').send({ fitCheck: { dailyLimitRegistered: before.body.data.fitCheck.dailyLimitRegistered } });
+  });
+
   it('PUT / updates only the submitted sub-fields, preserving the rest, over HTTP', async () => {
     const before = await request(app).get('/api/settings');
     const newTitle = `Test Title ${Date.now()}`;

@@ -83,6 +83,24 @@ export async function countByUser(userId, { success, favorited, productIdIn, inc
   });
 }
 
+/**
+ * Fit Check's "register before your guest Fit Checks expire and they
+ * migrate into your gallery" promise — re-parents every guest-session row
+ * to the new account and clears sessionId (the guest identity is no
+ * longer meaningful once attributed to a real user). Called once, right
+ * after account creation (see routes/auth.js's /register and /google),
+ * never on a returning user's login. `userId: null` in the WHERE guards
+ * against ever reassigning a row a *different* account already claimed.
+ */
+export async function migrateGuestSession(sessionId, userId, { client = prisma } = {}) {
+  if (!sessionId) return 0;
+  const result = await client.tryOnLog.updateMany({
+    where: { sessionId, userId: null },
+    data: { userId, sessionId: null },
+  });
+  return result.count;
+}
+
 /** Ownership-scoped in the WHERE clause — same pattern as
  * notificationRepository.markRead. Returns whether a row actually updated. */
 export async function softDelete(id, userId, { client = prisma } = {}) {
@@ -159,4 +177,4 @@ export async function mostTried(limit = 5, { client = prisma } = {}) {
   );
 }
 
-export default { create, find, findByUser, countByUser, softDelete, setFavorite, deleteOlderThan, mostTried };
+export default { create, find, findByUser, countByUser, softDelete, setFavorite, migrateGuestSession, deleteOlderThan, mostTried };

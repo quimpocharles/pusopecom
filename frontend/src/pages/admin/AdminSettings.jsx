@@ -20,6 +20,15 @@ const AdminSettings = () => {
     buttonText: '',
     buttonUrl: '',
   });
+  // Fit Check's daily allowances — "no values should be hardcoded" per the
+  // Fit Check engagement-platform plan. Defaults match lib/fitCheckQuota.js's
+  // own defaults, shown here only until the real settings row loads.
+  const [fitCheck, setFitCheck] = useState({
+    dailyLimitGuest: 1,
+    dailyLimitRegistered: 5,
+    dailyLimitPremium: 10,
+    guestRetentionHours: 24,
+  });
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -37,6 +46,14 @@ const AdminSettings = () => {
             videoUrl:   res.data.tryOnAd.videoUrl   || '',
             buttonText: res.data.tryOnAd.buttonText || '',
             buttonUrl:  res.data.tryOnAd.buttonUrl  || '',
+          });
+        }
+        if (res.data?.fitCheck) {
+          setFitCheck({
+            dailyLimitGuest:      res.data.fitCheck.dailyLimitGuest ?? 1,
+            dailyLimitRegistered: res.data.fitCheck.dailyLimitRegistered ?? 5,
+            dailyLimitPremium:    res.data.fitCheck.dailyLimitPremium ?? 10,
+            guestRetentionHours:  res.data.fitCheck.guestRetentionHours ?? 24,
           });
         }
       } catch (error) {
@@ -92,7 +109,7 @@ const AdminSettings = () => {
     setSaving(true);
     setMessage(null);
     try {
-      await settingsService.updateSettings({ tryOn, tryOnAd });
+      await settingsService.updateSettings({ tryOn, tryOnAd, fitCheck });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -237,6 +254,60 @@ const AdminSettings = () => {
                 placeholder="https://www.playtime.ph/"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Fit Check Daily Allowances */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Fit Check Daily Allowances</h2>
+          <p className="text-sm text-gray-500 mb-4">How many Fit Checks each fan tier gets per day, and how long a guest's results are kept before they're gone for good.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Guest / day</label>
+              <input
+                type="number"
+                min="0"
+                value={fitCheck.dailyLimitGuest}
+                onChange={(e) => setFitCheck((prev) => ({ ...prev, dailyLimitGuest: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Registered / day</label>
+              <input
+                type="number"
+                min="0"
+                value={fitCheck.dailyLimitRegistered}
+                onChange={(e) => setFitCheck((prev) => ({ ...prev, dailyLimitRegistered: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Premium / day</label>
+              <input
+                type="number"
+                min="0"
+                value={fitCheck.dailyLimitPremium}
+                onChange={(e) => setFitCheck((prev) => ({ ...prev, dailyLimitPremium: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">Reserved for Membership — not yet assignable to any account.</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Guest retention (hours)</label>
+            <input
+              type="number"
+              min="1"
+              value={fitCheck.guestRetentionHours}
+              onChange={(e) => setFitCheck((prev) => ({ ...prev, guestRetentionHours: Number(e.target.value) }))}
+              className="w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">How long a guest's Fit Check stays before it's dropped, unless they register first.</p>
           </div>
         </div>
 

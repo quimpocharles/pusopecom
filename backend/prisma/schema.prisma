@@ -46,6 +46,18 @@ enum UserRole {
   admin
 }
 
+// Fit Check's daily-allowance tier. "guest" is deliberately absent — a
+// guest has no User row at all (identified only by a client-generated
+// sessionId, see TryOnLog.sessionId), so its allowance is a config value
+// looked up directly, never a value stored on this enum. Per CLAUDE.md,
+// Membership is "an extension point, not built" — `premium` is reserved
+// here so the quota config/logic has somewhere real to point once it
+// exists, but until then every User row is `registered`.
+enum SubscriptionTier {
+  registered
+  premium
+}
+
 enum ProductCategory {
   jersey
   tshirt
@@ -123,24 +135,25 @@ enum VerificationStatus {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                   String       @id @default(uuid())
-  email                String       @unique
+  id                   String           @id @default(uuid())
+  email                String           @unique
   password             String?
   firstName            String
   lastName             String
   phone                String?
-  ageVerified          Boolean      @default(false)
+  ageVerified          Boolean          @default(false)
   avatar               String?
-  googleId             String?      @unique
-  facebookId           String?      @unique
-  authProvider         AuthProvider @default(local)
-  emailVerified        Boolean      @default(false)
+  googleId             String?          @unique
+  facebookId           String?          @unique
+  authProvider         AuthProvider     @default(local)
+  emailVerified        Boolean          @default(false)
   verificationToken    String?
   resetPasswordToken   String?
   resetPasswordExpires DateTime?
-  failedLoginAttempts  Int          @default(0)
-  accountLocked        Boolean      @default(false)
-  role                 UserRole     @default(customer)
+  failedLoginAttempts  Int              @default(0)
+  accountLocked        Boolean          @default(false)
+  role                 UserRole         @default(customer)
+  subscriptionTier     SubscriptionTier @default(registered)
 
   addresses             Address[]
   orders                Order[]
@@ -682,6 +695,20 @@ model SiteSettings {
   tryOnAdVideoUrl   String @default("")
   tryOnAdButtonText String @default("Visit Playtime.ph")
   tryOnAdButtonUrl  String @default("https://www.playtime.ph/")
+
+  // Fit Check daily allowances — "no values should be hardcoded" per the
+  // Fit Check engagement-platform plan. Read by lib/fitCheckQuota.js on
+  // every quota check; changing these here takes effect immediately, no
+  // deploy required. Defaults match the plan's own worked example
+  // (guest 1 / registered 5 / premium 10).
+  fitCheckDailyLimitGuest      Int @default(1)
+  fitCheckDailyLimitRegistered Int @default(5)
+  fitCheckDailyLimitPremium    Int @default(10)
+  // How long a guest's Fit Check stays in temporary storage before
+  // automatic cleanup if they never register — see the guest migration
+  // job. Not the same clock as the registered-gallery 90-day TryOnLog
+  // cleanup cron; guests get a much shorter, deliberately short-lived window.
+  fitCheckGuestRetentionHours  Int @default(24)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

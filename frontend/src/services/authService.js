@@ -1,8 +1,12 @@
 import api from './api';
+import { getSessionId } from './activityService';
 
 export const authService = {
+  // sessionId lets the backend migrate any Fit Checks generated as a guest
+  // (before this account existed) into the new My PUSO gallery — see
+  // routes/auth.js's tryOnLogRepository.migrateGuestSession.
   register: async (data) => {
-    const response = await api.post('/auth/register', data);
+    const response = await api.post('/auth/register', { ...data, sessionId: getSessionId() });
     return response.data;
   },
 
@@ -16,7 +20,7 @@ export const authService = {
   },
 
   googleLogin: async (credential) => {
-    const response = await api.post('/auth/google', { credential });
+    const response = await api.post('/auth/google', { credential, sessionId: getSessionId() });
     if (response.data.success && response.data.token) {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
