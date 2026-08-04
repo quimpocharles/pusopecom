@@ -406,7 +406,7 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
       ['Delivered', report.shipping.delivered],
     ], 'Status', 'Orders')}
 
-    ${sectionLabel('AI Try-On')}
+    ${sectionLabel('Fit Check')}
     ${breakdownTable([
       ['Sessions', report.tryOn.sessions],
       ['Successful Generations', report.tryOn.successful],

@@ -6,7 +6,7 @@ import ImageField from '../../components/admin/ImageField';
 
 const PLACEMENTS = [
   { value: 'hero', label: 'Hero (landing statement)' },
-  { value: 'tryOn', label: 'AI Try-On (before/after section)' },
+  { value: 'tryOn', label: 'Fit Check (before/after section)' },
 ];
 
 const emptyForm = {
@@ -436,7 +436,7 @@ const AdminCampaigns = () => {
                     type="text"
                     value={form.ctaLabel}
                     onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })}
-                    placeholder="Try It On"
+                    placeholder="Try Fit Check"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
@@ -496,7 +496,7 @@ const AdminCampaigns = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Featured Product</label>
                 <FeaturedProductPicker value={featuredProduct} onChange={setFeaturedProduct} />
                 <p className="text-xs text-gray-400 mt-1">
-                  Also used as the CTA destination (with Virtual Try-On opened automatically) when CTA Destination is left blank.
+                  Also used as the CTA destination (with Fit Check opened automatically) when CTA Destination is left blank.
                 </p>
               </div>
 

@@ -6,7 +6,7 @@ const STAGE_LABELS = {
   preparing: 'Preparing your photo...',
   optimizing: 'Optimizing image...',
   validating: 'Checking photo quality...',
-  starting: 'Starting AI Try-On...',
+  starting: 'Starting Fit Check...',
 };
 
 const TryOnPreparingScreen = ({ stage }) => (

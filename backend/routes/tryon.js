@@ -192,7 +192,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
     } else {
       res.status(422).json({
         success: false,
-        message: result.message || 'Failed to generate try-on image. Please try again.'
+        message: result.message || 'Failed to generate Fit Check image. Please try again.'
       });
     }
 
@@ -221,7 +221,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
     const isRateLimit = error.message?.toLowerCase().includes('rate limit');
     res.status(isRateLimit ? 429 : 500).json({
       success: false,
-      message: error.message || 'Failed to process virtual try-on'
+      message: error.message || 'Failed to process Fit Check'
     });
   }
 });

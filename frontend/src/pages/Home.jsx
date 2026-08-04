@@ -313,7 +313,7 @@ const Home = () => {
               }
               className="btn-primary inline-flex items-center gap-2"
             >
-              {tryOnCampaign?.ctaLabel || 'Try It On'}
+              {tryOnCampaign?.ctaLabel || 'Try Fit Check'}
               <ChevronRightIcon className="w-4 h-4 md:w-5 md:h-5" />
             </Link>
           </div>

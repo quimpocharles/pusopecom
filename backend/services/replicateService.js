@@ -159,7 +159,7 @@ IMAGE DEFINITIONS:
       throw new Error(error.response.data.detail);
     }
 
-    throw new Error(error.message || 'Failed to generate virtual try-on');
+    throw new Error(error.message || 'Failed to generate Fit Check');
   }
 };
 

@@ -36,7 +36,7 @@ const TryOnSection = ({ dateParams }) => {
   if (loading) {
     return (
       <div className="space-y-4">
-        <h2 className="text-xl font-bold text-gray-900">Virtual Try-On</h2>
+        <h2 className="text-xl font-bold text-gray-900">Fit Check</h2>
         <div className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
           <div className="space-y-3">
@@ -52,7 +52,7 @@ const TryOnSection = ({ dateParams }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">Virtual Try-On</h2>
+        <h2 className="text-xl font-bold text-gray-900">Fit Check</h2>
         <ExportButtons reportKey="tryon" dateParams={dateParams} />
       </div>
 

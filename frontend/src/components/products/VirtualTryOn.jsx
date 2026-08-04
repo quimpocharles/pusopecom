@@ -397,7 +397,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
               className="w-12 h-12 object-cover rounded-lg"
             />
             <div>
-              <h2 className="font-bold text-lg">Virtual Try-On</h2>
+              <h2 className="font-bold text-lg">Fit Check</h2>
               <p className="text-gray-500 text-sm truncate max-w-[180px]">{product.name}</p>
             </div>
           </div>

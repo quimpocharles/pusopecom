@@ -123,8 +123,8 @@ const ProductCard = ({ product, onBuyNow, dark = false }) => {
           {isTryOnEligible && (
             <span className="bg-merch-tryon text-white text-[10px] md:text-xs font-medium px-2 py-0.5 md:px-2.5 md:py-1 flex items-center gap-1 whitespace-nowrap">
               <SparklesIcon className="w-2.5 h-2.5 md:w-3 md:h-3 flex-shrink-0" />
-              <span className="md:hidden">AI Try-On</span>
-              <span className="hidden md:inline">AI Try-On</span>
+              <span className="md:hidden">Fit Check</span>
+              <span className="hidden md:inline">Fit Check</span>
             </span>
           )}
         </div>

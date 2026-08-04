@@ -821,7 +821,7 @@ const AdminProductForm = () => {
                 onChange={handleChange}
                 className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
               />
-              <span className="text-sm text-gray-700">Virtual Try-On</span>
+              <span className="text-sm text-gray-700">Fit Check</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input

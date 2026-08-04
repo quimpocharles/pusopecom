@@ -17,7 +17,7 @@ import {
 // it only routes to the section that can.
 const SECTIONS = [
   { label: 'Hero', description: 'The landing statement — headline, image, CTA.', to: '/admin/campaigns', icon: RectangleGroupIcon },
-  { label: 'AI Try-On', description: 'The homepage before/after teaser section.', to: '/admin/campaigns', icon: SparklesIcon },
+  { label: 'Fit Check', description: 'The homepage before/after teaser section.', to: '/admin/campaigns', icon: SparklesIcon },
   { label: 'Featured Team', description: 'The rotating team spotlight.', to: '/admin/homepage/featured-team', icon: UserGroupIcon },
   { label: 'Partners', description: 'Logos in the scrolling partner strip.', to: '/admin/homepage/partners', icon: BuildingStorefrontIcon },
   { label: 'FAQ', description: 'Questions shown on the homepage.', to: '/admin/homepage/faq', icon: QuestionMarkCircleIcon },

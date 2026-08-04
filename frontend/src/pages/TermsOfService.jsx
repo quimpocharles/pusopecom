@@ -74,9 +74,9 @@ const TermsOfService = () => {
             <li>Each customer may submit one review per product</li>
           </ul>
 
-          <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">8. Virtual Try-On</h2>
+          <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">8. Fit Check</h2>
           <p>
-            Our virtual try-on feature uses AI to generate preview images. These are approximate
+            Our Fit Check feature uses AI to generate preview images. These are approximate
             representations and may not perfectly reflect actual product appearance. Photos you upload
             are processed temporarily and are not stored on our servers.
           </p>

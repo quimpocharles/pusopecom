@@ -4,7 +4,7 @@ import homepageSectionService from '../../services/homepageSectionService';
 
 const SECTION_LABELS = {
   hero: 'Hero',
-  aiTryOn: 'AI Try-On',
+  aiTryOn: 'Fit Check',
   marquee: 'Marquee Bar',
   featuredProducts: 'Featured Products',
   featuredTeam: 'Featured Team',

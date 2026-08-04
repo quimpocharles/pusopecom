@@ -31,7 +31,7 @@ const PrivacyPolicy = () => {
           <ul className="list-disc pl-6 space-y-1 text-gray-700">
             <li><strong>Authentication tokens:</strong> We store a JSON Web Token (JWT) in your browser's local storage to keep you logged in</li>
             <li><strong>Shopping cart data:</strong> Cart contents are stored in your browser's local storage so your cart persists between visits</li>
-            <li><strong>Virtual try-on usage:</strong> When you use our virtual try-on feature, we log the product tried and whether the generation succeeded, for analytics purposes. We do not store the photos you upload — they are processed in memory only and discarded immediately.</li>
+            <li><strong>Fit Check usage:</strong> When you use our Fit Check feature, we log the product tried and whether the generation succeeded, for analytics purposes. We do not store the original photo you upload — it is processed only for the duration of the generation and discarded immediately afterward. The generated Fit Check result image is saved to your account gallery so you can revisit, favorite, or delete it later.</li>
           </ul>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">2. How We Use Your Information</h2>

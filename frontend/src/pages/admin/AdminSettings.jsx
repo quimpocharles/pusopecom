@@ -109,9 +109,9 @@ const AdminSettings = () => {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Site Settings</h1>
 
       <form onSubmit={handleSave} className="max-w-2xl space-y-8">
-        {/* Try-On Section */}
+        {/* Fit Check Section */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Homepage Try-On Section</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Homepage Fit Check Section</h2>
 
           <div className="space-y-4">
             {/* Title */}
@@ -153,7 +153,7 @@ const AdminSettings = () => {
                 <div className="mt-3">
                   <img
                     src={tryOn.image}
-                    alt="Try-on preview"
+                    alt="Fit Check preview"
                     className="w-40 h-auto rounded-lg border border-gray-200"
                   />
                 </div>
@@ -175,10 +175,10 @@ const AdminSettings = () => {
           </div>
         </div>
 
-        {/* Try-On Loading Ad */}
+        {/* Fit Check Loading Ad */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Try-On Loading Ad</h2>
-          <p className="text-sm text-gray-500 mb-4">Shown in the lower half of the try-on modal while the AI is generating.</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Fit Check Loading Ad</h2>
+          <p className="text-sm text-gray-500 mb-4">Shown in the lower half of the Fit Check modal while it's generating.</p>
 
           <div className="space-y-4">
             {/* Video URL + Upload */}

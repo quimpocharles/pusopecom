@@ -221,8 +221,8 @@ const AdminReportArchive = () => {
               <ViewStat label="Net Revenue" value={money(viewing.data.sales.netRevenue)} />
               <ViewStat label="Orders" value={viewing.data.sales.orders} />
               <ViewStat label="New Customers" value={viewing.data.customers.newCustomers} />
-              <ViewStat label="Try-On Sessions" value={viewing.data.tryOn.sessions} />
-              <ViewStat label="Try-On Success Rate" value={`${viewing.data.tryOn.successRate}%`} />
+              <ViewStat label="Fit Check Sessions" value={viewing.data.tryOn.sessions} />
+              <ViewStat label="Fit Check Success Rate" value={`${viewing.data.tryOn.successRate}%`} />
             </div>
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Top Selling Products</h3>

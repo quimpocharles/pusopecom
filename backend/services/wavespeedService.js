@@ -135,7 +135,7 @@ IMAGE DEFINITIONS:
     if (error.response?.status === 429) throw new Error('Rate limit exceeded. Please try again later.');
     if (error.response?.data?.message) throw new Error(error.response.data.message);
 
-    throw new Error(error.message || 'Failed to generate virtual try-on');
+    throw new Error(error.message || 'Failed to generate Fit Check');
   }
 };
 

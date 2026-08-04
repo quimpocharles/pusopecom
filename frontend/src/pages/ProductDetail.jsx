@@ -412,7 +412,7 @@ const ProductDetail = () => {
                   className={`${TRYON_PRIMARY_BTN} absolute bottom-4 left-4 gap-1.5 px-4 py-2`}
                 >
                   <SparklesIcon className="w-4 h-4" />
-                  Virtual Try-On
+                  Fit Check
                 </button>
               )}
             </div>
