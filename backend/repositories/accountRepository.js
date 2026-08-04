@@ -46,7 +46,7 @@ export async function getHomeFeed(userId, { client = prisma } = {}) {
     await Promise.all([
       userRepository.findById(userId, { client }),
       orderRepository.find({ where: { userId, updatedAt: { gte: cutoff } }, orderBy: { updatedAt: 'desc' }, take: PREVIEW_SIZE, client }),
-      tryOnLogRepository.find({ where: { userId, success: true, createdAt: { gte: cutoff } }, orderBy: { createdAt: 'desc' }, take: PREVIEW_SIZE, client }),
+      tryOnLogRepository.find({ where: { userId, success: true, deletedAt: null, createdAt: { gte: cutoff } }, orderBy: { createdAt: 'desc' }, take: PREVIEW_SIZE, client }),
       followRepository.followedOrganizationIds(userId, { client }),
       wishlistRepository.find({ userId, take: 30, client }),
       notificationRepository.find({ userId, read: false, take: PREVIEW_SIZE, client }),

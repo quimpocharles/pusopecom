@@ -254,6 +254,30 @@ export async function getOrdersByStatus({ client = prisma } = {}) {
   return result;
 }
 
+/**
+ * Fit Check's "Purchased" badge — one query over the user's paid
+ * OrderItems, not N+1 per try-on. `paid` specifically, not just any order
+ * status: a reserved-but-never-paid-for cart shouldn't read as "Purchased."
+ * Mirrors the shape organizationRepository.findPurchasedByUser already
+ * established for a similar cross-entity lookup (there: which
+ * organizations; here: which products, and the order each came from).
+ */
+export async function findPurchasedProductMap(userId, { client = prisma } = {}) {
+  const items = await client.orderItem.findMany({
+    where: { order: { userId, paymentStatus: 'paid' } },
+    select: { productId: true, order: { select: { orderNumber: true, createdAt: true } } },
+    orderBy: { order: { createdAt: 'desc' } },
+  });
+
+  const map = new Map();
+  for (const item of items) {
+    // Most recent paid order wins if a product was bought more than once —
+    // orderBy above means the first occurrence per productId is the latest.
+    if (!map.has(item.productId)) map.set(item.productId, item.order.orderNumber);
+  }
+  return map;
+}
+
 export default {
   generateOrderNumber,
   findById,
@@ -266,4 +290,5 @@ export default {
   getRevenueStats,
   getTopSellingProducts,
   getOrdersByStatus,
+  findPurchasedProductMap,
 };

@@ -3,6 +3,7 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import multer from 'multer';
 import axios from 'axios';
+import cloudinary from '../config/cloudinary.js';
 import { generateTryOn as replicateGenerateTryOn } from '../services/replicateService.js';
 import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedService.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
@@ -13,6 +14,20 @@ import { optionalAuth } from '../middleware/auth.js';
 const router = express.Router();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Bumped whenever the WaveSpeed prompt in wavespeedService.js changes
+// meaningfully, so old Fit Check rows keep recording which prompt actually
+// produced them rather than silently reading as whatever the current one is.
+const PROMPT_VERSION = 'v1';
+
+// Real per-model prices, matching wavespeedService.js's own documented
+// comments — not invented. Replicate has no per-call price published here,
+// so its rows simply carry no costUsd rather than a guessed number.
+const MODEL_COST_USD = {
+  seedream: 0.035,
+  'nano-banana-2': 0.07,
+  'nano-banana-pro': 0.14,
+};
 
 // Configure multer for memory storage
 const upload = multer({
@@ -29,13 +44,31 @@ const upload = multer({
   }
 });
 
-// Records which provider/model actually served the request, e.g.
-// "wavespeed:nano-banana-2" or "replicate" — read once per request so a
-// mid-flight env var change never mislabels an in-progress attempt.
-function currentProvider() {
-  return process.env.WAVESPEED_API_KEY
-    ? `wavespeed:${(process.env.WAVESPEED_MODEL || 'seedream').toLowerCase()}`
-    : 'replicate';
+// Records which provider/model actually served the request — read once per
+// request so a mid-flight env var change never mislabels an in-progress
+// attempt. Split into two real fields (not the old compound
+// "wavespeed:nano-banana-2" string) now that the Fit Check gallery needs
+// them separately filterable/reportable.
+function currentProviderAndModel() {
+  if (process.env.WAVESPEED_API_KEY) {
+    return { provider: 'wavespeed', aiModel: (process.env.WAVESPEED_MODEL || 'seedream').toLowerCase() };
+  }
+  return { provider: 'replicate', aiModel: null };
+}
+
+/**
+ * Durably re-hosts the AI result on Cloudinary — neither provider's own
+ * image reference is meant to last (WaveSpeed's is provider-hosted and
+ * time-limited; Replicate returns a raw base64 data URI, not a URL at
+ * all). cloudinary.uploader.upload() accepts a remote https URL or a
+ * base64 data URI as-is, so both provider shapes go through the same call.
+ * A distinct folder from the temporary one the user's own uploaded photo
+ * passes through — this asset is never auto-deleted (see
+ * tryOnLogRepository.deleteOlderThan for the eventual cleanup policy).
+ */
+async function uploadGeneratedImage(imageRef) {
+  const result = await cloudinary.uploader.upload(imageRef, { folder: 'puso-shop/tryon-results' });
+  return { url: result.secure_url, publicId: result.public_id };
 }
 
 // Virtual try-on endpoint
@@ -47,7 +80,8 @@ function currentProvider() {
 // convention) isn't sent by the frontend to this endpoint yet — stays
 // undefined until that's wired up separately.
 router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
-  const provider = currentProvider();
+  const { provider, aiModel } = currentProviderAndModel();
+  const costUsd = aiModel ? MODEL_COST_USD[aiModel] ?? null : null;
   let genStart;
 
   try {
@@ -114,12 +148,34 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
         const [found] = await productRepository.find({ where: { name: productName }, take: 1 });
         if (found) resolvedProductId = found._id;
       }
+
+      // The generated result is the Fit Check gallery's hero image — durably
+      // re-upload it before writing the row. A failed re-upload still
+      // writes the row (generatedImageUrl stays null, frontend treats that
+      // as "image unavailable"), it just doesn't lose the log entry.
+      let generatedImageUrl;
+      let generatedImagePublicId;
+      if (result.success && result.image) {
+        try {
+          const uploaded = await uploadGeneratedImage(result.image);
+          generatedImageUrl = uploaded.url;
+          generatedImagePublicId = uploaded.publicId;
+        } catch (uploadError) {
+          logger.error({ err: uploadError }, 'Failed to persist Fit Check result image');
+        }
+      }
+
       const logged = await tryOnLogRepository.create({
         productId: resolvedProductId || undefined,
         productName: productName || 'Unknown',
         productImage: productImageUrl,
         success: result.success,
         provider,
+        aiModel,
+        promptVersion: PROMPT_VERSION,
+        costUsd,
+        generatedImageUrl,
+        generatedImagePublicId,
         durationMs,
         userId: req.user?._id,
         sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
@@ -152,6 +208,9 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       productImage: req.body?.productImageUrl,
       success: false,
       provider,
+      aiModel,
+      promptVersion: PROMPT_VERSION,
+      costUsd,
       durationMs,
       userId: req.user?._id,
       sessionId: req.user ? undefined : (req.body?.sessionId || undefined),

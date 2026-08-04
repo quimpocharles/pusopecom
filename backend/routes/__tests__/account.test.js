@@ -9,7 +9,7 @@ import prisma from '../../lib/prisma.js';
 // 5s test timeout is comfortably enough for every other route in this file
 // but flakes on this one under this environment's real network latency.
 // Confirmed via isolated re-run: ~16s to genuinely complete, not a hang.
-vi.setConfig({ testTimeout: 20000 });
+vi.setConfig({ testTimeout: 20000, hookTimeout: 20000 });
 
 // Same convention as routes/__tests__/orders.test.js — authenticate reads
 // req.user from test headers rather than a real JWT, so these tests can
@@ -45,7 +45,7 @@ const agentAs = (userId) => {
   };
 };
 
-let userA, userB, userC, organization, product, orderA, orderB, wishlistA, notificationA, notificationB, tryOnA;
+let userA, userB, userC, organization, product, orderA, orderB, wishlistA, notificationA, notificationB, tryOnA, tryOnB, paidOrderA;
 
 beforeAll(async () => {
   const suffix = Date.now();
@@ -109,8 +109,28 @@ beforeAll(async () => {
     }),
   ]);
 
-  tryOnA = await prisma.tryOnLog.create({
-    data: { userId: userA.id, productName: product.name, success: true, provider: 'test' },
+  [tryOnA, tryOnB] = await Promise.all([
+    prisma.tryOnLog.create({
+      data: { userId: userA.id, productId: product.id, productName: product.name, success: true, provider: 'test' },
+    }),
+    prisma.tryOnLog.create({
+      data: { userId: userB.id, productId: product.id, productName: product.name, success: true, provider: 'test' },
+    }),
+  ]);
+
+  // A real paid order + item — findPurchasedProductMap reads OrderItem, not
+  // bare Order rows, so the "Purchased" badge/filter is untestable without
+  // this (orderA/orderB above have no items and default to pending).
+  paidOrderA = await prisma.order.create({
+    data: {
+      ...baseOrder,
+      orderNumber: `TEST-ACCT-${suffix}-PAID`,
+      userId: userA.id,
+      paymentStatus: 'paid',
+      items: {
+        create: [{ productId: product.id, name: product.name, price: product.price, quantity: 1, size: 'M', image: product.images[0] }],
+      },
+    },
   });
 });
 
@@ -120,7 +140,7 @@ afterAll(async () => {
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.wishlist.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.follow.deleteMany({ where: { userId: { in: userIds } } });
-  await prisma.order.deleteMany({ where: { id: { in: [orderA.id, orderB.id] } } });
+  await prisma.order.deleteMany({ where: { id: { in: [orderA.id, orderB.id, paidOrderA.id] } } });
   await prisma.product.delete({ where: { id: product.id } });
   await prisma.organization.delete({ where: { id: organization.id } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -198,6 +218,66 @@ describe('routes/account.js — Customer Portal API', () => {
     const resB = await agentAs(userB.id).get('/api/account/try-ons');
     expect(resA.body.data.map((t) => t._id)).toContain(tryOnA.id);
     expect(resB.body.data.map((t) => t._id)).not.toContain(tryOnA.id);
+  });
+
+  it('marks a try-on as purchased with the real order number, only for the user who actually paid', async () => {
+    const resA = await agentAs(userA.id).get('/api/account/try-ons');
+    const rowA = resA.body.data.find((t) => t._id === tryOnA.id);
+    expect(rowA.purchased).toBe(true);
+    expect(rowA.purchasedOrderNumber).toBe(paidOrderA.orderNumber);
+
+    // userB tried on the same product but never bought it
+    const resB = await agentAs(userB.id).get('/api/account/try-ons');
+    const rowB = resB.body.data.find((t) => t._id === tryOnB.id);
+    expect(rowB.purchased).toBe(false);
+    expect(rowB.purchasedOrderNumber).toBeNull();
+  });
+
+  it('GET /try-ons?purchased=true only returns try-ons for products the user actually paid for', async () => {
+    const res = await agentAs(userB.id).get('/api/account/try-ons?purchased=true');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0); // userB never bought anything
+  });
+
+  it('favoriting a try-on is idempotent and ownership-scoped', async () => {
+    const res = await agentAs(userA.id).patch(`/api/account/try-ons/${tryOnA.id}/favorite`).send({ favorited: true });
+    expect(res.status).toBe(200);
+
+    const row = await prisma.tryOnLog.findUnique({ where: { id: tryOnA.id } });
+    expect(row.favorited).toBe(true);
+
+    // userB can't favorite/unfavorite userA's try-on by guessing its id
+    const cross = await agentAs(userB.id).patch(`/api/account/try-ons/${tryOnA.id}/favorite`).send({ favorited: false });
+    expect(cross.status).toBe(404);
+    const untouched = await prisma.tryOnLog.findUnique({ where: { id: tryOnA.id } });
+    expect(untouched.favorited).toBe(true);
+
+    const favOnly = await agentAs(userA.id).get('/api/account/try-ons?favorited=true');
+    expect(favOnly.body.data.map((t) => t._id)).toContain(tryOnA.id);
+
+    await agentAs(userA.id).patch(`/api/account/try-ons/${tryOnA.id}/favorite`).send({ favorited: false }); // reset
+  });
+
+  it('DELETE soft-deletes a try-on — disappears from the customer\'s gallery immediately, but the row survives', async () => {
+    const del = await agentAs(userB.id).delete(`/api/account/try-ons/${tryOnB.id}`);
+    expect(del.status).toBe(200);
+
+    const list = await agentAs(userB.id).get('/api/account/try-ons');
+    expect(list.body.data.map((t) => t._id)).not.toContain(tryOnB.id);
+
+    // Soft delete, never a real DELETE — spec is explicit this must survive
+    // for admin analytics/moderation/support/recovery.
+    const row = await prisma.tryOnLog.findUnique({ where: { id: tryOnB.id } });
+    expect(row).not.toBeNull();
+    expect(row.deletedAt).not.toBeNull();
+  });
+
+  it('DELETE is ownership-scoped — a user cannot soft-delete another user\'s try-on', async () => {
+    const res = await agentAs(userB.id).delete(`/api/account/try-ons/${tryOnA.id}`);
+    expect(res.status).toBe(404);
+
+    const untouched = await prisma.tryOnLog.findUnique({ where: { id: tryOnA.id } });
+    expect(untouched.deletedAt).toBeNull();
   });
 
   it('follow is idempotent and scoped per user', async () => {

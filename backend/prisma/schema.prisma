@@ -1169,12 +1169,44 @@ model TryOnLog {
   // Added to answer a real question empirically (WaveSpeed model choice —
   // nano-banana-2 vs seedream vs nano-banana-pro) rather than trusting
   // provider documentation, which turned out to be incomplete/inconsistent
-  // on latency. `provider` is e.g. "wavespeed:nano-banana-2" or
-  // "replicate" — whichever path routes/tryon.js actually took for this
-  // attempt, since WAVESPEED_MODEL can change over time and old rows
-  // should keep recording what was true when they were created.
-  provider   String?
-  durationMs Int?
+  // on latency. `provider` used to be a compound value like
+  // "wavespeed:nano-banana-2" — split into bare `provider` ("wavespeed" /
+  // "replicate") + `aiModel` ("nano-banana-2" / "seedream" / null for
+  // Replicate) once the Fit Check gallery needed these as real, separately
+  // filterable/reportable fields rather than one string a UI would have to
+  // parse. `promptVersion` starts at "v1" — the WaveSpeed prompt was never
+  // versioned before this; future prompt iterations bump it so old rows
+  // keep recording which prompt actually produced them. `costUsd` is
+  // computed from the real per-model prices already documented as comments
+  // in wavespeedService.js, not invented.
+  provider      String?
+  aiModel       String?
+  promptVersion String?
+  costUsd       Float?
+  durationMs    Int?
+
+  // The AI result, durably re-hosted on Cloudinary (routes/tryon.js) —
+  // neither provider's own image reference is meant to last: WaveSpeed's
+  // is provider-hosted and time-limited, Replicate returns a raw base64
+  // blob with nowhere persistent at all. A separate folder from the
+  // temporary one the user's own uploaded photo still passes through and
+  // gets deleted from (CLAUDE.md: Virtual Try-On inputs are deleted after
+  // use, never retained — that rule is untouched by this field; this is
+  // the AI's output, not the fan's uploaded photo).
+  generatedImageUrl      String?
+  generatedImagePublicId String?
+
+  favorited Boolean @default(false)
+
+  // Soft delete — a customer's "Delete" never removes the row. Nullable
+  // timestamp, matching Notification.readAt's existing convention in this
+  // schema rather than introducing a separate boolean-flag pattern.
+  // Customer-facing reads always filter this out; only an explicit,
+  // admin-gated `includeDeleted` query returns these rows (see
+  // tryOnLogRepository.findByUser). Permanent removal — including the
+  // Cloudinary asset — happens only via deleteOlderThan's existing 90-day
+  // cron sweep, extended to destroy generatedImagePublicId first.
+  deletedAt DateTime?
 
   // Added for the Customer Portal's per-user try-on history — every row
   // before this migration has userId: null with nothing to backfill from
@@ -1191,6 +1223,7 @@ model TryOnLog {
   @@index([productId])
   @@index([createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, favorited])
   @@map("try_on_logs")
 }
 

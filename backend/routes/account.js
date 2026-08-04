@@ -100,13 +100,44 @@ router.get('/try-ons', async (req, res) => {
   try {
     const { page, limit, skip } = paginationParams(req);
     const success = req.query.success !== undefined ? req.query.success === 'true' : undefined;
+    const favorited = req.query.favorited !== undefined ? req.query.favorited === 'true' : undefined;
+    const purchasedOnly = req.query.purchased === 'true';
+
+    // Fetched once per request regardless of the purchased filter — every
+    // row's `purchased`/`purchasedOrderNumber` badge needs it either way,
+    // not just the filtered view. Real query, not N+1 per try-on.
+    const purchasedMap = await orderRepository.findPurchasedProductMap(req.user._id);
+    const purchasedProductIds = [...purchasedMap.keys()];
+
+    if (purchasedOnly && purchasedProductIds.length === 0) {
+      return res.json({ success: true, data: [], pagination: paginationMeta(page, limit, 0) });
+    }
+
+    const filterArgs = {
+      userId: req.user._id,
+      success,
+      favorited,
+      ...(purchasedOnly && { productIdIn: purchasedProductIds }),
+    };
 
     const [tryOns, total] = await Promise.all([
-      tryOnLogRepository.findByUser({ userId: req.user._id, success, skip, take: limit }),
-      tryOnLogRepository.countByUser(req.user._id, { success }),
+      tryOnLogRepository.findByUser({ ...filterArgs, skip, take: limit }),
+      tryOnLogRepository.countByUser(req.user._id, filterArgs),
     ]);
 
-    res.json({ success: true, data: tryOns, pagination: paginationMeta(page, limit, total) });
+    const enriched = tryOns.map((t) => {
+      // withRelationFallback collapses productId into `product` (either the
+      // populated object, when included, or the bare id as a fallback) —
+      // there is no top-level `productId` left to read on the serialized row.
+      const productId = t.product?._id || (typeof t.product === 'string' ? t.product : null);
+      return {
+        ...t,
+        purchased: !!productId && purchasedMap.has(productId),
+        purchasedOrderNumber: productId ? purchasedMap.get(productId) || null : null,
+      };
+    });
+
+    res.json({ success: true, data: enriched, pagination: paginationMeta(page, limit, total) });
   } catch (error) {
     logger.error({ err: error }, 'Get account try-ons error');
     Sentry.captureException(error);
@@ -117,7 +148,10 @@ router.get('/try-ons', async (req, res) => {
 // GET /api/account/try-ons/:id
 router.get('/try-ons/:id', async (req, res) => {
   try {
-    const [tryOn] = await tryOnLogRepository.find({ where: { id: req.params.id, userId: req.user._id } });
+    const [tryOn] = await tryOnLogRepository.find({
+      where: { id: req.params.id, userId: req.user._id, deletedAt: null },
+      include: { product: { include: { sizes: true, colors: { include: { sizes: true } } } } },
+    });
     if (!tryOn) {
       return res.status(404).json({ success: false, message: 'Try-on not found' });
     }
@@ -126,6 +160,43 @@ router.get('/try-ons/:id', async (req, res) => {
     logger.error({ err: error }, 'Get account try-on error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to load try-on' });
+  }
+});
+
+// DELETE /api/account/try-ons/:id — soft delete. Confirmation happens
+// client-side; this endpoint just marks deletedAt, never removes the row
+// (docs/... Fit Check plan — admins can still see it, the Cloudinary asset
+// is destroyed only much later by the existing 90-day cleanup cron).
+router.delete('/try-ons/:id', async (req, res) => {
+  try {
+    const removed = await tryOnLogRepository.softDelete(req.params.id, req.user._id);
+    if (!removed) {
+      return res.status(404).json({ success: false, message: 'Try-on not found' });
+    }
+    await accountCache.invalidateHome(req.user._id);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error }, 'Delete try-on error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to delete try-on' });
+  }
+});
+
+router.patch('/try-ons/:id/favorite', async (req, res) => {
+  try {
+    const { favorited } = req.body;
+    if (typeof favorited !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'favorited must be a boolean' });
+    }
+    const updated = await tryOnLogRepository.setFavorite(req.params.id, req.user._id, favorited);
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Try-on not found' });
+    }
+    res.json({ success: true, data: { favorited } });
+  } catch (error) {
+    logger.error({ err: error }, 'Favorite try-on error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to update favorite' });
   }
 });
 

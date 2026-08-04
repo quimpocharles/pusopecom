@@ -6,11 +6,15 @@ import prisma from '../../lib/prisma.js';
 vi.mock('../../services/replicateService.js', () => ({ generateTryOn: vi.fn() }));
 vi.mock('../../services/wavespeedService.js', () => ({ generateTryOn: vi.fn() }));
 vi.mock('axios', () => ({ default: { get: vi.fn() } }));
+vi.mock('../../config/cloudinary.js', () => ({
+  default: { uploader: { upload: vi.fn() } },
+}));
 
 const { default: tryonRouter } = await import('../tryon.js');
 const replicateService = await import('../../services/replicateService.js');
 const wavespeedService = await import('../../services/wavespeedService.js');
 const axios = (await import('axios')).default;
+const cloudinary = (await import('../../config/cloudinary.js')).default;
 
 const app = express();
 app.use('/api/tryon', tryonRouter);
@@ -25,6 +29,13 @@ const uniqueName = (label) => `TryOnTest-${label}-${Date.now()}-${Math.random().
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Sane default so tests that don't care about the re-upload itself don't
+  // each have to set it up — cleared call history via clearAllMocks above,
+  // but mockResolvedValue (not *Once) survives it, so this holds per test.
+  cloudinary.uploader.upload.mockResolvedValue({
+    secure_url: 'https://res.cloudinary.com/test/puso-shop/tryon-results/fake.jpg',
+    public_id: 'puso-shop/tryon-results/fake',
+  });
 });
 
 afterAll(async () => {
@@ -97,7 +108,10 @@ describe('POST /tryon — WaveSpeed path', () => {
     expect(log).not.toBeNull();
     expect(log.success).toBe(true);
     expect(log.productId).toBe(product.id);
-    expect(log.provider).toBe('wavespeed:nano-banana-2');
+    expect(log.provider).toBe('wavespeed');
+    expect(log.aiModel).toBe('nano-banana-2');
+    expect(log.promptVersion).toBe('v1');
+    expect(log.costUsd).toBeCloseTo(0.07);
     expect(log.durationMs).toBeGreaterThan(0);
   }, 15000);
 
@@ -139,8 +153,10 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const log = await waitForLog(productName);
     expect(log.success).toBe(false);
-    expect(log.provider).toBe('wavespeed:nano-banana-2');
+    expect(log.provider).toBe('wavespeed');
+    expect(log.aiModel).toBe('nano-banana-2');
     expect(log.durationMs).not.toBeNull();
+    expect(log.generatedImageUrl).toBeNull(); // nothing to upload — generation itself failed
   }, 15000);
 
   it('returns 500 (or 429 for a rate-limit message) and logs a failed attempt when generation throws, still recording provider and duration', async () => {
@@ -156,7 +172,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const log = await waitForLog(productName);
     expect(log.success).toBe(false);
-    expect(log.provider).toBe('wavespeed:nano-banana-2');
+    expect(log.provider).toBe('wavespeed');
     expect(log.durationMs).not.toBeNull(); // the throw happens after genStart is set — duration is still known
   }, 15000);
 
@@ -172,7 +188,48 @@ describe('POST /tryon — WaveSpeed path', () => {
       .attach('userImage', png, 'me.png');
 
     const log = await waitForLog(productName);
-    expect(log.provider).toBe('wavespeed:seedream');
+    expect(log.provider).toBe('wavespeed');
+    expect(log.aiModel).toBe('seedream');
+    expect(log.costUsd).toBeCloseTo(0.035);
+  }, 15000);
+
+  it('durably re-uploads the generated result to Cloudinary and stores the returned URL/publicId on the log row', async () => {
+    const productName = uniqueName('image-persisted');
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'https://wavespeed.example/output.jpg' });
+
+    await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+
+    // The upload happens inside the same fire-and-forget log write as the
+    // DB row — wait for the row before asserting on either, or this races.
+    const log = await waitForLog(productName);
+    expect(cloudinary.uploader.upload).toHaveBeenCalledWith(
+      'https://wavespeed.example/output.jpg',
+      expect.objectContaining({ folder: 'puso-shop/tryon-results' })
+    );
+    expect(log.generatedImageUrl).toBe('https://res.cloudinary.com/test/puso-shop/tryon-results/fake.jpg');
+    expect(log.generatedImagePublicId).toBe('puso-shop/tryon-results/fake');
+  }, 15000);
+
+  it('still writes the log row (with a null generatedImageUrl) when the Cloudinary re-upload itself fails', async () => {
+    const productName = uniqueName('upload-fails');
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'https://wavespeed.example/output.jpg' });
+    cloudinary.uploader.upload.mockRejectedValueOnce(new Error('cloudinary is down'));
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+    expect(res.status).toBe(200); // the live response to the user is unaffected — upload is fire-and-forget
+
+    const log = await waitForLog(productName);
+    expect(log).not.toBeNull();
+    expect(log.success).toBe(true);
+    expect(log.generatedImageUrl).toBeNull();
   }, 15000);
 });
 
@@ -196,7 +253,14 @@ describe('POST /tryon — Replicate path (no WAVESPEED_API_KEY)', () => {
 
     const log = await waitForLog(productName);
     expect(log.provider).toBe('replicate');
+    expect(log.aiModel).toBeNull();
+    expect(log.costUsd).toBeNull();
     expect(log.durationMs).not.toBeNull();
+    expect(cloudinary.uploader.upload).toHaveBeenCalledWith(
+      'data:image/png;base64,xyz',
+      expect.objectContaining({ folder: 'puso-shop/tryon-results' })
+    );
+    expect(log.generatedImageUrl).toBe('https://res.cloudinary.com/test/puso-shop/tryon-results/fake.jpg');
   }, 15000);
 
   it('400s when the product image cannot be fetched', async () => {

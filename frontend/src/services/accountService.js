@@ -26,6 +26,16 @@ export const accountService = {
     return response.data;
   },
 
+  setTryOnFavorite: async (id, favorited) => {
+    const response = await api.patch(`/account/try-ons/${id}/favorite`, { favorited });
+    return response.data;
+  },
+
+  deleteTryOn: async (id) => {
+    const response = await api.delete(`/account/try-ons/${id}`);
+    return response.data;
+  },
+
   getWishlist: async (params = {}) => {
     const response = await api.get('/account/wishlist', { params });
     return response.data;
