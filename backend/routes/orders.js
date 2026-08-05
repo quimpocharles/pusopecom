@@ -5,11 +5,13 @@ import { body, validationResult } from 'express-validator';
 import prisma from '../lib/prisma.js';
 import * as orderRepository from '../repositories/orderRepository.js';
 import * as orderEventRepository from '../repositories/orderEventRepository.js';
+import * as paymentRepository from '../repositories/paymentRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
+import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js';
 import * as paymentService from '../services/paymentService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
 import * as accountCache from '../lib/accountCache.js';
@@ -57,6 +59,26 @@ async function releaseStock(order) {
  * Only meaningful when `applied` is true; tryResolvePayment's guard means
  * whichever caller loses the race never gets to attribute the event.
  */
+/**
+ * Payment Platform Redesign, Phase 1 — dual-write: resolves the matching
+ * Payment attempt row alongside Order.paymentStatus, via the same
+ * conditional-update idempotency shape (paymentRepository.resolve), just
+ * scoped to one attempt instead of the whole order. Deliberately best-
+ * effort and never thrown from — Order.paymentStatus/tryResolvePayment
+ * remains the real idempotency gate every side effect in
+ * applyPaymentResolution already depends on; a Payment write failing here
+ * must never block a customer's payment from actually resolving.
+ */
+async function dualWritePaymentResolution(order, status, extra, logContext) {
+  try {
+    const payment = await paymentRepository.findLatestForOrder(order._id);
+    if (payment) await paymentRepository.resolve(payment._id, status, extra);
+  } catch (paymentError) {
+    logger.error({ err: paymentError, ...logContext }, 'Failed to dual-write Payment resolution');
+    Sentry.captureException(paymentError);
+  }
+}
+
 async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
   const logContext = { orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod };
 
@@ -67,6 +89,11 @@ async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
     const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' });
     if (applied) {
       logger.info(logContext, 'Payment verified — order marked paid');
+
+      await dualWritePaymentResolution(order, 'succeeded', {
+        paidAt: new Date(),
+        ...(source === 'webhook' && { webhookProcessedAt: new Date() }),
+      }, logContext);
 
       await orderEventRepository.create({
         orderId: order._id,
@@ -118,6 +145,10 @@ async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
     if (applied) {
       logger.info({ ...logContext, reason: gatewayStatus }, 'Payment did not succeed — order marked failed, stock released');
       await releaseStock(order);
+
+      await dualWritePaymentResolution(order, gatewayStatus === 'expired' ? 'expired' : 'failed', {
+        ...(source === 'webhook' && { webhookProcessedAt: new Date() }),
+      }, logContext);
 
       await orderEventRepository.create({
         orderId: order._id,
@@ -314,6 +345,23 @@ router.post('/',
         const { paymentReference, redirectUrl } = await paymentService.createCheckoutSession(order);
 
         await orderRepository.updateById(order._id, { mayaPaymentId: paymentReference, mayaCheckoutUrl: redirectUrl });
+
+        // Payment Platform Redesign, Phase 1 — dual-write the first attempt
+        // row. Best-effort: the customer's checkout must not fail because
+        // this insert did, since Order's own paymentMethod/mayaPaymentId/
+        // mayaCheckoutUrl fields above already carry everything the rest
+        // of the app reads today.
+        const sessionDurationMs = paymentService.getSessionDurationMs(order.paymentMethod);
+        paymentRepository.create({
+          orderId: order._id,
+          provider: order.paymentMethod,
+          checkoutReference: paymentReference,
+          checkoutUrl: redirectUrl,
+          expiresAt: sessionDurationMs ? new Date(Date.now() + sessionDurationMs) : null,
+        }).catch((paymentError) => {
+          logger.error({ err: paymentError, orderNumber: order.orderNumber }, 'Failed to dual-write initial Payment row');
+          Sentry.captureException(paymentError);
+        });
 
         await orderEventRepository.create({
           orderId: order._id,
@@ -625,7 +673,7 @@ router.get('/user/:userId', authenticate, async (req, res) => {
 // secret key) — the same trusted mechanism /verify-payment already relies
 // on. A forged webhook can, at worst, trigger one redundant, harmless
 // status check; it can never itself flip an order to paid or failed.
-router.post('/webhooks/maya', async (req, res) => {
+router.post('/webhooks/maya', mayaWebhookIpAllowlist, async (req, res) => {
   try {
     const { requestReferenceNumber } = req.body || {};
     if (!requestReferenceNumber) {

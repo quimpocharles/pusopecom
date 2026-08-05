@@ -106,6 +106,18 @@ enum PaymentStatus {
   refunded
 }
 
+// One attempt's lifecycle — distinct from PaymentStatus, which is the
+// *order's* current payment state (an aggregate view across however many
+// Payment attempts it's had). See the schema comment on Payment below for
+// why these are two different vocabularies on purpose.
+enum PaymentAttemptStatus {
+  pending
+  succeeded
+  failed
+  expired
+  cancelled
+}
+
 enum OrderStatus {
   processing
   confirmed
@@ -394,10 +406,84 @@ model Order {
 
   events OrderEvent[]
 
+  // Payment Platform Redesign, Phase 1 — the detailed, historical payment
+  // record now lives here, one row per checkout-session attempt. Order's
+  // own paymentMethod/paymentStatus/mayaPaymentId/mayaCheckoutUrl fields
+  // above are kept and still written on every payment event (dual-write,
+  // deliberate coexistence during transition — see the migration's own
+  // comment) so every existing consumer keeps working unchanged; they're
+  // the fast "what's the current state" read, Payment is the full history
+  // underneath. "Current" payment is just the most recent row for this
+  // orderId (paymentRepository.findLatestForOrder), not a second pointer
+  // field that could drift out of sync with reality.
+  payments Payment[]
+
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
   @@index([paymentStatus, orderStatus, userId, createdAt])
   @@map("orders")
+}
+
+// ---------------------------------------------------------------------------
+// Payment — Payment Platform Redesign, Phase 1. One row per checkout-session
+// attempt (not one mutable row per order) — this is what actually delivers
+// multi-attempt history/auditing rather than a single row that overwrites
+// itself on retry. `status` here is this one attempt's own lifecycle;
+// Order.paymentStatus is the order-level aggregate ("has any attempt
+// succeeded") — the two are related but not the same field twice.
+//
+// `expiresAt` is computed and stored by this platform at creation time, not
+// read from the gateway: Maya's Checkout API returns no expiration field at
+// all, and its session validity is a fixed, undocumented-as-configurable
+// 1 hour (verified against developers.maya.ph before this was designed).
+// "Never depend solely on Maya for state" starts here, one layer earlier
+// than the request itself anticipated.
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id    String @id @default(uuid())
+  order Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderId String
+
+  // "maya" today. A plain String, not an enum — matches Order.paymentMethod's
+  // existing convention, and means a new gateway (GCash, PayMongo, Xendit)
+  // never requires a schema migration just to be nameable here.
+  provider String
+
+  status PaymentAttemptStatus @default(pending)
+
+  // Maya's checkoutId — what createCheckoutSession returns and what the
+  // webhook/poll path looks status up by.
+  checkoutReference        String?
+  // Populated once a real payment (not just a checkout session) exists;
+  // may differ from checkoutReference depending on gateway. Nullable
+  // because most gateways only expose this after resolution, if at all.
+  providerPaymentReference String?
+  checkoutUrl              String?
+
+  expiresAt DateTime?
+  paidAt    DateTime?
+
+  errorCode    String?
+  errorMessage String?
+
+  // When a webhook was last processed for this specific attempt — distinct
+  // from OrderEvent's webhook_received log entry, which records that one
+  // happened; this records whether *this* Payment's own resolution was the
+  // one it drove.
+  webhookProcessedAt DateTime?
+
+  // Raw gateway response, for debugging only — never a business-logic
+  // source. Business decisions always go through the normalized `status`.
+  providerMetadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@index([checkoutReference])
+  @@map("payments")
 }
 
 // ---------------------------------------------------------------------------

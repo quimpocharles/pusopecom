@@ -61,4 +61,17 @@ export async function getPaymentStatus(paymentReference, gatewayName = 'maya') {
   return gateway.getPaymentStatus(paymentReference);
 }
 
-export default { createCheckoutSession, getPaymentStatus };
+/**
+ * How long a freshly created checkout session is valid for, per gateway —
+ * used to compute and store Payment.expiresAt at creation time, since no
+ * gateway implemented so far returns an expiration in its own response
+ * (confirmed for Maya; see mayaGateway.js's SESSION_DURATION_MS comment).
+ * Falls back to null (no known/enforced expiry) for a gateway that hasn't
+ * declared one, rather than guessing a duration.
+ */
+export function getSessionDurationMs(gatewayName = 'maya') {
+  const gateway = resolveGateway(gatewayName);
+  return gateway.SESSION_DURATION_MS ?? null;
+}
+
+export default { createCheckoutSession, getPaymentStatus, getSessionDurationMs };

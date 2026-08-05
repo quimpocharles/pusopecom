@@ -20,6 +20,9 @@ vi.mock('../../middleware/auth.js', () => ({
 vi.mock('../../services/paymentService.js', () => ({
   createCheckoutSession: vi.fn(),
   getPaymentStatus: vi.fn(),
+  // Real value (Maya's real, verified 1-hour session), not mocked away —
+  // the dual-write tests below assert a real computed expiresAt exists.
+  getSessionDurationMs: vi.fn().mockReturnValue(60 * 60 * 1000),
 }));
 
 vi.mock('../../services/emailService.js', () => ({
@@ -336,6 +339,53 @@ describe('POST /orders/:orderNumber/verify-payment', () => {
     const res = await request(app).post('/api/orders/PS-NOSUCHORDER/verify-payment');
     expect(res.status).toBe(404);
   });
+});
+
+describe('Payment dual-write (Payment Platform Redesign, Phase 1)', () => {
+  it('order creation writes a matching pending Payment row alongside the legacy Order fields', async () => {
+    const product = await makeProduct({ name: 'DualWriteCreate' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_dualwrite', redirectUrl: 'https://pay.example/chk_dualwrite' });
+
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+
+    // The Payment write is fire-and-forget relative to the response —
+    // poll briefly rather than assuming it's already committed.
+    let payment = null;
+    for (let i = 0; i < 20; i++) {
+      payment = await prisma.payment.findFirst({ where: { orderId: order.id } });
+      if (payment) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(payment).not.toBeNull();
+    expect(payment.provider).toBe('maya');
+    expect(payment.status).toBe('pending');
+    expect(payment.checkoutReference).toBe(order.mayaPaymentId);
+    expect(payment.checkoutUrl).toBe(order.mayaCheckoutUrl);
+    expect(payment.expiresAt).not.toBeNull(); // computed at creation — Maya never returns one
+  }, 15000);
+
+  it('a resolved payment leaves Order.paymentStatus and the matching Payment.status in agreement', async () => {
+    const product = await makeProduct({ name: 'DualWriteResolve' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_dualwrite_resolve', redirectUrl: 'https://pay.example/chk_dualwrite_resolve' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('paid');
+
+    let payment = null;
+    for (let i = 0; i < 20; i++) {
+      payment = await prisma.payment.findFirst({ where: { orderId: order.id }, orderBy: { createdAt: 'desc' } });
+      if (payment?.status === 'succeeded') break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(payment.status).toBe('succeeded');
+    expect(payment.paidAt).not.toBeNull();
+  }, 15000);
 });
 
 describe('Fit Check bonus grants (Phase 2)', () => {

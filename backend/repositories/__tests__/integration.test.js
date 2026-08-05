@@ -12,6 +12,7 @@ import * as tryOnLogRepo from '../tryOnLogRepository.js';
 import * as userActivityRepo from '../userActivityRepository.js';
 import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepo from '../fitCheckCampaignRepository.js';
+import * as paymentRepo from '../paymentRepository.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -1060,4 +1061,91 @@ describe('fitCheckCampaignRepository.analytics + incrementViews — Fit Check Ph
       await prisma.user.deleteMany({ where: { id: { in: [buyer.id, browser.id] } } });
     }
   }, 20000);
+});
+
+// Payment Platform Redesign, Phase 1 — the new Payment entity.
+function makeMinimalOrder(client, suffix) {
+  return client.order.create({
+    data: {
+      orderNumber: `PS-PAYMENTTEST-${suffix}`,
+      email: 'payment-test@example.com',
+      shipToFullName: 'Test Buyer', shipToPhone: '09171234567', shipToAddress: '1 St',
+      shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+      subtotal: 500, total: 500,
+    },
+  });
+}
+
+describe('paymentRepository — Payment Platform Redesign Phase 1', () => {
+  it('findLatestForOrder returns the most recent attempt, not the first', () =>
+    withRollback(async (tx) => {
+      const order = await makeMinimalOrder(tx, `latest-${Date.now()}`);
+      const older = await paymentRepo.create(
+        { orderId: order.id, provider: 'maya', checkoutReference: 'chk_old' }, { client: tx }
+      );
+      // Postgres timestamp resolution + immediate sequential inserts can
+      // land in the same millisecond — force a real ordering gap so
+      // "most recent" is unambiguous, matching how other tests in this
+      // file separate createdAt values that must sort deterministically.
+      await tx.payment.update({ where: { id: older._id }, data: { createdAt: new Date(Date.now() - 60000) } });
+      const newer = await paymentRepo.create(
+        { orderId: order.id, provider: 'maya', checkoutReference: 'chk_new' }, { client: tx }
+      );
+
+      const latest = await paymentRepo.findLatestForOrder(order.id, { client: tx });
+      expect(latest._id).toBe(newer._id);
+      expect(latest.checkoutReference).toBe('chk_new');
+
+      const all = await paymentRepo.findByOrder(order.id, { client: tx });
+      expect(all).toHaveLength(2);
+    }), 15000);
+
+  it('resolve() is idempotent — a second resolution of an already-resolved attempt no-ops', () =>
+    withRollback(async (tx) => {
+      const order = await makeMinimalOrder(tx, `resolve-${Date.now()}`);
+      const payment = await paymentRepo.create({ orderId: order.id, provider: 'maya' }, { client: tx });
+
+      const first = await paymentRepo.resolve(payment._id, 'succeeded', { paidAt: new Date() }, { client: tx });
+      expect(first).toBe(true);
+
+      const second = await paymentRepo.resolve(payment._id, 'failed', { errorCode: 'late' }, { client: tx });
+      expect(second).toBe(false); // already resolved — the WHERE status:'pending' guard blocks this
+
+      const row = await paymentRepo.findById(payment._id, { client: tx });
+      expect(row.status).toBe('succeeded'); // untouched by the second, no-op call
+      expect(row.errorCode).toBeNull();
+    }), 15000);
+});
+
+// Same real-transaction, real-concurrency discipline as productRepository
+// .decrementStock's own race test — runs outside withRollback deliberately
+// (needs two independently-committed transactions actually racing each
+// other, not two operations nested in one enclosing transaction), cleaned
+// up explicitly in a finally block.
+describe('paymentRepository.resolve — the exact race two concurrent resolutions target', () => {
+  it('two concurrent resolutions of the same pending attempt — only one succeeds', async () => {
+    const order = await makeMinimalOrder(prisma, `race-${Date.now()}`);
+    const payment = await prisma.payment.create({ data: { orderId: order.id, provider: 'maya' } });
+
+    try {
+      const results = await Promise.allSettled([
+        paymentRepo.resolve(payment.id, 'succeeded', { paidAt: new Date() }),
+        paymentRepo.resolve(payment.id, 'failed', { errorCode: 'lost_race' }),
+      ]);
+
+      const applied = results.filter((r) => r.status === 'fulfilled' && r.value === true);
+      const noop = results.filter((r) => r.status === 'fulfilled' && r.value === false);
+      expect(applied).toHaveLength(1);
+      expect(noop).toHaveLength(1);
+
+      const final = await prisma.payment.findUnique({ where: { id: payment.id } });
+      // Whichever call's updateMany actually matched the still-pending row
+      // first is authoritative — status is one of the two, never left at
+      // 'pending' and never corrupted by the loser applying on top.
+      expect(['succeeded', 'failed']).toContain(final.status);
+    } finally {
+      await prisma.payment.delete({ where: { id: payment.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
 });

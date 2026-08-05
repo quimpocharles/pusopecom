@@ -15,6 +15,13 @@ const MAYA_API_URL = process.env.MAYA_SANDBOX === 'true'
   ? 'https://pg-sandbox.paymaya.com'
   : 'https://pg.maya.ph';
 
+// Maya's Checkout API returns no expiration field on the session it
+// creates, and developers.maya.ph documents session validity as a fixed,
+// non-configurable 1 hour — verified directly against their docs before
+// this was hardcoded here. Payment.expiresAt is computed from this at
+// checkout-session creation time, never read off a Maya response.
+export const SESSION_DURATION_MS = 60 * 60 * 1000;
+
 const getAuthHeader = () => {
   const publicKey = process.env.MAYA_PUBLIC_KEY;
   const auth = Buffer.from(`${publicKey}:`).toString('base64');
@@ -140,4 +147,5 @@ export async function getPaymentStatus(paymentReference) {
 export default {
   createCheckoutSession,
   getPaymentStatus,
+  SESSION_DURATION_MS,
 };
