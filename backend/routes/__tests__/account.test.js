@@ -46,6 +46,7 @@ const agentAs = (userId) => {
 };
 
 let userA, userB, userC, organization, product, orderA, orderB, wishlistA, notificationA, notificationB, tryOnA, tryOnB, paidOrderA;
+let pendingOrderSoon, pendingOrderLater, pendingOrderB;
 
 beforeAll(async () => {
   const suffix = Date.now();
@@ -93,9 +94,14 @@ beforeAll(async () => {
     total: 999,
   };
 
+  // orderStatus: 'processing' — these represent real, already-paid orders
+  // for the Home feed's 'order' moment / GET /orders tests. Left at the
+  // schema default ('awaiting_payment') they'd be silently excluded from
+  // the feed's recentOrders query (Payment Platform Redesign, Phase 5 —
+  // see accountRepository.getHomeFeed's own comment on that exclusion).
   [orderA, orderB] = await Promise.all([
-    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-A`, userId: userA.id } }),
-    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-B`, userId: userB.id } }),
+    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-A`, userId: userA.id, orderStatus: 'processing' } }),
+    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-B`, userId: userB.id, orderStatus: 'processing' } }),
   ]);
 
   wishlistA = await prisma.wishlist.create({ data: { userId: userA.id, productId: product.id } });
@@ -127,11 +133,35 @@ beforeAll(async () => {
       orderNumber: `TEST-ACCT-${suffix}-PAID`,
       userId: userA.id,
       paymentStatus: 'paid',
+      orderStatus: 'paid',
       items: {
         create: [{ productId: product.id, name: product.name, price: product.price, quantity: 1, size: 'M', image: product.images[0] }],
       },
     },
   });
+
+  // Payment Platform Redesign, Phase 5 — Resume Checkout fixtures. Two
+  // genuinely-pending orders for userA so the sort-by-soonest-expiration
+  // behavior has something real to assert against; one for userB to prove
+  // cross-user isolation the same way every other Home-feed signal is tested.
+  [pendingOrderSoon, pendingOrderLater, pendingOrderB] = await Promise.all([
+    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-PEND-SOON`, userId: userA.id } }),
+    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-PEND-LATER`, userId: userA.id } }),
+    prisma.order.create({ data: { ...baseOrder, orderNumber: `TEST-ACCT-${suffix}-PEND-B`, userId: userB.id } }),
+  ]);
+
+  const now = Date.now();
+  await Promise.all([
+    prisma.payment.create({
+      data: { orderId: pendingOrderSoon.id, provider: 'maya', status: 'pending', expiresAt: new Date(now + 10 * 60 * 1000) },
+    }),
+    prisma.payment.create({
+      data: { orderId: pendingOrderLater.id, provider: 'maya', status: 'pending', expiresAt: new Date(now + 60 * 60 * 1000) },
+    }),
+    prisma.payment.create({
+      data: { orderId: pendingOrderB.id, provider: 'maya', status: 'pending', expiresAt: new Date(now + 60 * 60 * 1000) },
+    }),
+  ]);
 });
 
 afterAll(async () => {
@@ -140,7 +170,9 @@ afterAll(async () => {
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.wishlist.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.follow.deleteMany({ where: { userId: { in: userIds } } });
-  await prisma.order.deleteMany({ where: { id: { in: [orderA.id, orderB.id, paidOrderA.id] } } });
+  const orderIds = [orderA.id, orderB.id, paidOrderA.id, pendingOrderSoon.id, pendingOrderLater.id, pendingOrderB.id];
+  await prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } });
+  await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
   await prisma.product.delete({ where: { id: product.id } });
   await prisma.organization.delete({ where: { id: organization.id } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -159,6 +191,23 @@ describe('routes/account.js — Customer Portal API', () => {
     expect(types).toContain('fit-check');
     // userB's order/try-on must never leak into userA's feed
     expect(res.body.data.feed.every((m) => !String(m.body).includes(orderB.orderNumber))).toBe(true);
+  });
+
+  it('GET /home surfaces pendingPayments (Resume Checkout, Payment Platform Redesign Phase 5), sorted soonest-expiring first', async () => {
+    const res = await agentAs(userA.id).get('/api/account/home');
+    expect(res.status).toBe(200);
+
+    const orderNumbers = res.body.data.pendingPayments.map((p) => p.orderNumber);
+    expect(orderNumbers).toEqual([pendingOrderSoon.orderNumber, pendingOrderLater.orderNumber]);
+    // userB's own pending order must never leak into userA's module
+    expect(orderNumbers).not.toContain(pendingOrderB.orderNumber);
+
+    const soon = res.body.data.pendingPayments[0];
+    expect(soon.payment).toMatchObject({ provider: 'maya', status: 'pending' });
+    expect(soon.payment.expiresAt).toBeTruthy();
+
+    // Covered by the dedicated module instead — not a generic 'order' moment
+    expect(res.body.data.feed.some((m) => m.body?.includes(pendingOrderSoon.orderNumber))).toBe(false);
   });
 
   it('GET /home never returns an empty feed, even for a user with zero real activity', async () => {

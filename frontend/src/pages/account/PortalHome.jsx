@@ -3,11 +3,15 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { ErrorState } from '../../components/ui';
 import MomentCard from '../../components/portal/MomentCard';
 import FitCheckQuotaBar from '../../components/portal/FitCheckQuotaBar';
+import ResumeCheckoutModule from '../../components/portal/ResumeCheckoutModule';
 import accountService from '../../services/accountService';
 
 // My PUSO's Home — a living feed, not a dashboard of statistics. Every
 // moment already comes pre-composed from GET /api/account/home (see
 // accountRepository.getHomeFeed); this page just renders them in order.
+// Resume Checkout (pendingPayments) renders above the feed, unconditionally
+// first — the platform's one non-negotiable priority, per the original
+// Payment Platform Redesign spec's Home ordering (Phase 5).
 const PortalHome = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +47,8 @@ const PortalHome = () => {
         </p>
         <FitCheckQuotaBar />
       </div>
+
+      <ResumeCheckoutModule pendingPayments={data.pendingPayments} />
 
       <div className="space-y-3">
         {data.feed.map((moment) => (

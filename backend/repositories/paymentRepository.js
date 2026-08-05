@@ -29,6 +29,22 @@ export async function findByOrder(orderId, { client = prisma } = {}) {
 }
 
 /**
+ * Bulk form of findLatestForOrder — one query for My PUSO's Resume Checkout
+ * module (Payment Platform Redesign, Phase 5) instead of N round trips for N
+ * pending orders. `distinct` + `orderBy: createdAt desc` gives Postgres's
+ * SELECT DISTINCT ON semantics: exactly one row per orderId, the newest one.
+ */
+export async function findLatestForOrders(orderIds, { client = prisma } = {}) {
+  if (!orderIds.length) return [];
+  const payments = await client.payment.findMany({
+    where: { orderId: { in: orderIds } },
+    orderBy: { createdAt: 'desc' },
+    distinct: ['orderId'],
+  });
+  return serialize(payments);
+}
+
+/**
  * Atomically resolves one payment attempt — a conditional `updateMany`
  * (`WHERE id, status: 'pending'`), the same race-safe shape as
  * orderRepository.tryResolvePayment, just scoped one level down to a single
@@ -44,4 +60,4 @@ export async function resolve(id, status, extra = {}, { client = prisma } = {}) 
   return result.count > 0;
 }
 
-export default { create, findById, findLatestForOrder, findByOrder, resolve };
+export default { create, findById, findLatestForOrder, findByOrder, findLatestForOrders, resolve };

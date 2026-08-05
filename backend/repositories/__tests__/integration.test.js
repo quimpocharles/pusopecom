@@ -1101,6 +1101,31 @@ describe('paymentRepository — Payment Platform Redesign Phase 1', () => {
       expect(all).toHaveLength(2);
     }), 15000);
 
+  it('findLatestForOrders (bulk) returns exactly one row per order — the newest one, not an arbitrary attempt', () =>
+    withRollback(async (tx) => {
+      const orderOne = await makeMinimalOrder(tx, `bulk-latest-1-${Date.now()}`);
+      const orderTwo = await makeMinimalOrder(tx, `bulk-latest-2-${Date.now()}`);
+
+      const oneOlder = await paymentRepo.create(
+        { orderId: orderOne.id, provider: 'maya', checkoutReference: 'chk_1_old' }, { client: tx }
+      );
+      await tx.payment.update({ where: { id: oneOlder._id }, data: { createdAt: new Date(Date.now() - 60000) } });
+      const oneNewer = await paymentRepo.create(
+        { orderId: orderOne.id, provider: 'maya', checkoutReference: 'chk_1_new' }, { client: tx }
+      );
+      const twoOnly = await paymentRepo.create(
+        { orderId: orderTwo.id, provider: 'maya', checkoutReference: 'chk_2_only' }, { client: tx }
+      );
+
+      const latest = await paymentRepo.findLatestForOrders([orderOne.id, orderTwo.id], { client: tx });
+      expect(latest).toHaveLength(2);
+
+      const byOrderId = new Map(latest.map((p) => [p.orderId, p]));
+      expect(byOrderId.get(orderOne.id)._id).toBe(oneNewer._id);
+      expect(byOrderId.get(orderOne.id).checkoutReference).toBe('chk_1_new');
+      expect(byOrderId.get(orderTwo.id)._id).toBe(twoOnly._id);
+    }), 15000);
+
   it('resolve() is idempotent — a second resolution of an already-resolved attempt no-ops', () =>
     withRollback(async (tx) => {
       const order = await makeMinimalOrder(tx, `resolve-${Date.now()}`);

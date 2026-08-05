@@ -151,6 +151,10 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
         fitCheckBonus.grantEventBonus(order.user, 'first_purchase').catch((err) =>
           logger.error({ err, ...logContext }, 'Fit Check first-purchase bonus grant failed')
         );
+        // This order just left 'awaiting_payment' — the Home feed's Resume
+        // Checkout module (Phase 5) would otherwise show a stale/paid order
+        // for up to accountCache's 60s TTL.
+        await accountCache.invalidateHome(order.user);
       }
     }
     return 'paid';
@@ -178,6 +182,10 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
         message: `Payment ${gatewayStatus} via ${order.paymentMethod} — stock released`,
         metadata: { paymentId: order.mayaPaymentId, gateway: order.paymentMethod },
       });
+
+      // Same reasoning as the succeeded branch above — this order just left
+      // 'awaiting_payment', so Resume Checkout needs a fresh read.
+      if (order.user) await accountCache.invalidateHome(order.user);
     }
     return 'failed';
   }
@@ -727,6 +735,8 @@ router.post('/:orderNumber/pay', optionalAuth, async (req, res) => {
       message: `New checkout session generated via ${order.paymentMethod}`,
       metadata: { paymentId: paymentReference, gateway: order.paymentMethod },
     });
+
+    if (order.user) await accountCache.invalidateHome(order.user);
 
     res.json({ success: true, data: { checkoutUrl: redirectUrl, expiresAt, resumed: false } });
   } catch (error) {

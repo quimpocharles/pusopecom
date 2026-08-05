@@ -6,6 +6,7 @@ import * as tryOnLogRepository from './tryOnLogRepository.js';
 import * as notificationRepository from './notificationRepository.js';
 import * as followRepository from './followRepository.js';
 import * as productRepository from './productRepository.js';
+import * as paymentRepository from './paymentRepository.js';
 
 const PREVIEW_SIZE = 5;
 // Same recency window ProductCard already uses for its "New" badge —
@@ -18,8 +19,9 @@ const FEED_CAP = 15;
 // Payment Platform Redesign, Phase 2 — matches the fuller OrderStatus
 // vocabulary now. 'awaiting_payment' is deliberately absent: an unpaid
 // order isn't a "your order" moment worth celebrating in the feed the way
-// a real status change is — Phase 5's Resume Checkout moment covers that
-// case with its own, more actionable card instead.
+// a real status change is — Phase 5's dedicated pendingPayments module
+// (see getHomeFeed below) covers that case with its own, more actionable
+// card instead.
 const ORDER_STATUS_TITLE = {
   paid: 'Your order is confirmed',
   processing: 'Your order is being processed',
@@ -48,19 +50,65 @@ const recentCutoff = () => new Date(Date.now() - RECENT_DAYS * 24 * 60 * 60 * 10
  * if there are fewer than MIN_REAL_MOMENTS, trending products are appended
  * as filler so the feed is never empty — never a fabricated "recommendation
  * engine" (still explicitly deferred), just what's genuinely popular.
+ *
+ * Also returns `pendingPayments` — Resume Checkout (Payment Platform
+ * Redesign, Phase 5), the platform's one always-first, non-negotiable
+ * priority per the original spec's Home ordering. Kept as its own array
+ * rather than folded into `feed`'s recency sort, since "always first
+ * regardless of recency" isn't a sort order the shared moment shape (or
+ * MomentCard) needs to grow a special case for.
  */
 export async function getHomeFeed(userId, { client = prisma } = {}) {
   const cutoff = recentCutoff();
 
-  const [profile, recentOrders, recentTryOns, followedOrgIds, wishlistItems, unreadNotifications] =
+  const [profile, recentOrders, recentTryOns, followedOrgIds, wishlistItems, unreadNotifications, pendingOrders] =
     await Promise.all([
       userRepository.findById(userId, { client }),
-      orderRepository.find({ where: { userId, updatedAt: { gte: cutoff } }, orderBy: { updatedAt: 'desc' }, take: PREVIEW_SIZE, client }),
+      // 'awaiting_payment' orders are deliberately excluded here — they're
+      // covered by the dedicated pendingPayments module below instead of the
+      // generic "Order update" moment (see ORDER_STATUS_TITLE's own comment).
+      orderRepository.find({ where: { userId, updatedAt: { gte: cutoff }, orderStatus: { not: 'awaiting_payment' } }, orderBy: { updatedAt: 'desc' }, take: PREVIEW_SIZE, client }),
       tryOnLogRepository.find({ where: { userId, success: true, deletedAt: null, createdAt: { gte: cutoff } }, orderBy: { createdAt: 'desc' }, take: PREVIEW_SIZE, client }),
       followRepository.followedOrganizationIds(userId, { client }),
       wishlistRepository.find({ userId, take: 30, client }),
       notificationRepository.find({ userId, read: false, take: PREVIEW_SIZE, client }),
+      // Payment Platform Redesign, Phase 5 — Resume Checkout. Not windowed by
+      // `cutoff` like the rest of the feed: a pending order stays actionable
+      // (and worth surfacing) for its entire retention window, not just 14
+      // days — Phase 4's expireStaleOrders sweep is what eventually removes it.
+      orderRepository.find({ where: { userId, orderStatus: 'awaiting_payment' }, orderBy: { createdAt: 'desc' }, take: PREVIEW_SIZE, client }),
     ]);
+
+  const latestPendingPayments = await paymentRepository.findLatestForOrders(
+    pendingOrders.map((order) => order._id),
+    { client }
+  );
+  const paymentByOrderId = new Map(latestPendingPayments.map((p) => [p.orderId, p]));
+
+  // Sorted soonest-expiring-first — the fan closest to losing their reserved
+  // stock is the one who most needs to see this. Same customer-safe payment
+  // shape GET /:orderNumber already returns, so the frontend can hand it
+  // straight to CompletePaymentButton without reshaping it.
+  const pendingPayments = pendingOrders
+    .map((order) => {
+      const payment = paymentByOrderId.get(order._id);
+      return {
+        orderNumber: order.orderNumber,
+        total: order.total,
+        createdAt: order.createdAt,
+        payment: payment
+          ? { provider: payment.provider, status: payment.status, expiresAt: payment.expiresAt, checkoutUrl: payment.checkoutUrl }
+          : null,
+      };
+    })
+    .sort((a, b) => {
+      const aExpires = a.payment?.expiresAt ? new Date(a.payment.expiresAt) : null;
+      const bExpires = b.payment?.expiresAt ? new Date(b.payment.expiresAt) : null;
+      if (!aExpires && !bExpires) return 0;
+      if (!aExpires) return 1;
+      if (!bExpires) return -1;
+      return aExpires - bExpires;
+    });
 
   const followedProducts = followedOrgIds.length
     ? await productRepository.find({
@@ -160,6 +208,7 @@ export async function getHomeFeed(userId, { client = prisma } = {}) {
           memberSince: profile.createdAt,
         }
       : null,
+    pendingPayments,
     feed,
   };
 }
