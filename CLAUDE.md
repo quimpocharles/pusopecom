@@ -37,7 +37,7 @@ Evolving the existing stack, not replacing it — React + Vite, Node.js + Expres
 | Events | Same Redis infra, lightweight pub/sub | Notifications is strictly downstream of every event-producing capability, never upstream |
 | Search | Dedicated managed search service, not MongoDB `$text` | IA requires identity-aware, multi-entity-type, fuzzy search (Organizations/Teams/Athletes, not just product names) |
 | Storage/Media/CDN | Cloudinary, actually using its transformation features | Audit found full-res images shipped everywhere with zero transformation |
-| Payments | Maya, with mandatory webhook signature verification | Audit's single most severe finding: the webhook trusted unverified payloads |
+| Payments | Maya — no signature scheme exists on Maya's webhook, so every delivery is treated as a bare wake-up signal and re-verified via an authenticated pull against Maya's own status API, with IP allowlisting as the perimeter control in place of a signature (Decision Log ADR-008) | Audit's single most severe finding: the webhook trusted unverified payloads |
 | Auth | JWT + Google OAuth, add session revocation | 7-day token currently can't be invalidated on password change |
 | Deployment | CI/CD gating every deploy on tests | No promise in this document series can hold over time without this |
 | Observability | Structured logging + real error tracking | Trust's "ongoing monitoring" and Analytics literally cannot function on console.log |
@@ -190,7 +190,8 @@ Use these words exactly as defined. If a term isn't here, check `docs/DOMAIN_MOD
 | **Customer** | The fan. Holds identity, history, Favorites, Wishlist. |
 | **Favorite** | Followed Organizations/Teams — identity, not purchase intent. |
 | **Wishlist** | Saved Commerce Items — purchase intent, not identity. |
-| **Order** | A Customer's purchase commitment. Can span multiple Organizations. |
+| **Order** | A Customer's purchase commitment. Can span multiple Organizations. Its own `paymentStatus`/`paymentMethod` fields stay the fast "what's the current state" read; **Payment** underneath carries the detailed history (Decision Log ADR-008). |
+| **Payment** | One checkout-gateway attempt against an Order — one-to-many, not a single mutable field on Order. A regenerated session after expiry is a new Payment row, not an overwrite; "the current payment" is just the most recent row. |
 | **Fulfillment** | The abstract "deliver on the promise" concept. Shipment is its Merchandise-specific form. |
 | **Storefront** | An Organization's own branded destination. |
 | **Discovery Hub** | The platform-owned homepage — routing and introduction, owned by no single Organization. |
@@ -212,7 +213,7 @@ These are hard boundaries from `docs/AI_CAPABILITY.md` and `docs/PLATFORM_STRATE
 - **An Athlete's identity, voice, or likeness is never AI-generated without their own authorization.**
 - **The Organization-first data anchor is never "simplified" back to flat sport/league/team strings.** Everything in this document depends on it remaining real.
 - **Inventory is never cached or read optimistically.** Live, every time.
-- **No webhook payload is trusted without signature verification**, on any current or future integration.
+- **No webhook payload is trusted at face value** — every current or future integration must independently re-verify against the provider's own authenticated API before acting on it. Signature verification is the mechanism when a provider offers one; Maya doesn't, so IP allowlisting plus mandatory re-verification is the substitute (Decision Log ADR-008) — the rule is "never trust the payload," not "always check a signature."
 - **No Organization's return terms fall below the platform-wide baseline Guarantee.**
 
 ---
