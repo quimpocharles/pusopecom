@@ -512,6 +512,10 @@ describe('GET /orders/:orderNumber — access control', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.orderNumber).toBe(orderNumber);
     expect(res.body.data.items[0].product.name).toBe(product.name); // items.product populated
+    // Payment Platform Redesign, Phase 3 — the latest Payment attempt's
+    // customer-safe fields, nested alongside the order.
+    expect(res.body.data.payment).toMatchObject({ provider: 'maya', status: 'pending', checkoutUrl: 'https://pay.example/chk_guest' });
+    expect(res.body.data.payment.expiresAt).not.toBeNull();
   }, 15000);
 
   it('an owned order is forbidden to a different logged-in user, allowed to its owner and to an admin', async () => {
@@ -538,6 +542,81 @@ describe('GET /orders/:orderNumber — access control', () => {
 
   it('404s for a non-existent order number', async () => {
     const res = await request(app).get('/api/orders/PS-NOSUCHORDER');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /orders/:orderNumber/pay — resume or regenerate checkout (Payment Platform Redesign, Phase 3)', () => {
+  it('resumes an existing still-valid session without creating a new Payment row', async () => {
+    const product = await makeProduct({ name: 'PayResume' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_resume', redirectUrl: 'https://pay.example/chk_resume' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    const before = await prisma.payment.count({ where: { orderId: order.id } });
+
+    const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.checkoutUrl).toBe('https://pay.example/chk_resume');
+    expect(res.body.data.resumed).toBe(true);
+    expect(paymentService.createCheckoutSession).toHaveBeenCalledTimes(1); // only order creation's own call
+
+    const after = await prisma.payment.count({ where: { orderId: order.id } });
+    expect(after).toBe(before); // no new attempt row written
+  }, 15000);
+
+  it('regenerates a new session once the existing one has expired, writing a new Payment row', async () => {
+    const product = await makeProduct({ name: 'PayRegenerate' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_old', redirectUrl: 'https://pay.example/chk_old' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+
+    // Force the existing attempt into the past — same effect as its real 1-hour Maya window elapsing.
+    await prisma.payment.updateMany({ where: { orderId: order.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_new', redirectUrl: 'https://pay.example/chk_new' });
+    const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.checkoutUrl).toBe('https://pay.example/chk_new');
+    expect(res.body.data.resumed).toBe(false);
+
+    const payments = await prisma.payment.findMany({ where: { orderId: order.id }, orderBy: { createdAt: 'asc' } });
+    expect(payments).toHaveLength(2); // the customer never rebuilds their cart — this is a new attempt, not a lost order
+    expect(payments[1].checkoutReference).toBe('chk_new');
+
+    const updatedOrder = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(updatedOrder.mayaPaymentId).toBe('chk_new'); // legacy field kept in sync, Phase 1's dual-write coexistence
+  }, 15000);
+
+  it('400s when the order is already paid', async () => {
+    const product = await makeProduct({ name: 'PayAlreadyPaid' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_paid', redirectUrl: 'https://pay.example/chk_paid' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
+
+    const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
+    expect(res.status).toBe(400);
+  }, 15000);
+
+  it('400s when the order has been cancelled', async () => {
+    const product = await makeProduct({ name: 'PayCancelled' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_cancel', redirectUrl: 'https://pay.example/chk_cancel' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+
+    await prisma.order.update({ where: { id: order.id }, data: { orderStatus: 'cancelled' } });
+
+    const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
+    expect(res.status).toBe(400);
+  }, 15000);
+
+  it('404s for an unknown order number', async () => {
+    const res = await request(app).post('/api/orders/PS-NOSUCHORDER/pay');
     expect(res.status).toBe(404);
   });
 });

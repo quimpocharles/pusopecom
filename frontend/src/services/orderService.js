@@ -46,6 +46,15 @@ export const orderService = {
     return response.data;
   },
 
+  // Payment Platform Redesign, Phase 3 — "Complete Payment" / "Generate New
+  // Payment Link". Always a server round trip, never a client-cached
+  // checkoutUrl: only the backend's Payment.expiresAt can say whether a
+  // session is still actually valid.
+  payOrder: async (orderNumber) => {
+    const response = await api.post(`/orders/${orderNumber}/pay`);
+    return response.data;
+  },
+
   exportOrdersCSV: async (period = 'all') => {
     const response = await api.get('/orders/admin/export', {
       params: { period },

@@ -628,9 +628,23 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
       }
     }
 
+    // Payment Platform Redesign, Phase 3 — the Pending Payment experience
+    // needs the *attempt's* own status/expiresAt, not just Order's coarser
+    // paymentStatus. Nested under `payment`, only the fields a customer
+    // should see (never providerMetadata, the raw gateway response).
+    const latestPayment = await paymentRepository.findLatestForOrder(order._id);
+    const payment = latestPayment
+      ? {
+          provider: latestPayment.provider,
+          status: latestPayment.status,
+          expiresAt: latestPayment.expiresAt,
+          checkoutUrl: latestPayment.checkoutUrl,
+        }
+      : null;
+
     res.json({
       success: true,
-      data: order
+      data: { ...order, payment }
     });
   } catch (error) {
     logger.error({ err: error }, 'Get order error');
@@ -639,6 +653,81 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
       success: false,
       message: 'Failed to retrieve order'
     });
+  }
+});
+
+// POST /:orderNumber/pay — "Complete Payment" / "Generate New Payment Link"
+// (Payment Platform Redesign, Phase 3). Always a server-side decision, never
+// a client-cached checkoutUrl: whether a session is still valid is exactly
+// the "never depend solely on Maya for state" fact only Payment.expiresAt
+// can answer safely — the customer's own tab has no way to know if the
+// session was already consumed or expired since it last loaded the page.
+// Same optionalAuth/ownership pattern as GET /:orderNumber — order number
+// itself is the bearer secret for a guest order.
+router.post('/:orderNumber/pay', optionalAuth, async (req, res) => {
+  try {
+    const order = await orderRepository.findByOrderNumber(req.params.orderNumber);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.user && req.user) {
+      if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
+    if (order.paymentStatus === 'paid') {
+      return res.status(400).json({ success: false, message: 'This order is already paid' });
+    }
+    if (order.orderStatus === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'This order has been cancelled and can no longer be paid' });
+    }
+
+    // 1. Is there an active session already? Redirect straight to it.
+    const latestPayment = await paymentRepository.findLatestForOrder(order._id);
+    const stillValid = latestPayment
+      && latestPayment.status === 'pending'
+      && latestPayment.checkoutUrl
+      && latestPayment.expiresAt
+      && new Date(latestPayment.expiresAt) > new Date();
+
+    if (stillValid) {
+      return res.json({
+        success: true,
+        data: { checkoutUrl: latestPayment.checkoutUrl, expiresAt: latestPayment.expiresAt, resumed: true },
+      });
+    }
+
+    // 2. No valid session — generate a brand new one. Same flow order
+    // creation itself uses, so the customer never has to rebuild their cart.
+    const { paymentReference, redirectUrl } = await paymentService.createCheckoutSession(order);
+
+    await orderRepository.updateById(order._id, { mayaPaymentId: paymentReference, mayaCheckoutUrl: redirectUrl });
+
+    const sessionDurationMs = paymentService.getSessionDurationMs(order.paymentMethod);
+    const expiresAt = sessionDurationMs ? new Date(Date.now() + sessionDurationMs) : null;
+    await paymentRepository.create({
+      orderId: order._id,
+      provider: order.paymentMethod,
+      checkoutReference: paymentReference,
+      checkoutUrl: redirectUrl,
+      expiresAt,
+    });
+
+    await orderEventRepository.create({
+      orderId: order._id,
+      type: 'payment_pending',
+      actor: req.user ? 'customer' : 'system',
+      message: `New checkout session generated via ${order.paymentMethod}`,
+      metadata: { paymentId: paymentReference, gateway: order.paymentMethod },
+    });
+
+    res.json({ success: true, data: { checkoutUrl: redirectUrl, expiresAt, resumed: false } });
+  } catch (error) {
+    logger.error({ err: error, orderNumber: req.params.orderNumber }, 'Resume/regenerate checkout error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate a new payment link. Please try again.' });
   }
 });
 

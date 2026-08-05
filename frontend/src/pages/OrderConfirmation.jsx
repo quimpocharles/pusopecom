@@ -1,26 +1,78 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, DocumentArrowDownIcon, ClipboardDocumentIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import OrderTimeline from '../components/orders/OrderTimeline';
+import CompletePaymentButton from '../components/orders/CompletePaymentButton';
 import orderService from '../services/orderService';
 import useCartStore from '../store/cartStore';
 import { toTitleCase } from '../utils/text';
 import { orderStatusLabel } from '../utils/orderStatus';
+import { downloadOrderSummaryPdf } from '../utils/orderPdf';
+import usePaymentCountdown from '../hooks/usePaymentCountdown';
+
+const SUPPORT_EMAIL = 'support@pusopilipinas.com';
+
+// Payment Platform Redesign, Phase 3 — every state a customer can land on
+// this page in gets its own honest copy. "Customers should never ask
+// 'what do I do now?'" is the whole point: a failed or expired payment
+// reads as recoverable ("try again", "generate a new link"), never as a
+// dead-end failed purchase — the order itself was never lost.
+const HERO_CONTENT = {
+  paid: {
+    title: 'Order Confirmed!',
+    tone: 'success',
+    body: "Thank you for your order. We'll send you a confirmation email shortly.",
+  },
+  awaiting_payment: {
+    title: 'Complete Your Payment',
+    tone: 'pending',
+    body: 'Your order is saved and your items are reserved — just finish payment to lock it in.',
+  },
+  failed_payment: {
+    title: "Payment Didn't Go Through",
+    tone: 'pending',
+    body: "No problem — your order is still here. Try completing payment again below.",
+  },
+  expired: {
+    title: 'Your Payment Session Expired',
+    tone: 'pending',
+    body: "Your order wasn't lost — generate a new payment link to finish checking out.",
+  },
+  cancelled: {
+    title: 'Order Cancelled',
+    tone: 'cancelled',
+    body: 'This order has been cancelled. Contact support if this seems wrong.',
+  },
+};
+// Every other status (processing/packed/shipped/delivered/returned) means
+// payment already succeeded — same "paid" hero, the Order Timeline below
+// is what actually communicates further progress.
+const heroFor = (order) => HERO_CONTENT[order.orderStatus] || HERO_CONTENT.paid;
+
+const InfoRow = ({ label, value }) => (
+  <div className="flex justify-between gap-4 text-sm">
+    <dt className="text-gray-500">{label}</dt>
+    <dd className="font-medium text-gray-900 text-right">{value}</dd>
+  </div>
+);
 
 const OrderConfirmation = () => {
   const { orderNumber } = useParams();
   const [searchParams] = useSearchParams();
-  const paymentStatus = searchParams.get('payment');
+  const paymentStatusParam = searchParams.get('payment');
 
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
       try {
         // If returning from Maya with success, verify payment status first
-        if (paymentStatus === 'success') {
+        if (paymentStatusParam === 'success') {
           await orderService.verifyPayment(orderNumber).catch(() => {});
         }
 
@@ -28,7 +80,7 @@ const OrderConfirmation = () => {
         setOrder(response.data);
 
         // Clear cart after successful payment
-        if (paymentStatus === 'success' || response.data.paymentStatus === 'paid') {
+        if (paymentStatusParam === 'success' || response.data.paymentStatus === 'paid') {
           useCartStore.getState().clearCart();
         }
       } catch (err) {
@@ -41,7 +93,10 @@ const OrderConfirmation = () => {
     if (orderNumber) {
       fetchOrder();
     }
-  }, [orderNumber, paymentStatus]);
+  }, [orderNumber, paymentStatusParam]);
+
+  const paymentExpiresAt = order?.payment?.status === 'pending' ? order.payment.expiresAt : null;
+  const { formatted: timeRemaining, isExpired: countdownExpired } = usePaymentCountdown(paymentExpiresAt);
 
   if (loading) {
     return (
@@ -64,67 +119,76 @@ const OrderConfirmation = () => {
     );
   }
 
-  const isPaymentSuccess = paymentStatus === 'success' || order.paymentStatus === 'paid';
+  const hero = heroFor(order);
+  // Cancelled orders and already-paid orders are the only two states with
+  // nothing left to pay — every other state (including failed/expired) is
+  // exactly what this redesign exists to make recoverable.
+  const canPay = order.paymentStatus !== 'paid' && order.orderStatus !== 'cancelled';
+
+  const handleCopyOrderNumber = async () => {
+    try {
+      await navigator.clipboard.writeText(order.orderNumber);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — silently no-op
+      // rather than showing an error for a low-stakes convenience action.
+    }
+  };
 
   return (
     <Layout>
       <div className="container-custom py-12">
-        <div className="max-w-3xl mx-auto">
-          {/* Success/Failure Message */}
-          <div className={`card p-8 text-center mb-8 ${
-            isPaymentSuccess ? 'bg-green-50' : 'bg-yellow-50'
+        <div className="max-w-3xl mx-auto space-y-8">
+          {/* Hero + primary CTA */}
+          <div className={`card p-8 text-center ${
+            hero.tone === 'success' ? 'bg-green-50' : hero.tone === 'cancelled' ? 'bg-red-50' : 'bg-yellow-50'
           }`}>
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-              isPaymentSuccess ? 'bg-green-100' : 'bg-yellow-100'
+              hero.tone === 'success' ? 'bg-green-100' : hero.tone === 'cancelled' ? 'bg-red-100' : 'bg-yellow-100'
             }`}>
-              {isPaymentSuccess ? (
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              )}
+              {hero.tone === 'success' && <CheckIcon className="w-8 h-8 text-green-600" />}
+              {hero.tone === 'cancelled' && <XMarkIcon className="w-8 h-8 text-red-600" />}
+              {hero.tone === 'pending' && <ExclamationTriangleIcon className="w-8 h-8 text-yellow-600" />}
             </div>
-            <h1 className="text-2xl font-bold mb-2">
-              {isPaymentSuccess ? 'Order Confirmed!' : 'Payment Pending'}
-            </h1>
-            <p className="text-gray-600">
-              {isPaymentSuccess
-                ? 'Thank you for your order. We\'ll send you a confirmation email shortly.'
-                : 'Your order has been created but payment is still pending.'}
-            </p>
+            <h1 className="text-2xl font-bold mb-2">{hero.title}</h1>
+            <p className="text-gray-600">{hero.body}</p>
+
+            {canPay && (
+              <div className="mt-6 flex flex-col items-center">
+                <CompletePaymentButton orderNumber={order.orderNumber} payment={order.payment} />
+              </div>
+            )}
+          </div>
+
+          {/* Payment Information + Order Timeline */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="card p-6">
+              <h2 className="font-bold mb-4">Payment Information</h2>
+              <dl className="space-y-3">
+                <InfoRow label="Payment Method" value={toTitleCase(order.paymentMethod)} />
+                <InfoRow label="Payment Status" value={toTitleCase(order.paymentStatus)} />
+                <InfoRow label="Order Status" value={orderStatusLabel(order.orderStatus)} />
+                <InfoRow label="Order Date" value={new Date(order.createdAt).toLocaleString('en-PH')} />
+                {paymentExpiresAt && (
+                  <>
+                    <InfoRow label="Payment Expiration" value={new Date(paymentExpiresAt).toLocaleString('en-PH')} />
+                    <InfoRow label="Time Remaining" value={countdownExpired ? 'Expired' : timeRemaining} />
+                  </>
+                )}
+                <InfoRow label="Order Number" value={order.orderNumber} />
+              </dl>
+            </div>
+
+            <div className="card p-6">
+              <h2 className="font-bold mb-4">Order Timeline</h2>
+              <OrderTimeline orderStatus={order.orderStatus} />
+            </div>
           </div>
 
           {/* Order Details */}
           <div className="card p-8">
             <h2 className="text-xl font-bold mb-4">Order Details</h2>
-
-            <div className="grid grid-cols-2 gap-4 mb-6 pb-6 border-b">
-              <div>
-                <p className="text-sm text-gray-600">Order Number</p>
-                <p className="font-semibold">{order.orderNumber}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Order Date</p>
-                <p className="font-semibold">
-                  {new Date(order.createdAt).toLocaleDateString('en-PH')}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Payment Status</p>
-                <p className={`font-semibold capitalize ${
-                  order.paymentStatus === 'paid' ? 'text-green-600' : 'text-yellow-600'
-                }`}>
-                  {order.paymentStatus}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Order Status</p>
-                <p className="font-semibold">{orderStatusLabel(order.orderStatus)}</p>
-              </div>
-            </div>
 
             {/* Items */}
             <h3 className="font-bold mb-3">Items</h3>
@@ -180,10 +244,26 @@ const OrderConfirmation = () => {
             </div>
           </div>
 
-          <div className="text-center mt-8">
-            <Link to="/products" className="btn-primary inline-block">
+          {/* Secondary actions */}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link to="/products" className="btn-outline">
               Continue Shopping
             </Link>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Order ${order.orderNumber}`)}`}
+              className="btn-outline inline-flex items-center gap-1.5"
+            >
+              <EnvelopeIcon className="w-4 h-4" />
+              Contact Support
+            </a>
+            <button onClick={() => downloadOrderSummaryPdf(order)} className="btn-outline inline-flex items-center gap-1.5">
+              <DocumentArrowDownIcon className="w-4 h-4" />
+              Download Order Summary (PDF)
+            </button>
+            <button onClick={handleCopyOrderNumber} className="btn-outline inline-flex items-center gap-1.5">
+              <ClipboardDocumentIcon className="w-4 h-4" />
+              {copied ? 'Copied!' : 'Copy Order Number'}
+            </button>
           </div>
         </div>
       </div>
