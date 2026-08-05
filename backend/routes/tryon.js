@@ -11,6 +11,7 @@ import * as productRepository from '../repositories/productRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckQuota from '../lib/fitCheckQuota.js';
 import * as bonusFitCheckGrantRepository from '../repositories/bonusFitCheckGrantRepository.js';
+import * as fitCheckCampaignRepository from '../repositories/fitCheckCampaignRepository.js';
 import { optionalAuth, authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -94,6 +95,28 @@ router.get('/quota', optionalAuth, async (req, res) => {
   }
 });
 
+// GET /api/tryon/campaigns/active-for-product/:productId — public read
+// backing the "Unlimited Fit Checks — Sponsored by X" badge on product
+// pages. Returns null when nothing covers this product, never a 404 — an
+// unsponsored product is the default case, not an error.
+router.get('/campaigns/active-for-product/:productId', async (req, res) => {
+  try {
+    const product = await productRepository.findById(req.params.productId);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+    const campaign = await fitCheckCampaignRepository.findActiveForProduct({
+      productId: product._id,
+      category: product.category,
+    });
+    res.json({ success: true, data: campaign });
+  } catch (error) {
+    logger.error({ err: error }, 'Get active Fit Check campaign error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load Fit Check campaign' });
+  }
+});
+
 // Virtual try-on endpoint
 // optionalAuth added for the Customer Portal's per-user try-on history —
 // the shared frontend api client already attaches the bearer token to every
@@ -124,23 +147,42 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       });
     }
 
+    // Resolve the real Product row up front (by id, falling back to a
+    // name-based lookup) — both the sponsorship check below and the
+    // eventual log write need it, and resolving it once here avoids a
+    // second, redundant name lookup later.
+    const requestedProductId = productId && UUID_RE.test(productId) ? productId : null;
+    let product = requestedProductId ? await productRepository.findById(requestedProductId) : null;
+    if (!product && productName) {
+      const [found] = await productRepository.find({ where: { name: productName }, take: 1 });
+      product = found || null;
+    }
+
+    // Sponsored Fit Checks (Phase 3) — an active, unlimited FitCheckCampaign
+    // covering this product bypasses the daily quota entirely for this
+    // generation. Checked before the tier/bonus quota so a sponsored
+    // product never spends a fan's own daily allowance or bonus balance.
+    const sponsoringCampaign = product
+      ? await fitCheckCampaignRepository.findActiveForProduct({ productId: product._id, category: product.category })
+      : null;
+
     // Daily allowance — checked and consumed atomically (one Redis INCR)
     // before the AI call, so a request that's over quota never reaches the
-    // paid provider at all. Sponsored-campaign overrides and bonus grants
-    // are explicitly future phases (see docs/... Fit Check roadmap) — this
-    // is the base tier-limit check only.
-    let quotaStatus;
-    try {
-      quotaStatus = await fitCheckQuota.consume({
-        userId: req.user?._id,
-        sessionId: req.user ? undefined : sessionId,
-        tier: req.user?.subscriptionTier,
-      });
-    } catch (quotaError) {
-      if (quotaError instanceof fitCheckQuota.QuotaExceededError) {
-        return res.status(429).json({ success: false, message: quotaError.message, quota: quotaError.status });
+    // paid provider at all. Skipped entirely when sponsoringCampaign covers
+    // this generation.
+    if (!sponsoringCampaign) {
+      try {
+        await fitCheckQuota.consume({
+          userId: req.user?._id,
+          sessionId: req.user ? undefined : sessionId,
+          tier: req.user?.subscriptionTier,
+        });
+      } catch (quotaError) {
+        if (quotaError instanceof fitCheckQuota.QuotaExceededError) {
+          return res.status(429).json({ success: false, message: quotaError.message, quota: quotaError.status });
+        }
+        throw quotaError;
       }
-      throw quotaError;
     }
 
     let result;
@@ -181,16 +223,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
     const durationMs = Date.now() - genStart;
 
     // Fire-and-forget: log try-on attempt
-    const logProductId = productId && UUID_RE.test(productId)
-      ? productId
-      : null;
     const logPromise = (async () => {
-      let resolvedProductId = logProductId;
-      if (!resolvedProductId && productName) {
-        const [found] = await productRepository.find({ where: { name: productName }, take: 1 });
-        if (found) resolvedProductId = found._id;
-      }
-
       // The generated result is the Fit Check gallery's hero image — durably
       // re-upload it before writing the row. A failed re-upload still
       // writes the row (generatedImageUrl stays null, frontend treats that
@@ -208,7 +241,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       }
 
       const logged = await tryOnLogRepository.create({
-        productId: resolvedProductId || undefined,
+        productId: product?._id || undefined,
         productName: productName || 'Unknown',
         productImage: productImageUrl,
         success: result.success,
@@ -221,6 +254,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
         durationMs,
         userId: req.user?._id,
         sessionId: req.user ? undefined : (req.body?.sessionId || undefined),
+        fitCheckCampaignId: sponsoringCampaign?._id || undefined,
       });
       if (req.user) await accountCache.invalidateHome(req.user._id);
       return logged;

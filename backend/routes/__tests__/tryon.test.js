@@ -44,6 +44,13 @@ vi.mock('../../repositories/bonusFitCheckGrantRepository.js', () => ({
   grant: vi.fn(),
 }));
 
+// Defaults to "nothing sponsors this product" so every existing test in
+// this file (none of which involve a Sponsored Fit Check campaign) keeps
+// going through the normal tier/bonus quota path unaffected.
+vi.mock('../../repositories/fitCheckCampaignRepository.js', () => ({
+  findActiveForProduct: vi.fn().mockResolvedValue(null),
+}));
+
 const { default: tryonRouter } = await import('../tryon.js');
 const replicateService = await import('../../services/replicateService.js');
 const wavespeedService = await import('../../services/wavespeedService.js');
@@ -51,6 +58,7 @@ const axios = (await import('axios')).default;
 const cloudinary = (await import('../../config/cloudinary.js')).default;
 const fitCheckQuota = await import('../../lib/fitCheckQuota.js');
 const bonusFitCheckGrantRepository = await import('../../repositories/bonusFitCheckGrantRepository.js');
+const fitCheckCampaignRepository = await import('../../repositories/fitCheckCampaignRepository.js');
 
 const app = express();
 // Only the new JSON admin routes (bonus grant) need this — the existing
@@ -61,6 +69,7 @@ app.use('/api/tryon', tryonRouter);
 const originalWavespeedKey = process.env.WAVESPEED_API_KEY;
 const originalWavespeedModel = process.env.WAVESPEED_MODEL;
 const createdProductIds = [];
+const createdCampaignIds = [];
 // Each test uses its own productName so /tryon's fire-and-forget log write
 // can be looked up unambiguously by name, rather than racing other tests'
 // writes under a shared name.
@@ -83,6 +92,7 @@ afterAll(async () => {
   if (originalWavespeedModel === undefined) delete process.env.WAVESPEED_MODEL;
   else process.env.WAVESPEED_MODEL = originalWavespeedModel;
   await prisma.tryOnLog.deleteMany({ where: { productName: { startsWith: 'TryOnTest-' } } });
+  await prisma.fitCheckCampaign.deleteMany({ where: { id: { in: createdCampaignIds } } });
   await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
   await prisma.$disconnect();
 });
@@ -400,5 +410,99 @@ describe('POST /tryon/admin/bonus-grant', () => {
     expect(fractional.status).toBe(400);
 
     expect(bonusFitCheckGrantRepository.grant).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /tryon — sponsored campaigns (Phase 3)', () => {
+  it('bypasses the daily quota entirely and logs the campaign when an active campaign covers the product', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: uniqueName('sponsored'),
+        slug: `sponsored-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
+      },
+    });
+    createdProductIds.push(product.id);
+
+    // A real row, not a fake id — TryOnLog.fitCheckCampaignId is a real FK,
+    // so the fire-and-forget log write would otherwise fail its constraint.
+    const campaign = await prisma.fitCheckCampaign.create({
+      data: { name: 'Test Sponsorship', sponsorName: 'Playtime.ph', headline: 'Unlimited', productIds: [product.id] },
+    });
+    createdCampaignIds.push(campaign.id);
+
+    fitCheckCampaignRepository.findActiveForProduct.mockResolvedValueOnce({ _id: campaign.id, sponsorName: 'Playtime.ph' });
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productId', product.id)
+      .field('productName', product.name)
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(200);
+    expect(fitCheckQuota.consume).not.toHaveBeenCalled();
+    expect(fitCheckCampaignRepository.findActiveForProduct).toHaveBeenCalledWith({ productId: product.id, category: 'jersey' });
+
+    const log = await waitForLog(product.name);
+    expect(log.fitCheckCampaignId).toBe(campaign.id);
+  });
+
+  it('falls through to the normal daily quota when no product is resolved at all', async () => {
+    // No productId, and productName matches nothing real — product stays
+    // unresolved, so findActiveForProduct is never even reached (its
+    // persistent mockResolvedValue(null) default covers this case; no
+    // *Once needed, and queuing one here that's never consumed would leak
+    // into whichever test runs next).
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+
+    await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', uniqueName('unsponsored'))
+      .attach('userImage', png, 'me.png');
+
+    expect(fitCheckQuota.consume).toHaveBeenCalled();
+    expect(fitCheckCampaignRepository.findActiveForProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /tryon/campaigns/active-for-product/:productId', () => {
+  it('returns the active campaign covering a product', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: uniqueName('active-campaign-read'),
+        slug: `active-campaign-read-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
+      },
+    });
+    createdProductIds.push(product.id);
+    fitCheckCampaignRepository.findActiveForProduct.mockResolvedValueOnce({ _id: 'campaign-2', sponsorName: 'Playtime.ph' });
+
+    const res = await request(app).get(`/api/tryon/campaigns/active-for-product/${product.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.sponsorName).toBe('Playtime.ph');
+  });
+
+  it('returns null (not a 404) when nothing sponsors the product', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: uniqueName('no-campaign-read'),
+        slug: `no-campaign-read-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
+      },
+    });
+    createdProductIds.push(product.id);
+    fitCheckCampaignRepository.findActiveForProduct.mockResolvedValueOnce(null);
+
+    const res = await request(app).get(`/api/tryon/campaigns/active-for-product/${product.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeNull();
+  });
+
+  it('404s for an unknown product id', async () => {
+    const res = await request(app).get('/api/tryon/campaigns/active-for-product/00000000-0000-0000-0000-000000000000');
+    expect(res.status).toBe(404);
   });
 });

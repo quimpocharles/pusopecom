@@ -6,6 +6,7 @@ import settingsService from '../../services/settingsService';
 import useAuthStore from '../../store/authStore';
 import { getSessionId } from '../../services/activityService';
 import FitCheckQuotaBar from '../portal/FitCheckQuotaBar';
+import fitCheckCampaignService from '../../services/fitCheckCampaignService';
 import { useCameraCapture } from '../../hooks/useCameraCapture';
 import { optimizeImage } from '../../utils/imageOptimization';
 import { validateImage } from '../../utils/imageValidation';
@@ -36,6 +37,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [error, setError] = useState('');
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [sponsorship, setSponsorship] = useState(null);
 
   // Acquisition flow state — everything before an image is handed to
   // handleGenerate().
@@ -53,6 +55,19 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       if (res.data?.tryOnAd) setAd(res.data.tryOnAd);
     }).catch(() => {});
   }, [isOpen]);
+
+  // Sponsored Fit Checks (Phase 3) — when an active campaign covers this
+  // product, the daily allowance doesn't apply, so its display is replaced
+  // rather than shown alongside a number that would be misleading here.
+  useEffect(() => {
+    if (!isOpen || !product?._id) {
+      setSponsorship(null);
+      return;
+    }
+    fitCheckCampaignService.getActiveForProduct(product._id)
+      .then((res) => setSponsorship(res.data))
+      .catch(() => setSponsorship(null));
+  }, [isOpen, product?._id]);
 
   // Reset the acquisition flow (and release the camera) every time the
   // modal closes — it doesn't unmount between opens (isOpen just gates
@@ -422,7 +437,15 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
           </button>
         </div>
 
-        <FitCheckQuotaBar refreshKey={quotaRefreshKey} className="py-3 border-b" />
+        {sponsorship ? (
+          <div className="py-3 border-b text-center">
+            <p className="text-sm font-semibold text-primary-700">
+              Unlimited Fit Checks — Sponsored by {sponsorship.sponsorName}
+            </p>
+          </div>
+        ) : (
+          <FitCheckQuotaBar refreshKey={quotaRefreshKey} className="py-3 border-b" />
+        )}
 
         {/* Main Content */}
         <div className="p-4">

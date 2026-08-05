@@ -533,7 +533,8 @@ model Organization {
   affiliations AthleteAffiliation[] @relation("AffiliationAthlete")
   affiliates   AthleteAffiliation[] @relation("AffiliationOrganization")
 
-  followedBy Follow[]
+  followedBy                 Follow[]
+  fitCheckCampaignsSponsored FitCheckCampaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -876,6 +877,60 @@ model Campaign {
   // the OrganizationParticipation model's own comment on that same limit).
   @@index([placement, featuredOnHomepage, active])
   @@map("campaigns")
+}
+
+// ---------------------------------------------------------------------------
+// FitCheckCampaign — Phase 3 of the Fit Check engagement plan. A distinct
+// model from Campaign above, on purpose: Campaign is one-active-row-per-
+// homepage-slot; this is many-simultaneously-active, targeted at
+// products/a category rather than a homepage slot, and drives a real
+// commerce mechanic (bypassing the daily Fit Check quota) rather than
+// homepage content. Overloading Campaign with unrelated fields would
+// violate CLAUDE.md's "vocabulary matches the domain, exactly."
+//
+// Targeting is a union, not an intersection: a product is covered if it's
+// in `productIds` OR its category matches `category`. No Collection
+// targeting — Collection is a documented Domain Model concept but isn't a
+// real Prisma model yet (CLAUDE.md: Commerce Item extension points build
+// out as needed, not ahead of time); add it here once it exists rather
+// than pointing at something that doesn't.
+//
+// `unlimitedFitChecks` is the only override mechanic Phase 3 wires up — the
+// plan's own Quota Architecture section describes exactly one check
+// ("is the product covered by an active, unlimited campaign? -> bypass
+// entirely"), not a second parallel bonus-grant path. Keeping the model to
+// what's actually wired rather than a field nobody reads.
+model FitCheckCampaign {
+  id             String        @id @default(uuid())
+  name           String
+  sponsorName    String
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  productIds String[] // scalar array, same convention as Product.images — a marketing config list, not a relation needing referential integrity
+  category   ProductCategory?
+
+  unlimitedFitChecks Boolean @default(true)
+
+  bannerImage    String?
+  headline       String
+  description    String?
+  ctaLabel       String?
+  ctaLink        String?
+  landingPageUrl String?
+
+  startDate DateTime?
+  endDate   DateTime?
+  priority  Int       @default(0)
+  active    Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tryOnLogs TryOnLog[] // which Fit Checks this campaign covered — see TryOnLog.fitCheckCampaignId
+
+  @@index([active, priority])
+  @@map("fit_check_campaigns")
 }
 
 // ---------------------------------------------------------------------------
@@ -1296,6 +1351,12 @@ model TryOnLog {
   userId    String?
   user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   sessionId String?
+
+  // Phase 3 — set only when this generation bypassed the daily quota via an
+  // active, unlimited FitCheckCampaign. onDelete: SetNull so a deleted
+  // campaign never takes historical Fit Check rows down with it.
+  fitCheckCampaignId String?
+  fitCheckCampaign   FitCheckCampaign? @relation(fields: [fitCheckCampaignId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

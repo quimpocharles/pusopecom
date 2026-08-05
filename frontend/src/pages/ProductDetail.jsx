@@ -17,6 +17,7 @@ import VirtualTryOn from '../components/products/VirtualTryOn';
 import ShareButton from '../components/products/ShareButton';
 import { TRYON_PRIMARY_BTN } from '../components/products/tryOn/tryOnButtonStyles';
 import productService from '../services/productService';
+import fitCheckCampaignService from '../services/fitCheckCampaignService';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import activityService from '../services/activityService';
@@ -191,6 +192,7 @@ const ProductDetail = () => {
   const [error, setError] = useState('');
   const [addedToCart, setAddedToCart] = useState(false);
   const [showTryOn, setShowTryOn] = useState(false);
+  const [sponsorship, setSponsorship] = useState(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
   const [selectedColor, setSelectedColor] = useState(null);
 
@@ -240,6 +242,15 @@ const ProductDetail = () => {
       setShowTryOn(true);
     }
   }, [product, searchParams]);
+
+  // Sponsored Fit Checks (Phase 3) — lets a fan see "Unlimited Fit Checks"
+  // before they even open the modal, not just once they're inside it.
+  useEffect(() => {
+    if (!product?.tryOnEnabled) return;
+    fitCheckCampaignService.getActiveForProduct(product._id)
+      .then((res) => setSponsorship(res.data))
+      .catch(() => setSponsorship(null));
+  }, [product]);
 
   // Fetch reviews
   useEffect(() => {
@@ -414,6 +425,11 @@ const ProductDetail = () => {
                   <SparklesIcon className="w-4 h-4" />
                   Fit Check
                 </button>
+              )}
+              {isTryOnEligible && sponsorship && (
+                <span className="absolute top-4 left-4 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-400 text-amber-950">
+                  Unlimited Fit Checks — Sponsored by {sponsorship.sponsorName}
+                </span>
               )}
             </div>
 

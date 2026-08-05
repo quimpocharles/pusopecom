@@ -31,6 +31,7 @@ const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
 const AdminProductForm = lazy(() => import('./pages/admin/AdminProductForm'));
 const AdminLeagues = lazy(() => import('./pages/admin/AdminLeagues'));
 const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
+const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
 const AdminReportArchive = lazy(() => import('./pages/admin/AdminReportArchive'));
@@ -103,6 +104,7 @@ function App() {
             <Route path="products/:id/edit" element={<AdminProductForm />} />
             <Route path="leagues" element={<AdminLeagues />} />
             <Route path="campaigns" element={<AdminCampaigns />} />
+            <Route path="fit-check-campaigns" element={<AdminFitCheckCampaigns />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="orders/:orderNumber" element={<AdminOrderDetail />} />
             <Route path="users" element={<AdminUsers />} />

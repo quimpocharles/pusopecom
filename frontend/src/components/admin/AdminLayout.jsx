@@ -15,7 +15,8 @@ import {
   Bars3Icon,
   XMarkIcon,
   SparklesIcon,
-  RectangleGroupIcon
+  RectangleGroupIcon,
+  MegaphoneIcon
 } from '@heroicons/react/24/outline';
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon },
   { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon },
   { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon },
+  { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon },
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
