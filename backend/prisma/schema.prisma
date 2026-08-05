@@ -424,6 +424,17 @@ model Order {
   shippingRegion  String?
   notes           String?
 
+  // Payment Platform Redesign, Phase 6 — which reminder tiers
+  // (lib/sendPaymentReminders.js's TIERS: '24h'/'6h'/'2h') have already
+  // been emailed for this order's payment deadline. Lives on Order, not
+  // Payment: the deadline being reminded about is the order's own
+  // retention window (createdAt + SiteSettings.orderRetentionHours — the
+  // real "you lose your reserved stock" cliff, Phase 4), not any one
+  // checkout session's ephemeral 1-hour Maya expiry. Regenerating a
+  // session (Phase 3) creates a new Payment row but must never reset which
+  // reminders already went out for this same underlying deadline.
+  paymentReminderTiers String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

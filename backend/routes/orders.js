@@ -13,7 +13,13 @@ import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/ship
 import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js';
 import * as paymentService from '../services/paymentService.js';
-import { sendOrderConfirmationEmail } from '../services/emailService.js';
+import {
+  sendOrderConfirmationEmail,
+  sendPaymentPendingEmail,
+  sendPaymentFailedEmail,
+  sendOrderStatusEmail,
+} from '../services/emailService.js';
+import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 
@@ -155,6 +161,17 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
         // Checkout module (Phase 5) would otherwise show a stale/paid order
         // for up to accountCache's 60s TTL.
         await accountCache.invalidateHome(order.user);
+
+        // Payment Platform Redesign, Phase 6 — the dormant Notification
+        // system's first real write-side trigger. Guest orders have no
+        // account/bell to notify, same guard as the bonus grant above.
+        notificationRepository.create({
+          userId: order.user,
+          type: 'order',
+          title: 'Payment confirmed',
+          body: `Order #${order.orderNumber} — payment received.`,
+          link: `/order/${order.orderNumber}`,
+        }).catch((err) => logger.error({ err, ...logContext }, 'Failed to create payment-succeeded notification'));
       }
     }
     return 'paid';
@@ -186,6 +203,28 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
       // Same reasoning as the succeeded branch above — this order just left
       // 'awaiting_payment', so Resume Checkout needs a fresh read.
       if (order.user) await accountCache.invalidateHome(order.user);
+
+      // Payment Platform Redesign, Phase 6 — fires for every trigger of
+      // this branch, including Phase 4's hourly sweep: a customer whose
+      // order quietly expired with nobody watching is exactly who most
+      // needs telling "your order wasn't lost, here's how to finish it."
+      const failureReason = gatewayStatus === 'expired' ? 'expired' : 'failed';
+      try {
+        await sendPaymentFailedEmail(order.email, order, failureReason);
+      } catch (emailError) {
+        logger.error({ err: emailError, ...logContext }, 'Failed to send payment-failed email');
+        Sentry.captureException(emailError);
+      }
+
+      if (order.user) {
+        notificationRepository.create({
+          userId: order.user,
+          type: 'order',
+          title: failureReason === 'expired' ? 'Payment session expired' : 'Payment failed',
+          body: `Order #${order.orderNumber} — ${failureReason === 'expired' ? 'your payment session expired' : "payment didn't go through"}. Your order is still here.`,
+          link: `/order/${order.orderNumber}`,
+        }).catch((err) => logger.error({ err, ...logContext }, 'Failed to create payment-failed notification'));
+      }
     }
     return 'failed';
   }
@@ -404,6 +443,17 @@ router.post('/',
           { orderNumber: order.orderNumber, paymentId: paymentReference, gateway: order.paymentMethod, customerId: req.user?._id },
           'Order created'
         );
+
+        // Payment Platform Redesign, Phase 6 — the only email a customer
+        // used to get was on success; a still-pending order (the normal
+        // case right after redirect to Maya) got silence. Fire-and-forget,
+        // same as the dual-write Payment create above — this is the
+        // customer's checkout-redirect response, the one path on the whole
+        // payment lifecycle where SMTP latency actually costs something.
+        sendPaymentPendingEmail(order.email, order).catch((emailError) => {
+          logger.error({ err: emailError, orderNumber: order.orderNumber }, 'Failed to send payment-pending email');
+          Sentry.captureException(emailError);
+        });
 
         res.status(201).json({
           success: true,
@@ -892,6 +942,27 @@ router.patch('/:id/status',
       }
 
       if (before.user) await accountCache.invalidateHome(before.user);
+
+      // Payment Platform Redesign, Phase 6 — one email/notification pair
+      // for every admin-driven fulfillment transition. sendOrderStatusEmail
+      // silently no-ops for statuses it doesn't cover (paid/awaiting_payment/
+      // expired/failed_payment already have their own dedicated emails
+      // elsewhere in the payment lifecycle), so this route doesn't need its
+      // own second copy of that status list to stay in sync with.
+      if (orderStatus && orderStatus !== before.orderStatus) {
+        sendOrderStatusEmail(order.email, order, orderStatus).catch((err) =>
+          logger.error({ err, orderNumber: order.orderNumber, orderStatus }, 'Failed to send order-status email')
+        );
+        if (order.user) {
+          notificationRepository.create({
+            userId: order.user,
+            type: 'order',
+            title: `Order ${orderStatus}`,
+            body: `Order #${order.orderNumber} is now ${orderStatus}.`,
+            link: `/order/${order.orderNumber}`,
+          }).catch((err) => logger.error({ err, orderNumber: order.orderNumber }, 'Failed to create order-status notification'));
+        }
+      }
 
       res.json({
         success: true,

@@ -21,6 +21,7 @@ import {
   generateAndSendQuarterlyBusinessReport,
 } from './services/dailyBusinessReportService.js';
 import { expireStaleOrders } from './lib/expireStaleOrders.js';
+import { sendPaymentReminders } from './lib/sendPaymentReminders.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -294,6 +295,27 @@ cron.schedule('0 * * * *', async () => {
     }
   } catch (error) {
     logger.error({ err: error }, 'Stale order expiration sweep failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Payment Platform Redesign, Phase 6 — 6h/24h/2h-before-deadline reminder
+// emails (see sendPaymentReminders.js for why those tiers are measured
+// against the order's retention deadline, not the 1-hour Maya session).
+// Offset 5 minutes past the expiration sweep above so the two hourly jobs
+// don't both hit the same awaiting_payment rows in the same tick.
+cron.schedule('5 * * * *', async () => {
+  try {
+    const result = await sendPaymentReminders();
+    if (result.remindersSent > 0 || result.errors.length > 0) {
+      logger.info(result, 'Payment reminder sweep completed');
+    }
+    for (const { orderNumber, error } of result.errors) {
+      logger.error({ err: error, orderNumber }, 'Failed to send a payment reminder');
+      Sentry.captureException(error);
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Payment reminder sweep failed');
     Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });

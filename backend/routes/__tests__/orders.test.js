@@ -27,6 +27,9 @@ vi.mock('../../services/paymentService.js', () => ({
 
 vi.mock('../../services/emailService.js', () => ({
   sendOrderConfirmationEmail: vi.fn().mockResolvedValue(undefined),
+  sendPaymentPendingEmail: vi.fn().mockResolvedValue(undefined),
+  sendPaymentFailedEmail: vi.fn().mockResolvedValue(undefined),
+  sendOrderStatusEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { default: ordersRouter } = await import('../orders.js');
@@ -95,6 +98,9 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   emailService.sendOrderConfirmationEmail.mockResolvedValue(undefined);
+  emailService.sendPaymentPendingEmail.mockResolvedValue(undefined);
+  emailService.sendPaymentFailedEmail.mockResolvedValue(undefined);
+  emailService.sendOrderStatusEmail.mockResolvedValue(undefined);
 });
 
 afterAll(async () => {
@@ -251,6 +257,11 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     expect(order.paymentStatus).toBe('failed'); // driven by the real Maya check, not the forged claim
     expect(order.orderStatus).toBe('failed_payment'); // Payment Platform Redesign, Phase 2 — previously left untouched
     expect(emailService.sendOrderConfirmationEmail).not.toHaveBeenCalled();
+    // Payment Platform Redesign, Phase 6 — 'failed', not 'expired' — a real
+    // gateway rejection, not a lapsed session.
+    expect(emailService.sendPaymentFailedEmail).toHaveBeenCalledWith(
+      order.email, expect.objectContaining({ orderNumber }), 'failed'
+    );
   }, 15000);
 
   it('a genuine webhook (real Maya status confirms success) marks the order paid, records a shipping event, and emails once', async () => {
@@ -397,6 +408,11 @@ describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => 
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
     expect(order.orderStatus).toBe('awaiting_payment');
+    // Payment Platform Redesign, Phase 6 — the only email that used to fire
+    // was on success; a still-pending order (the normal case) got silence.
+    expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledWith(
+      order.email, expect.objectContaining({ orderNumber: order.orderNumber })
+    );
   }, 15000);
 
   it('an expired checkout session marks the order expired, distinct from a failed one', async () => {
@@ -411,6 +427,11 @@ describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => 
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     expect(order.paymentStatus).toBe('failed'); // PaymentStatus stays the coarser 2-state-terminal vocabulary
     expect(order.orderStatus).toBe('expired'); // OrderStatus carries the real distinction
+    // Payment Platform Redesign, Phase 6 — 'expired' reason, distinct copy
+    // from a real gateway failure ("session expired" vs "didn't go through").
+    expect(emailService.sendPaymentFailedEmail).toHaveBeenCalledWith(
+      order.email, expect.objectContaining({ orderNumber }), 'expired'
+    );
   }, 20000);
 
   it('PATCH /:id/status 400s on an orderStatus value outside the valid set, and never touches the order', async () => {
@@ -645,6 +666,25 @@ describe('admin order routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.orderStatus).toBe('shipped');
     expect(res.body.data.trackingNumber).toBe('TRACK123');
+    // Payment Platform Redesign, Phase 6 — one parameterized email for
+    // every admin-driven fulfillment transition.
+    expect(emailService.sendOrderStatusEmail).toHaveBeenCalledWith(
+      order.email, expect.objectContaining({ orderNumber: order.orderNumber }), 'shipped'
+    );
+  }, 15000);
+
+  it('PATCH /:id/status does not email when orderStatus is unchanged (courier/tracking-only update)', async () => {
+    const product = await makeProduct({ name: 'AdminStatusUnchanged' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin2', redirectUrl: 'https://pay.example/chk_admin2' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    emailService.sendOrderStatusEmail.mockClear();
+
+    const res = await request(app)
+      .patch(`/api/orders/${order.id}/status`)
+      .send({ orderStatus: order.orderStatus, courier: 'J&T' });
+    expect(res.status).toBe(200);
+    expect(emailService.sendOrderStatusEmail).not.toHaveBeenCalled();
   }, 15000);
 
   it('PATCH /:id/status 404s for a non-existent order', async () => {

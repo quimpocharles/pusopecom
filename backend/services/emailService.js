@@ -177,46 +177,51 @@ export const sendPasswordResetEmail = async (email, firstName, resetToken) => {
   });
 };
 
+// ── Shared order rendering (Order Confirmation + Phase 6's Payment Pending/
+// Reminder/Failed emails all show the same items/address block) ──────────────
+const orderItemsRows = (order) => order.items.map(item => `
+  <tr>
+    <td style="padding:12px 0;border-bottom:1px solid ${BORDER};font-size:14px;color:rgba(255,255,255,0.80);">
+      <span style="font-weight:600;color:${WHITE};">${item.name}</span><br>
+      <span style="font-size:12px;color:rgba(255,255,255,0.40);">
+        Size: ${item.size}${item.color ? ` &nbsp;/&nbsp; ${item.color}` : ''} &nbsp;&middot;&nbsp; Qty: ${item.quantity}
+      </span>
+    </td>
+    <td style="padding:12px 0;border-bottom:1px solid ${BORDER};text-align:right;font-size:14px;
+               font-weight:600;color:${WHITE};white-space:nowrap;">
+      &#8369;${(item.price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+    </td>
+  </tr>
+`).join('');
+
+const orderAddressBlock = (order) => order.shippingMethod === 'venue_pickup' ? `
+  ${label('Pick-Up Venue')}
+  ${value(`${order.shippingAddress.city}<br><span style="color:rgba(255,255,255,0.50);font-size:13px;">${order.shippingAddress.address}</span>`)}
+` : `
+  ${label('Ship To')}
+  ${value(`
+    ${order.shippingAddress.fullName}<br>
+    <span style="color:rgba(255,255,255,0.50);font-size:13px;">
+      ${order.shippingAddress.phone}<br>
+      ${order.shippingAddress.address}<br>
+      ${order.shippingAddress.city}, ${order.shippingAddress.province} ${order.shippingAddress.zipCode}
+    </span>
+  `)}
+`;
+
+const orderShippingLabel = (order) => order.shippingMethod === 'venue_pickup'
+  ? '<span style="color:#a78bfa;">FREE &nbsp;&middot;&nbsp; Venue Pick-Up</span>'
+  : (order.shippingFee === 0
+      ? '<span style="color:#34d399;">FREE</span>'
+      : `&#8369;${order.shippingFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+
 // ── Order confirmation email ───────────────────────────────────────────────────
 export const sendOrderConfirmationEmail = async (email, order) => {
   const orderUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
-  const isPickup  = order.shippingMethod === 'venue_pickup';
-
-  const itemsRows = order.items.map(item => `
-    <tr>
-      <td style="padding:12px 0;border-bottom:1px solid ${BORDER};font-size:14px;color:rgba(255,255,255,0.80);">
-        <span style="font-weight:600;color:${WHITE};">${item.name}</span><br>
-        <span style="font-size:12px;color:rgba(255,255,255,0.40);">
-          Size: ${item.size}${item.color ? ` &nbsp;/&nbsp; ${item.color}` : ''} &nbsp;&middot;&nbsp; Qty: ${item.quantity}
-        </span>
-      </td>
-      <td style="padding:12px 0;border-bottom:1px solid ${BORDER};text-align:right;font-size:14px;
-                 font-weight:600;color:${WHITE};white-space:nowrap;">
-        &#8369;${(item.price * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-      </td>
-    </tr>
-  `).join('');
-
-  const addressBlock = isPickup ? `
-    ${label('Pick-Up Venue')}
-    ${value(`${order.shippingAddress.city}<br><span style="color:rgba(255,255,255,0.50);font-size:13px;">${order.shippingAddress.address}</span>`)}
-  ` : `
-    ${label('Ship To')}
-    ${value(`
-      ${order.shippingAddress.fullName}<br>
-      <span style="color:rgba(255,255,255,0.50);font-size:13px;">
-        ${order.shippingAddress.phone}<br>
-        ${order.shippingAddress.address}<br>
-        ${order.shippingAddress.city}, ${order.shippingAddress.province} ${order.shippingAddress.zipCode}
-      </span>
-    `)}
-  `;
-
-  const shippingLabel = isPickup
-    ? '<span style="color:#a78bfa;">FREE &nbsp;&middot;&nbsp; Venue Pick-Up</span>'
-    : (order.shippingFee === 0
-        ? '<span style="color:#34d399;">FREE</span>'
-        : `&#8369;${order.shippingFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+  const itemsRows = orderItemsRows(order);
+  const addressBlock = orderAddressBlock(order);
+  const shippingLabel = orderShippingLabel(order);
+  const isPickup = order.shippingMethod === 'venue_pickup';
 
   const content = `
     ${h2('Order Confirmed!')}
@@ -282,6 +287,156 @@ export const sendOrderConfirmationEmail = async (email, order) => {
     from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: `Order Confirmed — ${order.orderNumber}`,
+    html: getEmailTemplate(content),
+  });
+};
+
+// ── Payment Platform Redesign, Phase 6 ──────────────────────────────────────────
+// Payment Pending — sent once, immediately at order creation. The original
+// spec listed "Order Created" and "Payment Pending" as separate emails, but
+// for every real order today those two events happen in the same request
+// (checkout always starts a payment session) — sending two emails back to
+// back for one moment would just be noise. One honest email covering both.
+export const sendPaymentPendingEmail = async (email, order) => {
+  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const itemsRows = orderItemsRows(order);
+  const addressBlock = orderAddressBlock(order);
+  const shippingLabel = orderShippingLabel(order);
+
+  const content = `
+    ${h2('Complete Your Payment')}
+    ${p('We\'ve saved your order and reserved your items — just finish payment to lock it in.')}
+
+    ${divider()}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td style="width:50%;vertical-align:top;">
+          ${label('Order Number')}
+          ${value(`<span style="font-family:monospace;letter-spacing:0.04em;">${order.orderNumber}</span>`)}
+        </td>
+        <td style="width:50%;vertical-align:top;">
+          ${label('Payment Method')}
+          ${value(order.paymentMethod)}
+        </td>
+      </tr>
+    </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+      ${itemsRows}
+      <tr>
+        <td style="padding:10px 0 4px;font-size:13px;color:rgba(255,255,255,0.45);">Shipping</td>
+        <td style="padding:10px 0 4px;text-align:right;font-size:13px;">${shippingLabel}</td>
+      </tr>
+      <tr>
+        <td style="padding:14px 0 0;border-top:1px solid ${BORDER};font-size:16px;font-weight:700;color:${WHITE};">Total</td>
+        <td style="padding:14px 0 0;border-top:1px solid ${BORDER};text-align:right;font-size:16px;font-weight:700;color:${WHITE};">
+          &#8369;${order.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+        </td>
+      </tr>
+    </table>
+
+    ${divider()}
+    ${addressBlock}
+    ${pillButton(payUrl, 'Complete Payment')}
+    ${divider()}
+    ${p('Your items are reserved, not guaranteed forever — if payment isn\'t completed, the reservation eventually releases and someone else can buy them. We\'ll remind you before that happens.', 'font-size:13px;')}
+  `;
+
+  await transporter.sendMail({
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Complete Your Payment — ${order.orderNumber}`,
+    html: getEmailTemplate(content),
+  });
+};
+
+// Payment Reminder — one template, reused for every tier in
+// lib/sendPaymentReminders.js's TIERS ('24h'/'6h'/'2h' remaining until the
+// order's own retention deadline, not the 1-hour Maya session — see that
+// file's comment for why).
+export const sendPaymentReminderEmail = async (email, order, timeRemainingLabel) => {
+  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const content = `
+    ${h2('Your Order Is Waiting')}
+    ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong> still needs payment — you have <strong style="color:${WHITE};">${timeRemainingLabel}</strong> left before your reserved items are released.`)}
+    ${pillButton(payUrl, 'Complete Payment')}
+    ${smallLink(payUrl)}
+    ${divider()}
+    ${p(`Total due: <strong style="color:${WHITE};">&#8369;${order.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong>`, 'font-size:13px;')}
+  `;
+
+  await transporter.sendMail({
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Reminder: Complete Payment (${timeRemainingLabel} left) — ${order.orderNumber}`,
+    html: getEmailTemplate(content),
+  });
+};
+
+// Payment Failed — covers both a real gateway failure and a lapsed session
+// (`reason`: 'failed' | 'expired'). Same "this is recoverable" tone as
+// OrderConfirmation.jsx's own pending-state copy (Phase 3) — never a dead
+// end, the order and its reserved items are still there to pay for.
+export const sendPaymentFailedEmail = async (email, order, reason) => {
+  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const isExpired = reason === 'expired';
+
+  const content = `
+    ${h2(isExpired ? 'Your Payment Session Expired' : "Payment Didn't Go Through")}
+    ${p(isExpired
+      ? 'No problem — your order wasn\'t lost. Generate a new payment link to finish checking out.'
+      : 'No problem — your order is still here. Try completing payment again below.')}
+    ${pillButton(payUrl, 'Try Again')}
+    ${smallLink(payUrl)}
+    ${divider()}
+    ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong> &nbsp;&middot;&nbsp; &#8369;${order.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'font-size:13px;')}
+  `;
+
+  await transporter.sendMail({
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `${isExpired ? 'Payment Session Expired' : 'Payment Failed'} — ${order.orderNumber}`,
+    html: getEmailTemplate(content),
+  });
+};
+
+// Order status update — one parameterized template for every post-payment
+// fulfillment transition an admin sets via PATCH /:id/status, rather than
+// five near-identical hand-written emails (processing/packed/shipped/
+// delivered/cancelled/returned all share this exact shape — the second
+// through sixth real use case, not a speculative abstraction).
+const ORDER_STATUS_EMAIL_COPY = {
+  processing: { title: 'Your Order Is Being Processed', body: 'We\'re getting your order ready.' },
+  packed: { title: 'Your Order Has Been Packed', body: 'Your order is packed and will ship soon.' },
+  shipped: { title: 'Your Order Has Shipped', body: 'Your order is on its way.' },
+  delivered: { title: 'Your Order Was Delivered', body: 'Your order has arrived — enjoy!' },
+  cancelled: { title: 'Your Order Was Cancelled', body: 'This order has been cancelled. Contact support if this seems wrong.' },
+  returned: { title: 'Your Return Was Received', body: 'We\'ve received your returned order.' },
+};
+
+export const sendOrderStatusEmail = async (email, order, status) => {
+  const copy = ORDER_STATUS_EMAIL_COPY[status];
+  if (!copy) return; // not a status this email covers — caller already guards, this is defense in depth
+
+  const orderUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const trackingLine = status === 'shipped' && order.trackingNumber
+    ? p(`Tracking: <strong style="color:${WHITE};">${order.trackingNumber}</strong>${order.courier ? ` via ${order.courier}` : ''}`, 'font-size:13px;')
+    : '';
+
+  const content = `
+    ${h2(copy.title)}
+    ${p(copy.body)}
+    ${trackingLine}
+    ${pillButton(orderUrl, 'View Order')}
+    ${divider()}
+    ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong>`, 'font-size:13px;')}
+  `;
+
+  await transporter.sendMail({
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `${copy.title} — ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -416,7 +571,7 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
     ${breakdownTable(report.tryOn.mostTriedOn.map((x) => [x.productName ?? 'Unknown', x.count]), 'Product', 'Sessions')}
 
     ${divider()}
-    ${p('Checkout Abandonment, Refund Requests, and Support Issues are not shown — not yet tracked by the platform.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
+    ${p('Refund Requests and Support Issues are not shown — not yet tracked by the platform. Checkout Abandonment now has its own dedicated report (Admin &rarr; Reports &rarr; Checkout Recovery), not folded into this daily digest.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
   `;
 
   await transporter.sendMail({
@@ -431,5 +586,9 @@ export default {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOrderConfirmationEmail,
+  sendPaymentPendingEmail,
+  sendPaymentReminderEmail,
+  sendPaymentFailedEmail,
+  sendOrderStatusEmail,
   sendDailyBusinessReportEmail,
 };

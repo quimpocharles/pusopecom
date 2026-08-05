@@ -14,6 +14,7 @@ import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepo from '../fitCheckCampaignRepository.js';
 import * as paymentRepo from '../paymentRepository.js';
 import { expireStaleOrders } from '../../lib/expireStaleOrders.js';
+import { sendPaymentReminders } from '../../lib/sendPaymentReminders.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -1270,6 +1271,88 @@ describe('expireStaleOrders — Payment Platform Redesign, Phase 4', () => {
     try {
       const result = await expireStaleOrders();
       expect(result).toEqual({ skipped: true, expiredCount: 0, candidateCount: 0, errors: [] });
+    } finally {
+      await siteSettingsRepo.update({ payment: { orderExpirationEnabled: before.payment.orderExpirationEnabled } });
+    }
+  }, 15000);
+});
+
+async function makeReminderTestOrder(hoursAgo, extra = {}) {
+  return prisma.order.create({
+    data: {
+      orderNumber: `PS-REMINDERTEST-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      email: 'reminder-test@example.com',
+      shipToFullName: 'Test', shipToPhone: '09171234567', shipToAddress: '1 St',
+      shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+      subtotal: 500, total: 500,
+      paymentStatus: 'pending',
+      createdAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000),
+      ...extra,
+    },
+  });
+}
+
+describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
+  it('sends the 24h tier for an order that just crossed 24h remaining (default 48h retention), and records it', async () => {
+    // 25h old under a 48h window = 23h remaining — past the 24h threshold.
+    const order = await makeReminderTestOrder(25);
+
+    try {
+      const result = await sendPaymentReminders();
+      expect(result.skipped).toBe(false);
+      expect(result.remindersSent).toBeGreaterThanOrEqual(1);
+
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual(['24h']);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 20000);
+
+  it('sends nothing for an order still well inside every tier window', async () => {
+    const order = await makeReminderTestOrder(5); // 43h remaining — under no threshold yet
+
+    try {
+      await sendPaymentReminders();
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual([]);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('never re-sends a tier that was already recorded — idempotent across runs', async () => {
+    const order = await makeReminderTestOrder(25, { paymentReminderTiers: ['24h'] });
+
+    try {
+      await sendPaymentReminders();
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual(['24h']); // unchanged — not appended again
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('a cron gap that skips past multiple tiers sends only the most urgent, but records all of them', async () => {
+    // 47h old under a 48h window = 1h remaining — past 24h, 6h, AND 2h at once.
+    const order = await makeReminderTestOrder(47);
+
+    try {
+      await sendPaymentReminders();
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual(['24h', '6h', '2h']);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('skips the entire sweep when orderExpirationEnabled is off — reminders reference the same deadline the sweep enforces', async () => {
+    const before = await siteSettingsRepo.get();
+    await siteSettingsRepo.update({ payment: { orderExpirationEnabled: false } });
+
+    try {
+      const result = await sendPaymentReminders();
+      expect(result).toEqual({ skipped: true, remindersSent: 0, candidateCount: 0, errors: [] });
     } finally {
       await siteSettingsRepo.update({ payment: { orderExpirationEnabled: before.payment.orderExpirationEnabled } });
     }
