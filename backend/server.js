@@ -126,13 +126,15 @@ app.use('/api/auth/', authLimiter);
 // cost safety net is a different concern from any one user's own quota.
 // skip also excludes anything but the generation POST — GET /api/tryon/quota
 // is a cheap, frequently-polled status read that shouldn't spend this
-// shared budget.
+// shared budget, and /admin/* actions (Phase 2's manual bonus grant) carry
+// no AI generation cost at all, so they don't belong against this budget
+// either.
 const tryonGlobalLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 500, // across all users
   keyGenerator: () => 'global_tryon',
   message: 'Fit Check is temporarily unavailable due to high demand. Please try again later.',
-  skip: (req) => isDev || req.method !== 'POST',
+  skip: (req) => isDev || req.method !== 'POST' || req.path.startsWith('/admin/'),
   store: redisStore('rl:tryon-global:')
 });
 

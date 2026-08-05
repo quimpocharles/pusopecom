@@ -36,6 +36,15 @@ function toNestedShape(row) {
       dailyLimitRegistered: row.fitCheckDailyLimitRegistered,
       dailyLimitPremium: row.fitCheckDailyLimitPremium,
       guestRetentionHours: row.fitCheckGuestRetentionHours,
+      // Phase 2 — Bonus Fit Checks. Nested one level deeper than the daily
+      // limits above since these govern a distinct mechanic (a durable
+      // top-up ledger, not the resetting daily counter).
+      bonus: {
+        enabled: row.fitCheckBonusEnabled,
+        profileComplete: row.fitCheckBonusProfileComplete,
+        emailVerified: row.fitCheckBonusEmailVerified,
+        firstPurchase: row.fitCheckBonusFirstPurchase,
+      },
     },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -49,7 +58,11 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
   const merged = {
     tryOn: { ...existingNested.tryOn, ...tryOn },
     tryOnAd: { ...existingNested.tryOnAd, ...tryOnAd },
-    fitCheck: { ...existingNested.fitCheck, ...fitCheck },
+    fitCheck: {
+      ...existingNested.fitCheck,
+      ...fitCheck,
+      bonus: { ...existingNested.fitCheck.bonus, ...fitCheck?.bonus },
+    },
   };
   return {
     tryOnTitle: merged.tryOn.title,
@@ -62,6 +75,10 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
     fitCheckDailyLimitRegistered: merged.fitCheck.dailyLimitRegistered,
     fitCheckDailyLimitPremium: merged.fitCheck.dailyLimitPremium,
     fitCheckGuestRetentionHours: merged.fitCheck.guestRetentionHours,
+    fitCheckBonusEnabled: merged.fitCheck.bonus.enabled,
+    fitCheckBonusProfileComplete: merged.fitCheck.bonus.profileComplete,
+    fitCheckBonusEmailVerified: merged.fitCheck.bonus.emailVerified,
+    fitCheckBonusFirstPurchase: merged.fitCheck.bonus.firstPurchase,
   };
 }
 

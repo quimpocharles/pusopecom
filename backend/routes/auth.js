@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { body, validationResult } from 'express-validator';
 import * as userRepository from '../repositories/userRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
+import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
@@ -133,6 +134,10 @@ router.get('/verify-email', async (req, res) => {
       emailVerified: true,
       verificationToken: null
     });
+
+    fitCheckBonus.grantEventBonus(user._id, 'email_verified').catch((err) =>
+      logger.error({ err }, 'Fit Check email-verified bonus grant failed')
+    );
 
     res.json({
       success: true,
@@ -410,6 +415,15 @@ router.put('/complete-profile', authenticate, async (req, res) => {
 
     if (address) {
       user = await userRepository.addAddress(user._id, { ...address, isDefault: true });
+    }
+
+    // "Complete" means both halves of what this form collects actually
+    // landed on the account — a request that only touched one field (or
+    // was called with nothing new to save) isn't a genuine completion.
+    if (user.phone && user.addresses?.length > 0) {
+      fitCheckBonus.grantEventBonus(user._id, 'profile_complete').catch((err) =>
+        logger.error({ err }, 'Fit Check profile-complete bonus grant failed')
+      );
     }
 
     res.json({

@@ -58,6 +58,22 @@ enum SubscriptionTier {
   premium
 }
 
+// profile_complete/email_verified/first_purchase/admin_grant are wired to a
+// real trigger as of Phase 2 of the Fit Check engagement plan. birthday,
+// referral, and campaign are reserved the same way SubscriptionTier.premium
+// is — the enum slot exists so later phases don't need an enum-alter
+// migration, but nothing grants them yet (no birthday field on User, no
+// referral system, and campaign awaits FitCheckCampaign in Phase 3).
+enum BonusFitCheckReason {
+  profile_complete
+  email_verified
+  first_purchase
+  birthday
+  referral
+  admin_grant
+  campaign
+}
+
 enum ProductCategory {
   jersey
   tshirt
@@ -171,6 +187,7 @@ model User {
   notifications         Notification[]
   tryOnLogs             TryOnLog[]
   following             Follow[]
+  bonusFitCheckGrants   BonusFitCheckGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -710,10 +727,46 @@ model SiteSettings {
   // cleanup cron; guests get a much shorter, deliberately short-lived window.
   fitCheckGuestRetentionHours  Int @default(24)
 
+  // Bonus Fit Checks (Phase 2) — a global kill switch plus one amount per
+  // reason that actually has a live trigger (see BonusFitCheckGrant).
+  // birthday/referral/campaign have no config knob yet because nothing
+  // grants them yet — adding a number nobody reads would violate "no
+  // abstraction before the second real use case."
+  fitCheckBonusEnabled         Boolean @default(true)
+  fitCheckBonusProfileComplete Int     @default(1)
+  fitCheckBonusEmailVerified   Int     @default(1)
+  fitCheckBonusFirstPurchase   Int     @default(2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("site_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Bonus Fit Checks — Phase 2 of the Fit Check engagement plan. An auditable
+// grant ledger, not just a bigger daily number: "amount" is how many this
+// grant is worth, "consumedCount" tracks how many of those have been drawn
+// down. Balance = amount - consumedCount, summed across every grant a user
+// has. Consumed only after today's free daily allowance runs out (see
+// lib/fitCheckQuota.js) — a durable top-up, not a second daily counter.
+// Guests never appear here: every reason requires a real account.
+// ---------------------------------------------------------------------------
+model BonusFitCheckGrant {
+  id            String              @id @default(uuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason        BonusFitCheckReason
+  amount        Int
+  consumedCount Int                 @default(0)
+  // Free-text context for admin_grant (why a human decided to grant this) —
+  // null for every event-triggered reason, which is self-explanatory from
+  // `reason` alone.
+  note          String?
+  grantedAt     DateTime            @default(now())
+
+  @@index([userId])
+  @@map("bonus_fit_check_grants")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import authService from '../../services/authService';
+import BonusFitCheckGrantModal from '../../components/admin/BonusFitCheckGrantModal';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -7,6 +8,7 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
+  const [bonusModalUser, setBonusModalUser] = useState(null);
 
   const fetchUsers = useCallback(async (page = 1) => {
     setLoading(true);
@@ -71,18 +73,19 @@ const AdminUsers = () => {
                 <th className="px-6 py-3">Provider</th>
                 <th className="px-6 py-3">Verified</th>
                 <th className="px-6 py-3">Joined</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={7} className="px-6 py-12 text-center">
                     <div className="w-6 h-6 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
                     No users found
                   </td>
                 </tr>
@@ -131,6 +134,14 @@ const AdminUsers = () => {
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setBonusModalUser(user)}
+                        className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                      >
+                        Grant Fit Checks
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -163,6 +174,12 @@ const AdminUsers = () => {
           </div>
         )}
       </div>
+
+      <BonusFitCheckGrantModal
+        open={!!bonusModalUser}
+        onClose={() => setBonusModalUser(null)}
+        user={bonusModalUser}
+      />
     </div>
   );
 };

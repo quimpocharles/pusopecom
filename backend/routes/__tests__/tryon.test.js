@@ -27,14 +27,35 @@ vi.mock('../../lib/fitCheckQuota.js', () => ({
   QuotaExceededError: FakeQuotaExceededError,
 }));
 
+// None of this file's existing tests send an Authorization header, so
+// req.user stays undefined either way — this mock only exists to make the
+// new admin-gated routes below testable without a real signed JWT, and
+// matches the always-admin convention already used in
+// routes/__tests__/settings.test.js.
+vi.mock('../../middleware/auth.js', () => ({
+  optionalAuth: (req, res, next) => next(),
+  authenticate: (req, res, next) => { req.user = { _id: 'test-admin', role: 'admin' }; next(); },
+  isAdmin: (req, res, next) => next(),
+}));
+
+vi.mock('../../repositories/bonusFitCheckGrantRepository.js', () => ({
+  findByUser: vi.fn(),
+  getBalance: vi.fn(),
+  grant: vi.fn(),
+}));
+
 const { default: tryonRouter } = await import('../tryon.js');
 const replicateService = await import('../../services/replicateService.js');
 const wavespeedService = await import('../../services/wavespeedService.js');
 const axios = (await import('axios')).default;
 const cloudinary = (await import('../../config/cloudinary.js')).default;
 const fitCheckQuota = await import('../../lib/fitCheckQuota.js');
+const bonusFitCheckGrantRepository = await import('../../repositories/bonusFitCheckGrantRepository.js');
 
 const app = express();
+// Only the new JSON admin routes (bonus grant) need this — the existing
+// generation endpoint parses multipart form data itself via multer.
+app.use(express.json());
 app.use('/api/tryon', tryonRouter);
 
 const originalWavespeedKey = process.env.WAVESPEED_API_KEY;
@@ -340,5 +361,44 @@ describe('GET /tryon/quota', () => {
     expect(fitCheckQuota.getStatus).toHaveBeenCalledWith(
       expect.objectContaining({ userId: undefined, sessionId: 'test-guest-session-456' })
     );
+  });
+});
+
+describe('GET /tryon/admin/bonus-grants/:userId', () => {
+  it('returns the grant history and balance for a user (admin-gated)', async () => {
+    const grants = [{ id: 'g1', reason: 'admin_grant', amount: 3, consumedCount: 1 }];
+    bonusFitCheckGrantRepository.findByUser.mockResolvedValueOnce(grants);
+    bonusFitCheckGrantRepository.getBalance.mockResolvedValueOnce(2);
+
+    const res = await request(app).get('/api/tryon/admin/bonus-grants/user-123');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ grants, balance: 2 });
+    expect(bonusFitCheckGrantRepository.findByUser).toHaveBeenCalledWith('user-123');
+  });
+});
+
+describe('POST /tryon/admin/bonus-grant', () => {
+  it('grants a positive whole-number amount with reason admin_grant', async () => {
+    bonusFitCheckGrantRepository.grant.mockResolvedValueOnce({ id: 'g2', reason: 'admin_grant', amount: 3 });
+
+    const res = await request(app)
+      .post('/api/tryon/admin/bonus-grant')
+      .send({ userId: 'user-123', amount: 3, note: 'giveaway' });
+
+    expect(res.status).toBe(201);
+    expect(bonusFitCheckGrantRepository.grant).toHaveBeenCalledWith('user-123', 'admin_grant', 3, { note: 'giveaway' });
+  });
+
+  it('400s on a missing userId or a non-positive amount, without touching the ledger', async () => {
+    const noUser = await request(app).post('/api/tryon/admin/bonus-grant').send({ amount: 3 });
+    expect(noUser.status).toBe(400);
+
+    const zeroAmount = await request(app).post('/api/tryon/admin/bonus-grant').send({ userId: 'user-123', amount: 0 });
+    expect(zeroAmount.status).toBe(400);
+
+    const fractional = await request(app).post('/api/tryon/admin/bonus-grant').send({ userId: 'user-123', amount: 1.5 });
+    expect(fractional.status).toBe(400);
+
+    expect(bonusFitCheckGrantRepository.grant).not.toHaveBeenCalled();
   });
 });

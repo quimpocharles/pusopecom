@@ -13,6 +13,7 @@ import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
 import * as paymentService from '../services/paymentService.js';
 import { sendOrderConfirmationEmail } from '../services/emailService.js';
 import * as accountCache from '../lib/accountCache.js';
+import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 
 const router = express.Router();
 
@@ -93,6 +94,20 @@ async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
       } catch (emailError) {
         logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
         Sentry.captureException(emailError);
+      }
+
+      // Guest checkouts have no account to grant against. orderRepository's
+      // Mongoose-compatibility layer (withRelationFallback) collapses the
+      // raw userId scalar into `order.user` (a bare id string here, since
+      // `user` isn't in this repo's DEFAULT_INCLUDE) and deletes `userId`
+      // outright — `order.user` is the field that actually exists on this
+      // object, not `order.userId`. grantEventBonus's own once-per-user
+      // idempotency (not an order-history query) is what makes this
+      // correctly a "first purchase only" bonus.
+      if (order.user) {
+        fitCheckBonus.grantEventBonus(order.user, 'first_purchase').catch((err) =>
+          logger.error({ err, ...logContext }, 'Fit Check first-purchase bonus grant failed')
+        );
       }
     }
     return 'paid';

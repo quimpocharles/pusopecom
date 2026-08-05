@@ -338,6 +338,70 @@ describe('POST /orders/:orderNumber/verify-payment', () => {
   });
 });
 
+describe('Fit Check bonus grants (Phase 2)', () => {
+  it("grants the first-purchase bonus when a registered user's order resolves to paid, but only once", async () => {
+    const buyer = await prisma.user.create({
+      data: { email: `bonus-first-purchase-${Date.now()}@test.local`, firstName: 'Bonus', lastName: 'Buyer' },
+    });
+    createdUserIds.push(buyer.id);
+
+    const product = await makeProduct({ name: 'FirstPurchaseBonus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fp', redirectUrl: 'https://pay.example/chk_fp' });
+    const createRes = await request(app)
+      .post('/api/orders')
+      .set('x-test-userid', buyer.id)
+      .send(validOrderPayload(product));
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    await request(app)
+      .post(`/api/orders/${createRes.body.data.orderNumber}/verify-payment`)
+      .set('x-test-userid', buyer.id);
+
+    // Fire-and-forget, same pattern as the guest-migration/email-verified
+    // bonus tests — poll briefly rather than assuming it's already committed.
+    let grant = null;
+    for (let i = 0; i < 20; i++) {
+      grant = await prisma.bonusFitCheckGrant.findFirst({ where: { userId: buyer.id, reason: 'first_purchase' } });
+      if (grant) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(grant).not.toBeNull();
+    expect(grant.amount).toBeGreaterThan(0);
+
+    // A second paid order for the same buyer must not grant a second time —
+    // grantEventBonus's own once-per-user idempotency, not an order-history
+    // query, is what makes this correctly "first purchase only."
+    const product2 = await makeProduct({ name: 'SecondPurchase' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fp2', redirectUrl: 'https://pay.example/chk_fp2' });
+    const createRes2 = await request(app)
+      .post('/api/orders')
+      .set('x-test-userid', buyer.id)
+      .send(validOrderPayload(product2));
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    await request(app)
+      .post(`/api/orders/${createRes2.body.data.orderNumber}/verify-payment`)
+      .set('x-test-userid', buyer.id);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const grants = await prisma.bonusFitCheckGrant.findMany({ where: { userId: buyer.id, reason: 'first_purchase' } });
+    expect(grants).toHaveLength(1);
+  }, 40000);
+
+  it('a guest checkout (no account) never grants a first-purchase bonus', async () => {
+    const product = await makeProduct({ name: 'GuestNoBonus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_guest_bonus', redirectUrl: 'https://pay.example/chk_guest_bonus' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product)); // no x-test-userid — a guest order
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    const res = await request(app).post(`/api/orders/${createRes.body.data.orderNumber}/verify-payment`);
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(res.body.data.paymentStatus).toBe('paid');
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    expect(order.userId).toBeNull(); // nothing to grant against — grantEventBonus is never even reachable
+  }, 20000);
+});
+
 describe('GET /orders/:orderNumber — access control', () => {
   it('a guest (no owning user) order is readable by anyone', async () => {
     const product = await makeProduct({ name: 'GuestOrder' });

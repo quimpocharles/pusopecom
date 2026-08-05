@@ -10,6 +10,7 @@ import * as teamRepo from '../teamRepository.js';
 import * as athleteAffiliationRepo from '../athleteAffiliationRepository.js';
 import * as tryOnLogRepo from '../tryOnLogRepository.js';
 import * as userActivityRepo from '../userActivityRepository.js';
+import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -848,4 +849,109 @@ describe('deleteOlderThan — the TTL-index replacement for TryOnLog/UserActivit
       expect(await tx.userActivity.findUnique({ where: { id: old.id } })).toBeNull();
       expect(await tx.userActivity.findUnique({ where: { id: recent._id } })).not.toBeNull();
     }), 15000);
+});
+
+describe('bonusFitCheckGrantRepository — Fit Check Phase 2 ledger', () => {
+  it('grant() is idempotent for once-per-user reasons but allows repeat admin_grant rows', () =>
+    withRollback(async (tx) => {
+      const user = await userRepo.create(
+        { email: `bonus-${Date.now()}@example.com`, firstName: 'Bonus', lastName: 'Test', password: 'x' },
+        { client: tx }
+      );
+
+      const first = await bonusFitCheckGrantRepo.grant(user._id, 'profile_complete', 1, { client: tx });
+      const second = await bonusFitCheckGrantRepo.grant(user._id, 'profile_complete', 1, { client: tx });
+      expect(first).not.toBeNull();
+      expect(second).toBeNull(); // already granted once — no-op, not a duplicate row
+
+      const firstAdminGrant = await bonusFitCheckGrantRepo.grant(user._id, 'admin_grant', 3, { client: tx, note: 'gesture' });
+      const secondAdminGrant = await bonusFitCheckGrantRepo.grant(user._id, 'admin_grant', 2, { client: tx });
+      expect(firstAdminGrant).not.toBeNull();
+      expect(secondAdminGrant).not.toBeNull(); // an admin can grant to the same user more than once, on purpose
+
+      const grants = await tx.bonusFitCheckGrant.findMany({ where: { userId: user._id } });
+      expect(grants).toHaveLength(3); // 1 profile_complete + 2 admin_grant
+    }), 15000);
+
+  it('getBalance() sums (amount - consumedCount) across every grant, never negative', () =>
+    withRollback(async (tx) => {
+      const user = await userRepo.create(
+        { email: `bonus-balance-${Date.now()}@example.com`, firstName: 'Bonus', lastName: 'Balance', password: 'x' },
+        { client: tx }
+      );
+      await tx.bonusFitCheckGrant.create({ data: { userId: user._id, reason: 'profile_complete', amount: 1, consumedCount: 1 } }); // fully used
+      await tx.bonusFitCheckGrant.create({ data: { userId: user._id, reason: 'email_verified', amount: 1, consumedCount: 0 } });
+      await tx.bonusFitCheckGrant.create({ data: { userId: user._id, reason: 'admin_grant', amount: 3, consumedCount: 1 } });
+
+      const balance = await bonusFitCheckGrantRepo.getBalance(user._id, { client: tx });
+      expect(balance).toBe(3); // 0 + 1 + 2
+    }), 15000);
+});
+
+// consumeOne() opens its own real transaction internally (the same
+// FOR-UPDATE-locked-atomic-conditional-update discipline as
+// productRepository.decrementStock) — it can't be driven through
+// withRollback's own enclosing transaction the way the plain CRUD above
+// can, and its whole reason for existing is to be race-safe under real
+// concurrency. Runs outside withRollback deliberately, with explicit
+// cleanup, exactly like decrementStock's own race test below.
+describe('bonusFitCheckGrantRepository.consumeOne — real transaction, real concurrency', () => {
+  it('draws from the oldest unconsumed grant first (FIFO)', async () => {
+    const user = await prisma.user.create({
+      data: { email: `bonus-fifo-${Date.now()}@example.com`, firstName: 'Bonus', lastName: 'Fifo' },
+    });
+    try {
+      const older = await prisma.bonusFitCheckGrant.create({
+        data: { userId: user.id, reason: 'email_verified', amount: 1, grantedAt: new Date(Date.now() - 60000) },
+      });
+      const newer = await prisma.bonusFitCheckGrant.create({
+        data: { userId: user.id, reason: 'admin_grant', amount: 1, grantedAt: new Date() },
+      });
+
+      const consumed = await bonusFitCheckGrantRepo.consumeOne(user.id);
+      expect(consumed).toBe(true);
+
+      const olderRow = await prisma.bonusFitCheckGrant.findUnique({ where: { id: older.id } });
+      const newerRow = await prisma.bonusFitCheckGrant.findUnique({ where: { id: newer.id } });
+      expect(olderRow.consumedCount).toBe(1);
+      expect(newerRow.consumedCount).toBe(0);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } }); // cascades to grants
+    }
+  }, 15000);
+
+  it('returns false once every grant is fully consumed', async () => {
+    const user = await prisma.user.create({
+      data: { email: `bonus-empty-${Date.now()}@example.com`, firstName: 'Bonus', lastName: 'Empty' },
+    });
+    try {
+      await prisma.bonusFitCheckGrant.create({ data: { userId: user.id, reason: 'admin_grant', amount: 1, consumedCount: 1 } });
+      expect(await bonusFitCheckGrantRepo.consumeOne(user.id)).toBe(false);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  }, 15000);
+
+  it('two concurrent Fit Checks drawing on the last unit of bonus balance — only one succeeds', async () => {
+    const user = await prisma.user.create({
+      data: { email: `bonus-race-${Date.now()}@example.com`, firstName: 'Bonus', lastName: 'Race' },
+    });
+    try {
+      await prisma.bonusFitCheckGrant.create({ data: { userId: user.id, reason: 'admin_grant', amount: 1 } }); // exactly one left
+
+      const results = await Promise.allSettled([
+        bonusFitCheckGrantRepo.consumeOne(user.id),
+        bonusFitCheckGrantRepo.consumeOne(user.id),
+      ]);
+
+      const succeeded = results.filter((r) => r.status === 'fulfilled' && r.value === true);
+      const failed = results.filter((r) => r.status === 'fulfilled' && r.value === false);
+      expect(succeeded).toHaveLength(1);
+      expect(failed).toHaveLength(1);
+
+      expect(await bonusFitCheckGrantRepo.getBalance(user.id)).toBe(0);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  }, 15000);
 });

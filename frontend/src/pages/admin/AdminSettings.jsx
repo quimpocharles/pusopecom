@@ -29,6 +29,15 @@ const AdminSettings = () => {
     dailyLimitPremium: 10,
     guestRetentionHours: 24,
   });
+  // Phase 2 — Bonus Fit Checks. Kept as its own state slice (mirroring the
+  // API's nested fitCheck.bonus shape) since it governs a distinct
+  // mechanic from the daily allowances above.
+  const [fitCheckBonus, setFitCheckBonus] = useState({
+    enabled: true,
+    profileComplete: 1,
+    emailVerified: 1,
+    firstPurchase: 2,
+  });
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -55,6 +64,14 @@ const AdminSettings = () => {
             dailyLimitPremium:    res.data.fitCheck.dailyLimitPremium ?? 10,
             guestRetentionHours:  res.data.fitCheck.guestRetentionHours ?? 24,
           });
+          if (res.data.fitCheck.bonus) {
+            setFitCheckBonus({
+              enabled:         res.data.fitCheck.bonus.enabled ?? true,
+              profileComplete: res.data.fitCheck.bonus.profileComplete ?? 1,
+              emailVerified:   res.data.fitCheck.bonus.emailVerified ?? 1,
+              firstPurchase:   res.data.fitCheck.bonus.firstPurchase ?? 2,
+            });
+          }
         }
       } catch (error) {
         console.error('Failed to fetch settings:', error);
@@ -109,7 +126,7 @@ const AdminSettings = () => {
     setSaving(true);
     setMessage(null);
     try {
-      await settingsService.updateSettings({ tryOn, tryOnAd, fitCheck });
+      await settingsService.updateSettings({ tryOn, tryOnAd, fitCheck: { ...fitCheck, bonus: fitCheckBonus } });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -309,6 +326,62 @@ const AdminSettings = () => {
             />
             <p className="text-xs text-gray-500 mt-1">How long a guest's Fit Check stays before it's dropped, unless they register first.</p>
           </div>
+        </div>
+
+        {/* Bonus Fit Checks */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <h2 className="text-lg font-semibold text-gray-900">Bonus Fit Checks</h2>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fitCheckBonus.enabled}
+                onChange={(e) => setFitCheckBonus((prev) => ({ ...prev, enabled: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Enabled</span>
+            </label>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">One-time bonus Fit Checks a fan earns for real milestones — added on top of their daily allowance once that runs out, and carried over day to day until used.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Completing their profile</label>
+              <input
+                type="number"
+                min="0"
+                disabled={!fitCheckBonus.enabled}
+                value={fitCheckBonus.profileComplete}
+                onChange={(e) => setFitCheckBonus((prev) => ({ ...prev, profileComplete: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Verifying their email</label>
+              <input
+                type="number"
+                min="0"
+                disabled={!fitCheckBonus.enabled}
+                value={fitCheckBonus.emailVerified}
+                onChange={(e) => setFitCheckBonus((prev) => ({ ...prev, emailVerified: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">First purchase</label>
+              <input
+                type="number"
+                min="0"
+                disabled={!fitCheckBonus.enabled}
+                value={fitCheckBonus.firstPurchase}
+                onChange={(e) => setFitCheckBonus((prev) => ({ ...prev, firstPurchase: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-3">To grant a one-off bonus to a specific fan (a giveaway, a customer-service gesture), use "Grant Fit Checks" on their row in Users.</p>
         </div>
 
         {/* Message */}

@@ -10,7 +10,8 @@ import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckQuota from '../lib/fitCheckQuota.js';
-import { optionalAuth } from '../middleware/auth.js';
+import * as bonusFitCheckGrantRepository from '../repositories/bonusFitCheckGrantRepository.js';
+import { optionalAuth, authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -264,6 +265,46 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       success: false,
       message: error.message || 'Failed to process Fit Check'
     });
+  }
+});
+
+// GET /api/tryon/admin/bonus-grants/:userId — a user's full Bonus Fit
+// Check ledger + current balance, backing the admin grant panel (Phase 2:
+// "configurable from the Admin Dashboard" implies inspectable/reportable,
+// not just a bigger number — see BonusFitCheckGrant's schema comment).
+router.get('/admin/bonus-grants/:userId', authenticate, isAdmin, async (req, res) => {
+  try {
+    const [grants, balance] = await Promise.all([
+      bonusFitCheckGrantRepository.findByUser(req.params.userId),
+      bonusFitCheckGrantRepository.getBalance(req.params.userId),
+    ]);
+    res.json({ success: true, data: { grants, balance } });
+  } catch (error) {
+    logger.error({ err: error }, 'Get Fit Check bonus grants error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load bonus grants' });
+  }
+});
+
+// POST /api/tryon/admin/bonus-grant — a human admin manually grants bonus
+// Fit Checks to one user (reason: admin_grant). Always creates a new row —
+// unlike the event-triggered reasons, an admin can grant to the same user
+// more than once on purpose, so there's no idempotency guard here.
+router.post('/admin/bonus-grant', authenticate, isAdmin, async (req, res) => {
+  try {
+    const { userId, amount, note } = req.body;
+    const parsedAmount = Number(amount);
+
+    if (!userId || !Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'A userId and a positive whole-number amount are required' });
+    }
+
+    const grantRow = await bonusFitCheckGrantRepository.grant(userId, 'admin_grant', parsedAmount, { note });
+    res.status(201).json({ success: true, data: grantRow });
+  } catch (error) {
+    logger.error({ err: error }, 'Grant Fit Check bonus error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to grant Fit Checks' });
   }
 });
 

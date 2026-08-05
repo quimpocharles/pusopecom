@@ -30,7 +30,7 @@ const FitCheckQuotaBar = ({ className = '', refreshKey }) => {
 
   if (!quota) return null;
 
-  const { limit, remaining, resetsInSeconds } = quota;
+  const { limit, remaining, resetsInSeconds, bonusRemaining } = quota;
 
   return (
     <div className={`text-center ${className}`.trim()}>
@@ -44,6 +44,12 @@ const FitCheckQuotaBar = ({ className = '', refreshKey }) => {
         {remaining} / {limit} Remaining
       </p>
       <p className="text-xs text-gray-400">Resets in {formatResetTime(resetsInSeconds)}</p>
+      {/* Bonus balance is a separate, durable ledger (Phase 2) — only shown
+          once a fan actually has one, distinct from the resetting daily pips
+          above so the two mechanics never look like the same number. */}
+      {bonusRemaining > 0 && (
+        <p className="text-xs font-medium text-amber-600 mt-1">+{bonusRemaining} bonus Fit Check{bonusRemaining === 1 ? '' : 's'}</p>
+      )}
     </div>
   );
 };

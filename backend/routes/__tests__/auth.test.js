@@ -154,6 +154,71 @@ describe('routes/auth.js', () => {
     }, 15000);
   });
 
+  describe('Fit Check bonus grants (Phase 2)', () => {
+    it('GET /verify-email grants the email-verified bonus exactly once', async () => {
+      const email = uniqueEmail('bonus-email-verified');
+      await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: 'correct-horse-battery', firstName: 'Bonus', lastName: 'Verify' });
+      const token = emailService.sendVerificationEmail.mock.calls.at(-1)[2];
+
+      const verifyRes = await request(app).get(`/api/auth/verify-email?token=${token}`);
+      expect(verifyRes.status).toBe(200);
+
+      // Fire-and-forget, same as the guest migration above — poll briefly.
+      let grant = null;
+      for (let i = 0; i < 20; i++) {
+        grant = await prisma.bonusFitCheckGrant.findFirst({ where: { user: { email }, reason: 'email_verified' } });
+        if (grant) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(grant).not.toBeNull();
+      expect(grant.amount).toBeGreaterThan(0);
+
+      // Re-verifying (e.g. a stale link opened twice) must never double-grant.
+      await request(app).get(`/api/auth/verify-email?token=${token}`);
+      await new Promise((r) => setTimeout(r, 300));
+      const grants = await prisma.bonusFitCheckGrant.findMany({ where: { user: { email }, reason: 'email_verified' } });
+      expect(grants).toHaveLength(1);
+    }, 15000);
+
+    it('PUT /complete-profile grants the profile-complete bonus only once both phone and an address are present', async () => {
+      const email = uniqueEmail('bonus-profile-complete');
+      const registerRes = await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: 'correct-horse-battery', firstName: 'Bonus', lastName: 'Profile' });
+      const token = emailService.sendVerificationEmail.mock.calls.at(-1)[2];
+      await request(app).get(`/api/auth/verify-email?token=${token}`);
+      const loginRes = await request(app).post('/api/auth/login').send({ email, password: 'correct-horse-battery' });
+      const auth = `Bearer ${loginRes.body.token}`;
+      const userId = registerRes.body.user.id;
+
+      // Phone only — not a complete profile yet, no bonus.
+      await request(app).put('/api/auth/complete-profile').set('Authorization', auth).send({ phone: '09171234567' });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(await prisma.bonusFitCheckGrant.findFirst({ where: { userId, reason: 'profile_complete' } })).toBeNull();
+
+      // Now add the address too — profile is genuinely complete.
+      await request(app)
+        .put('/api/auth/complete-profile')
+        .set('Authorization', auth)
+        .send({
+          address: {
+            fullName: 'Bonus Profile', phone: '09171234567', country: 'Philippines',
+            address: '123 Test St', city: 'Quezon City', province: 'Metro Manila', zipCode: '1100', isDefault: true,
+          },
+        });
+
+      let grant = null;
+      for (let i = 0; i < 20; i++) {
+        grant = await prisma.bonusFitCheckGrant.findFirst({ where: { userId, reason: 'profile_complete' } });
+        if (grant) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      expect(grant).not.toBeNull();
+    }, 15000);
+  });
+
   describe('forgot-password -> reset-password', () => {
     it('resets the password, clears the lockout, and lets the new password log in', async () => {
       const email = uniqueEmail('reset-flow');
