@@ -11,6 +11,7 @@ import * as athleteAffiliationRepo from '../athleteAffiliationRepository.js';
 import * as tryOnLogRepo from '../tryOnLogRepository.js';
 import * as userActivityRepo from '../userActivityRepository.js';
 import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
+import * as fitCheckCampaignRepo from '../fitCheckCampaignRepository.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -954,4 +955,109 @@ describe('bonusFitCheckGrantRepository.consumeOne — real transaction, real con
       await prisma.user.delete({ where: { id: user.id } });
     }
   }, 15000);
+});
+
+describe('tryOnLogRepository.trending — Fit Check Phase 4', () => {
+  it('counts only recent, successful, non-deleted generations, ranked by count', () =>
+    withRollback(async (tx) => {
+      const trendyProduct = await tx.product.create({
+        data: { name: `Trendy ${Date.now()}`, slug: `trendy-${Date.now()}`, description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: ['img.jpg'], active: true },
+      });
+      const quietProduct = await tx.product.create({
+        data: { name: `Quiet ${Date.now()}`, slug: `quiet-${Date.now()}`, description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: ['img.jpg'], active: true },
+      });
+
+      // 2 recent successful — should count
+      await tx.tryOnLog.create({ data: { productId: trendyProduct.id, productName: trendyProduct.name, success: true } });
+      await tx.tryOnLog.create({ data: { productId: trendyProduct.id, productName: trendyProduct.name, success: true } });
+      // 1 recent but failed — must not count
+      await tx.tryOnLog.create({ data: { productId: trendyProduct.id, productName: trendyProduct.name, success: false } });
+      // 1 recent but soft-deleted — must not count
+      await tx.tryOnLog.create({ data: { productId: trendyProduct.id, productName: trendyProduct.name, success: true, deletedAt: new Date() } });
+      // 1 recent successful for the other product — should count once
+      await tx.tryOnLog.create({ data: { productId: quietProduct.id, productName: quietProduct.name, success: true } });
+      // 1 successful but outside the window — must not count
+      await tx.tryOnLog.create({
+        data: { productId: quietProduct.id, productName: quietProduct.name, success: true, createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      });
+
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const results = await tryOnLogRepo.trending({ since, limit: 10, client: tx });
+
+      const trendyResult = results.find((r) => r.productId === trendyProduct.id);
+      const quietResult = results.find((r) => r.productId === quietProduct.id);
+      expect(trendyResult.count).toBe(2);
+      expect(quietResult.count).toBe(1);
+      // Never leaks anything identity-related — only display/count fields.
+      for (const r of results) {
+        expect(Object.keys(r).sort()).toEqual(['count', 'image', 'name', 'price', 'productId', 'salePrice', 'slug'].sort());
+      }
+    }), 15000);
+});
+
+describe('fitCheckCampaignRepository.analytics + incrementViews — Fit Check Phase 4', () => {
+  it('computes generations, unique fans, and live purchase correlation for a campaign', async () => {
+    const buyer = await prisma.user.create({ data: { email: `analytics-buyer-${Date.now()}@example.com`, firstName: 'A', lastName: 'B' } });
+    const browser = await prisma.user.create({ data: { email: `analytics-browser-${Date.now()}@example.com`, firstName: 'C', lastName: 'D' } });
+    const product = await prisma.product.create({
+      data: { name: `Analytics Product ${Date.now()}`, slug: `analytics-product-${Date.now()}`, description: 'x', price: 1000, category: 'jersey', sport: 'basketball', images: ['img.jpg'], active: true },
+    });
+    const campaign = await prisma.fitCheckCampaign.create({
+      data: { name: 'Analytics Test', sponsorName: 'Test Sponsor', headline: 'x', productIds: [product.id] },
+    });
+    let order = null;
+
+    try {
+      // buyer generated a Fit Check under this campaign, then bought the product
+      await prisma.tryOnLog.create({
+        data: { fitCheckCampaignId: campaign.id, userId: buyer.id, productId: product.id, productName: product.name, success: true, durationMs: 4000 },
+      });
+      // browser also generated one, but never bought
+      await prisma.tryOnLog.create({
+        data: { fitCheckCampaignId: campaign.id, userId: browser.id, productId: product.id, productName: product.name, success: true, durationMs: 6000 },
+      });
+      // a guest generation too — contributes to uniqueFans via sessionId, not userId
+      await prisma.tryOnLog.create({
+        data: { fitCheckCampaignId: campaign.id, sessionId: `guest-${Date.now()}`, productId: product.id, productName: product.name, success: true, durationMs: 2000 },
+      });
+
+      order = await prisma.order.create({
+        data: {
+          orderNumber: `PS-ANALYTICS-${Date.now()}`,
+          userId: buyer.id,
+          email: buyer.email,
+          shipToFullName: 'Buyer', shipToPhone: '09171234567', shipToAddress: '1 St', shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+          subtotal: 1000, total: 1000,
+          paymentStatus: 'paid',
+          items: { create: [{ productId: product.id, name: product.name, price: 1000, quantity: 1, size: 'M', image: 'img.jpg' }] },
+        },
+      });
+
+      await fitCheckCampaignRepo.incrementViews(campaign.id);
+      await fitCheckCampaignRepo.incrementViews(campaign.id);
+
+      const result = await fitCheckCampaignRepo.analytics(campaign.id);
+      expect(result.views).toBe(2);
+      expect(result.generations).toBe(3);
+      expect(result.successRate).toBe(1);
+      expect(result.avgGenerationMs).toBe(4000); // (4000 + 6000 + 2000) / 3
+      expect(result.uniqueFans).toBe(3); // 2 distinct userIds + 1 distinct sessionId
+      expect(result.purchases).toBe(1);
+      expect(result.revenue).toBe(1000);
+      expect(result.topProducts).toEqual([{ id: product.id, name: product.name, slug: product.slug, count: 3 }]);
+    } finally {
+      // All cleanup lives here, not split across the try body — an
+      // assertion failure above must never leave the order/orderItem rows
+      // still referencing the product and turning a real failure into a
+      // confusing FK-violation error instead.
+      if (order) {
+        await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+        await prisma.order.delete({ where: { id: order.id } });
+      }
+      await prisma.tryOnLog.deleteMany({ where: { fitCheckCampaignId: campaign.id } });
+      await prisma.fitCheckCampaign.delete({ where: { id: campaign.id } });
+      await prisma.product.delete({ where: { id: product.id } });
+      await prisma.user.deleteMany({ where: { id: { in: [buyer.id, browser.id] } } });
+    }
+  }, 20000);
 });

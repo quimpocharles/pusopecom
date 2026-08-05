@@ -738,6 +738,11 @@ model SiteSettings {
   fitCheckBonusEmailVerified   Int     @default(1)
   fitCheckBonusFirstPurchase   Int     @default(2)
 
+  // Trending Fit Checks (Phase 4) — how far back tryOnLogRepository.trending()
+  // looks, and how many products the homepage module shows.
+  fitCheckTrendingWindowDays Int @default(7)
+  fitCheckTrendingLimit      Int @default(8)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -794,6 +799,7 @@ enum HomepageSectionKey {
   featuredTeam
   partners
   faq
+  trendingFitChecks // Phase 4 of the Fit Check engagement plan
 }
 
 // One row per HomepageSectionKey, self-healing (see homepageSectionRepository
@@ -923,6 +929,12 @@ model FitCheckCampaign {
   endDate   DateTime?
   priority  Int       @default(0)
   active    Boolean   @default(true)
+
+  // Phase 4 — a plain incrementing counter, not an event log. Enough for
+  // the admin analytics panel's "Views" figure; a per-view row table would
+  // be the right call if this ever needed unique-viewer counting, but
+  // nothing today asks for that.
+  views Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

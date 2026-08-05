@@ -21,9 +21,24 @@ const fitCheckCampaignService = {
     return response.data;
   },
 
+  getAnalytics: async (id) => {
+    const response = await api.get(`/fit-check-campaigns/${id}/analytics`);
+    return response.data;
+  },
+
+  // Fire-and-forget — the caller never awaits/handles this beyond catching
+  // the promise, matching how a view ping is used everywhere it's called.
+  recordView: (id) => api.post(`/fit-check-campaigns/${id}/view`).catch(() => {}),
+
   // Public read — the "Unlimited Fit Checks — Sponsored by X" badge on a product page.
   getActiveForProduct: async (productId) => {
     const response = await api.get(`/tryon/campaigns/active-for-product/${productId}`);
+    return response.data;
+  },
+
+  // Public read — the Trending Fit Checks homepage module.
+  getTrending: async () => {
+    const response = await api.get('/tryon/trending');
     return response.data;
   },
 };

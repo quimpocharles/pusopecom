@@ -248,7 +248,10 @@ const ProductDetail = () => {
   useEffect(() => {
     if (!product?.tryOnEnabled) return;
     fitCheckCampaignService.getActiveForProduct(product._id)
-      .then((res) => setSponsorship(res.data))
+      .then((res) => {
+        setSponsorship(res.data);
+        if (res.data) fitCheckCampaignService.recordView(res.data._id);
+      })
       .catch(() => setSponsorship(null));
   }, [product]);
 

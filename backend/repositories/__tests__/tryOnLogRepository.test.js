@@ -3,9 +3,13 @@ import * as tryOnLogRepository from '../tryOnLogRepository.js';
 
 describe('tryOnLogRepository.mostTried', () => {
   it('groups by product via SQL, ranks by count, and resolves display fields from a sample row', async () => {
+    // With a single `by` field, Prisma's `_count: true` in groupBy returns
+    // `_count` as a bare number, not `{ productId: n }` — this mock used to
+    // (wrongly) shape it as an object, which meant this test was verifying
+    // nothing real; see the same fix in mostTried/trending/analytics.
     const groupBy = vi.fn().mockResolvedValue([
-      { productId: 'p1', _count: { productId: 5 } },
-      { productId: 'p2', _count: { productId: 2 } },
+      { productId: 'p1', _count: 5 },
+      { productId: 'p2', _count: 2 },
     ]);
     const findFirst = vi.fn()
       .mockResolvedValueOnce({ productName: 'Jersey', productImage: 'jersey.jpg' })

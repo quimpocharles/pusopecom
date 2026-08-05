@@ -12,6 +12,7 @@ import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckQuota from '../lib/fitCheckQuota.js';
 import * as bonusFitCheckGrantRepository from '../repositories/bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepository from '../repositories/fitCheckCampaignRepository.js';
+import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
 import { optionalAuth, authenticate, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -92,6 +93,22 @@ router.get('/quota', optionalAuth, async (req, res) => {
     logger.error({ err: error }, 'Get Fit Check quota error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to load Fit Check quota' });
+  }
+});
+
+// GET /api/tryon/trending — public read backing the Trending Fit Checks
+// homepage module (Phase 4). Window/count are admin-configurable
+// (SiteSettings.fitCheckTrendingWindowDays/Limit), never hardcoded.
+router.get('/trending', async (req, res) => {
+  try {
+    const settings = await siteSettingsRepository.get();
+    const since = new Date(Date.now() - settings.fitCheck.trending.windowDays * 24 * 60 * 60 * 1000);
+    const trending = await tryOnLogRepository.trending({ since, limit: settings.fitCheck.trending.limit });
+    res.json({ success: true, data: trending });
+  } catch (error) {
+    logger.error({ err: error }, 'Get trending Fit Checks error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load trending Fit Checks' });
   }
 });
 

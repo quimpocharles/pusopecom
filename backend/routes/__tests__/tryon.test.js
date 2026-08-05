@@ -506,3 +506,27 @@ describe('GET /tryon/campaigns/active-for-product/:productId', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /tryon/trending', () => {
+  it('surfaces a recent successful Fit Check for a real product, with no identity fields in the response', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: uniqueName('trending'),
+        slug: `trending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description: 'x', price: 500, category: 'jersey', sport: 'basketball', images: ['img.jpg'], active: true,
+      },
+    });
+    createdProductIds.push(product.id);
+    await prisma.tryOnLog.create({
+      data: { productId: product.id, productName: product.name, success: true, sessionId: 'should-never-appear' },
+    });
+
+    const res = await request(app).get('/api/tryon/trending');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+
+    const entry = res.body.data.find((p) => p.productId === product.id);
+    expect(entry.count).toBeGreaterThan(0);
+    expect(Object.keys(entry).sort()).toEqual(['count', 'image', 'name', 'price', 'productId', 'salePrice', 'slug'].sort());
+  });
+});

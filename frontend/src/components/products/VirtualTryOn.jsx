@@ -65,7 +65,12 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       return;
     }
     fitCheckCampaignService.getActiveForProduct(product._id)
-      .then((res) => setSponsorship(res.data))
+      .then((res) => {
+        setSponsorship(res.data);
+        // Views (Phase 4) — counted once per badge render, matching how
+        // "impression" is defined everywhere else this same read is used.
+        if (res.data) fitCheckCampaignService.recordView(res.data._id);
+      })
       .catch(() => setSponsorship(null));
   }, [isOpen, product?._id]);
 

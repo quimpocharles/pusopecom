@@ -67,6 +67,38 @@ describe('routes/fitCheckCampaigns.js', () => {
     expect(res.status).toBe(404);
   });
 
+  it('POST /:id/view increments the view counter', async () => {
+    const before = await prisma.fitCheckCampaign.findUnique({ where: { id: createdId } });
+    const res = await request(app).post(`/api/fit-check-campaigns/${createdId}/view`);
+    expect(res.status).toBe(200);
+    const after = await prisma.fitCheckCampaign.findUnique({ where: { id: createdId } });
+    expect(after.views).toBe(before.views + 1);
+  });
+
+  it('POST /:id/view still 200s for an unknown id — a stray ping is not an error', async () => {
+    const res = await request(app).post('/api/fit-check-campaigns/00000000-0000-0000-0000-000000000000/view');
+    expect(res.status).toBe(200);
+  });
+
+  it('GET /:id/analytics returns zeroed analytics for a campaign with no Fit Checks yet', async () => {
+    const res = await request(app).get(`/api/fit-check-campaigns/${createdId}/analytics`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      generations: 0,
+      successRate: 0,
+      uniqueFans: 0,
+      purchases: 0,
+      revenue: 0,
+      topProducts: [],
+    });
+    expect(res.body.data.views).toBeGreaterThan(0); // the two pings above
+  });
+
+  it('GET /:id/analytics 404s for an unknown id', async () => {
+    const res = await request(app).get('/api/fit-check-campaigns/00000000-0000-0000-0000-000000000000/analytics');
+    expect(res.status).toBe(404);
+  });
+
   it('DELETE /:id soft-deletes (active: false), not a real row delete', async () => {
     const res = await request(app).delete(`/api/fit-check-campaigns/${createdId}`);
     expect(res.status).toBe(200);

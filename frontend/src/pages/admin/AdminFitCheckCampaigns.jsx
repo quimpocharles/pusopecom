@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import fitCheckCampaignService from '../../services/fitCheckCampaignService';
 import productService from '../../services/productService';
 import ImageField from '../../components/admin/ImageField';
@@ -124,6 +124,23 @@ const AdminFitCheckCampaigns = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [analyticsCampaign, setAnalyticsCampaign] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  const openAnalytics = async (campaign) => {
+    setAnalyticsCampaign(campaign);
+    setAnalytics(null);
+    setAnalyticsLoading(true);
+    try {
+      const res = await fitCheckCampaignService.getAnalytics(campaign._id);
+      setAnalytics(res.data);
+    } catch (err) {
+      console.error('Failed to load Fit Check campaign analytics:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -309,6 +326,13 @@ const AdminFitCheckCampaigns = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openAnalytics(campaign)}
+                          className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          title="Analytics"
+                        >
+                          <ChartBarIcon className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => openEdit(campaign)}
                           className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -546,6 +570,78 @@ const AdminFitCheckCampaigns = () => {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics */}
+      {analyticsCampaign && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">{analyticsCampaign.name}</h3>
+              <button onClick={() => setAnalyticsCampaign(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {analyticsLoading ? (
+                <div className="w-6 h-6 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              ) : !analytics ? (
+                <p className="text-sm text-gray-500">Failed to load analytics.</p>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{analytics.views}</p>
+                      <p className="text-xs text-gray-500">Views</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{analytics.generations}</p>
+                      <p className="text-xs text-gray-500">Generations</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{analytics.uniqueFans}</p>
+                      <p className="text-xs text-gray-500">Unique Fans</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{Math.round(analytics.successRate * 100)}%</p>
+                      <p className="text-xs text-gray-500">Success Rate</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{(analytics.avgGenerationMs / 1000).toFixed(1)}s</p>
+                      <p className="text-xs text-gray-500">Avg. Time</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xl font-bold text-gray-900">{analytics.purchases}</p>
+                      <p className="text-xs text-gray-500">Purchases</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-primary-50 border border-primary-100 rounded-lg px-4 py-3">
+                    <p className="text-sm text-gray-600">Revenue attributed</p>
+                    <p className="text-2xl font-bold text-primary-700">₱{analytics.revenue.toLocaleString()}</p>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Top Products</h4>
+                    {analytics.topProducts.length === 0 ? (
+                      <p className="text-sm text-gray-500">No Fit Checks generated yet.</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {analytics.topProducts.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 truncate">{p.name}</span>
+                            <span className="text-gray-500 font-medium">{p.count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

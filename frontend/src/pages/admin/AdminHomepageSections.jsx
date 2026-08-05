@@ -7,6 +7,7 @@ const SECTION_LABELS = {
   aiTryOn: 'Fit Check',
   marquee: 'Marquee Bar',
   featuredProducts: 'Featured Products',
+  trendingFitChecks: 'Trending Fit Checks',
   featuredTeam: 'Featured Team',
   partners: 'Our Partners',
   faq: 'FAQ',

@@ -33,6 +33,39 @@ router.get('/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
+// GET /:id/analytics — Phase 4's Campaign Analytics panel (admin). Kept
+// separate from the plain GET /:id above so the ordinary list/edit reads
+// stay cheap; this one runs several aggregate queries and a live
+// purchase-correlation join.
+router.get('/:id/analytics', authenticate, isAdmin, async (req, res) => {
+  try {
+    const campaign = await fitCheckCampaignRepository.findById(req.params.id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Fit Check campaign not found' });
+    }
+    const analytics = await fitCheckCampaignRepository.analytics(req.params.id);
+    res.json({ success: true, data: analytics });
+  } catch (error) {
+    logger.error({ err: error }, 'Get Fit Check campaign analytics error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve Fit Check campaign analytics' });
+  }
+});
+
+// POST /:id/view — public, fire-and-forget from the frontend whenever the
+// "Unlimited Fit Checks — Sponsored by X" badge actually renders (product
+// page, Fit Check modal). Always 200s even for an unknown id — a stray
+// view ping racing a campaign's deletion is not the caller's problem.
+router.post('/:id/view', async (req, res) => {
+  try {
+    await fitCheckCampaignRepository.incrementViews(req.params.id);
+  } catch (error) {
+    logger.error({ err: error }, 'Increment Fit Check campaign view error');
+    Sentry.captureException(error);
+  }
+  res.json({ success: true });
+});
+
 // Create Fit Check campaign (admin)
 router.post('/', authenticate, isAdmin, async (req, res) => {
   try {

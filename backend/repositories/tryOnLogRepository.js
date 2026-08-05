@@ -172,9 +172,57 @@ export async function mostTried(limit = 5, { client = prisma } = {}) {
         where: { productId: g.productId },
         select: { productName: true, productImage: true },
       });
-      return { productName: sample?.productName, productImage: sample?.productImage, count: g._count.productId };
+      // NOTE: with `by: ['productId']` and `_count: true`, this Prisma
+      // version returns `_count` as a bare number, not `{ productId: n }`
+      // — found and fixed here while adding trending() below, which had
+      // inherited the same wrong `.productId` access.
+      return { productName: sample?.productName, productImage: sample?.productImage, count: g._count };
     })
   );
 }
 
-export default { create, find, findByUser, countByUser, softDelete, setFavorite, migrateGuestSession, deleteOlderThan, mostTried };
+/**
+ * Recent, aggregated Fit Check activity by product — backs the public
+ * Trending Fit Checks homepage module (Phase 4). Unlike mostTried above
+ * (all-time, internal dashboard), this is windowed (default last 7 days,
+ * see SiteSettings.fitCheckTrendingWindowDays) and excludes failed/soft-
+ * deleted generations — "trending" should read as real recent interest,
+ * not a lifetime total. Selects only product-identifying and count fields;
+ * no userId, sessionId, or generatedImageUrl ever leaves this function —
+ * CLAUDE.md's "never expose customer photos" isn't just a UI rule, it's
+ * enforced by this query never fetching them in the first place.
+ */
+export async function trending({ since, limit = 8, client = prisma } = {}) {
+  const groups = await client.tryOnLog.groupBy({
+    by: ['productId'],
+    where: { productId: { not: null }, success: true, deletedAt: null, createdAt: { gte: since } },
+    _count: true,
+    orderBy: { _count: { productId: 'desc' } },
+    take: limit,
+  });
+  if (groups.length === 0) return [];
+
+  const products = await client.product.findMany({
+    where: { id: { in: groups.map((g) => g.productId) }, active: true },
+    select: { id: true, name: true, slug: true, images: true, price: true, salePrice: true },
+  });
+  const byId = new Map(products.map((p) => [p.id, p]));
+
+  return groups
+    .map((g) => {
+      const product = byId.get(g.productId);
+      if (!product) return null; // deleted/deactivated since — nothing to link to
+      return {
+        productId: product.id,
+        name: product.name,
+        slug: product.slug,
+        image: product.images?.[0] || null,
+        price: product.price,
+        salePrice: product.salePrice,
+        count: g._count,
+      };
+    })
+    .filter(Boolean);
+}
+
+export default { create, find, findByUser, countByUser, softDelete, setFavorite, migrateGuestSession, deleteOlderThan, mostTried, trending };

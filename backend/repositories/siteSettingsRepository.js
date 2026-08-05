@@ -45,6 +45,11 @@ function toNestedShape(row) {
         emailVerified: row.fitCheckBonusEmailVerified,
         firstPurchase: row.fitCheckBonusFirstPurchase,
       },
+      // Phase 4 — Trending Fit Checks.
+      trending: {
+        windowDays: row.fitCheckTrendingWindowDays,
+        limit: row.fitCheckTrendingLimit,
+      },
     },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -62,6 +67,7 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
       ...existingNested.fitCheck,
       ...fitCheck,
       bonus: { ...existingNested.fitCheck.bonus, ...fitCheck?.bonus },
+      trending: { ...existingNested.fitCheck.trending, ...fitCheck?.trending },
     },
   };
   return {
@@ -79,6 +85,8 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
     fitCheckBonusProfileComplete: merged.fitCheck.bonus.profileComplete,
     fitCheckBonusEmailVerified: merged.fitCheck.bonus.emailVerified,
     fitCheckBonusFirstPurchase: merged.fitCheck.bonus.firstPurchase,
+    fitCheckTrendingWindowDays: merged.fitCheck.trending.windowDays,
+    fitCheckTrendingLimit: merged.fitCheck.trending.limit,
   };
 }
 

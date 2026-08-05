@@ -10,6 +10,7 @@ const DEFAULT_ORDER = [
   'aiTryOn',
   'marquee',
   'featuredProducts',
+  'trendingFitChecks',
   'featuredTeam',
   'partners',
   'faq',

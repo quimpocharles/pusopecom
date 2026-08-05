@@ -11,12 +11,13 @@ import promoMessageService from '../services/promoMessageService';
 import homepageSectionService from '../services/homepageSectionService';
 import featuredTeamService from '../services/featuredTeamService';
 import partnerLogoService from '../services/partnerLogoService';
+import fitCheckCampaignService from '../services/fitCheckCampaignService';
 import SEO from '../components/common/SEO';
 
 // Default render order — used until the CMS-driven order loads, so nothing
 // visibly reshuffles once it does (this matches the self-healing default
 // order homepageSectionRepository seeds new installs with).
-const DEFAULT_SECTION_ORDER = ['hero', 'aiTryOn', 'marquee', 'featuredProducts', 'featuredTeam', 'partners', 'faq'];
+const DEFAULT_SECTION_ORDER = ['hero', 'aiTryOn', 'marquee', 'featuredProducts', 'trendingFitChecks', 'featuredTeam', 'partners', 'faq'];
 
 // Repeats `items` until there are at least `minCount`, so the marquee track
 // stays visually full even with a small partner roster. The caller then
@@ -45,6 +46,10 @@ const Home = () => {
   // the section is omitted entirely rather than showing stale content.
   const [featuredTeam, setFeaturedTeam] = useState(null);
   const [partnerLogos, setPartnerLogos] = useState([]);
+  // Trending Fit Checks (Phase 4) — aggregated counts only, no customer
+  // photos, ever (see tryOnLogRepository.trending). Empty until real
+  // recent activity exists, and the section below stays hidden until then.
+  const [trendingFitChecks, setTrendingFitChecks] = useState([]);
 
   // Fetch featured products
   useEffect(() => {
@@ -57,6 +62,12 @@ const Home = () => {
       }
     };
     fetchFeatured();
+  }, []);
+
+  useEffect(() => {
+    fitCheckCampaignService.getTrending()
+      .then((res) => setTrendingFitChecks(res.data))
+      .catch((error) => console.error('Failed to fetch trending Fit Checks:', error));
   }, []);
 
   // Hero — the active placement=hero campaign, fully CMS-driven (eyebrow/
@@ -418,6 +429,52 @@ const Home = () => {
     </section>
   );
 
+  const trendingFitChecksSection = trendingFitChecks.length > 0 && (
+    /* Trending Fit Checks — aggregated counts only, no customer photos.
+       Product name/image/price come from the live Product row, the count
+       from tryOnLogRepository.trending(); nothing here is admin-authored
+       copy, so unlike Featured Products/Team this section's label lives in
+       code, matching Featured Products' own "our featured gear" eyebrow. */
+    <section key="trendingFitChecks" className="py-12 md:py-24 bg-white">
+      <div className="container-custom">
+        <p
+          className="text-xs md:text-sm font-semibold uppercase mb-4 md:mb-6 text-ink-900/35"
+          style={{ letterSpacing: '0.09em' }}
+        >
+          trending fit checks
+        </p>
+
+        <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2">
+          {trendingFitChecks.map((product) => (
+            <Link
+              key={product.productId}
+              to={`/products/${product.slug}?tryOn=1`}
+              className="flex-shrink-0 w-40 md:w-56 group"
+            >
+              <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden relative mb-3">
+                {product.image && (
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                )}
+                <span className="absolute top-2 left-2 px-2 py-1 rounded-full text-[11px] font-semibold bg-white/90 text-ink-900">
+                  {product.count} tried this on
+                </span>
+              </div>
+              <p className="text-sm md:text-base font-semibold text-ink-900 truncate">{product.name}</p>
+              <p className="text-sm text-ink-900/50">
+                ₱{(product.salePrice ?? product.price).toLocaleString()}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+
   const featuredTeamBgColor = featuredTeam?.backgroundColor || '#0A2463';
   const featuredTeamTextColor = featuredTeam?.textColor || '#ffffff';
   const featuredTeamDisplayMonth = featuredTeam?.displayMonth || new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -676,6 +733,7 @@ const Home = () => {
     aiTryOn: aiTryOnSection,
     marquee: marqueeSection,
     featuredProducts: featuredProductsSection,
+    trendingFitChecks: trendingFitChecksSection,
     featuredTeam: featuredTeamSection,
     partners: partnersSection,
     faq: faqSection,
