@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import orderService from '../services/orderService';
 import useCartStore from '../store/cartStore';
 import { toTitleCase } from '../utils/text';
+import { orderStatusLabel } from '../utils/orderStatus';
 
 const OrderConfirmation = () => {
   const { orderNumber } = useParams();
@@ -121,7 +122,7 @@ const OrderConfirmation = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Order Status</p>
-                <p className="font-semibold capitalize">{order.orderStatus}</p>
+                <p className="font-semibold">{orderStatusLabel(order.orderStatus)}</p>
               </div>
             </div>
 

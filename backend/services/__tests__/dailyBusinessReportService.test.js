@@ -158,9 +158,13 @@ describe('generateDailyBusinessReport — customers', () => {
 describe('generateDailyBusinessReport — payments and shipping', () => {
   it('breaks down payment status/method and shipping status across ALL orders, not just paid', async () => {
     orderRepository.find.mockResolvedValueOnce([
-      order({ paymentStatus: 'paid', paymentMethod: 'maya', orderStatus: 'confirmed' }),
-      order({ paymentStatus: 'failed', paymentMethod: 'maya', orderStatus: 'processing' }),
-      order({ paymentStatus: 'pending', paymentMethod: 'maya', orderStatus: 'processing' }),
+      // Payment Platform Redesign, Phase 2 — orderStatus values match what
+      // applyPaymentResolution actually produces for each paymentStatus
+      // now (paid->'paid', failed->'failed_payment', pending stays
+      // unresolved->'awaiting_payment'), not the pre-Phase-2 vocabulary.
+      order({ paymentStatus: 'paid', paymentMethod: 'maya', orderStatus: 'paid' }),
+      order({ paymentStatus: 'failed', paymentMethod: 'maya', orderStatus: 'failed_payment' }),
+      order({ paymentStatus: 'pending', paymentMethod: 'maya', orderStatus: 'awaiting_payment' }),
       order({ paymentStatus: 'paid', paymentMethod: 'maya', orderStatus: 'shipped' }),
       order({ paymentStatus: 'paid', paymentMethod: 'maya', orderStatus: 'delivered' }),
     ]);
@@ -169,8 +173,8 @@ describe('generateDailyBusinessReport — payments and shipping', () => {
 
     expect(report.payments).toMatchObject({ successful: 3, failed: 1, pending: 1, refunded: 0 });
     expect(report.payments.byMethod).toEqual([{ method: 'maya', count: 5 }]);
-    // awaitingShipment = processing + confirmed = 2 + 1
-    expect(report.shipping).toEqual({ awaitingShipment: 3, inTransit: 1, delivered: 1 });
+    // awaitingShipment = paid/processing/packed, only the first row qualifies
+    expect(report.shipping).toEqual({ awaitingShipment: 1, inTransit: 1, delivered: 1 });
   });
 });
 

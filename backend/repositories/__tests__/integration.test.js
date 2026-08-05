@@ -523,14 +523,14 @@ describe('Order — multi-Organization-shaped Order-plus-OrderItems, and relatio
         { client: tx }
       );
 
-      const first = await orderRepo.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' }, { client: tx });
+      const first = await orderRepo.tryResolvePayment(order._id, 'paid', { orderStatus: 'paid' }, { client: tx });
       const second = await orderRepo.tryResolvePayment(order._id, 'failed', {}, { client: tx });
       expect(first).toBe(true);
       expect(second).toBe(false); // already resolved — must not flip a paid order to failed
 
       const finalOrder = await orderRepo.findById(order._id, { client: tx });
       expect(finalOrder.paymentStatus).toBe('paid');
-      expect(finalOrder.orderStatus).toBe('confirmed');
+      expect(finalOrder.orderStatus).toBe('paid');
     }));
 });
 

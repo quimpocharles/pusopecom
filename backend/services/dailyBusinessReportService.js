@@ -207,8 +207,12 @@ function buildPaymentsSection(allOrders) {
 }
 
 function buildShippingSection(allOrders) {
+  // Payment Platform Redesign, Phase 2 — "awaiting shipment" means paid,
+  // not yet shipped: paid/processing/packed, never 'confirmed' (superseded)
+  // or 'awaiting_payment' (not paid at all, a different bucket entirely).
+  const AWAITING_SHIPMENT_STATUSES = new Set(['paid', 'processing', 'packed']);
   return {
-    awaitingShipment: allOrders.filter((o) => o.orderStatus === 'processing' || o.orderStatus === 'confirmed').length,
+    awaitingShipment: allOrders.filter((o) => AWAITING_SHIPMENT_STATUSES.has(o.orderStatus)).length,
     inTransit: allOrders.filter((o) => o.orderStatus === 'shipped').length,
     delivered: allOrders.filter((o) => o.orderStatus === 'delivered').length,
   };

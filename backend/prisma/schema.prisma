@@ -118,12 +118,35 @@ enum PaymentAttemptStatus {
   cancelled
 }
 
+// Payment Platform Redesign, Phase 2. Two axes that used to be conflated
+// into one: `processing` meant both "just placed, unpaid" and was the only
+// value anything moved through before `confirmed` on payment success.
+//
+//   awaiting_payment -> paid -> processing -> packed -> shipped -> delivered
+//                                                                 -> returned
+//           -> failed_payment / expired / cancelled
+//
+// `awaiting_payment` is the new default at order creation; `processing` is
+// repurposed to mean fulfillment prep (post-payment) only, never "unpaid."
+// `confirmed` is not deleted — Postgres enums don't shrink cleanly and
+// nothing requires it — but is superseded: the migration backfills every
+// existing `confirmed` row to `paid`, and no code path sets `confirmed`
+// again. Refunds are deliberately not a value here — PaymentStatus.refunded
+// already exists and can co-occur with any orderStatus (e.g. `delivered`
+// then refunded); duplicating that fact onto this enum would just create
+// two places that could disagree.
 enum OrderStatus {
+  awaiting_payment
+  paid
   processing
-  confirmed
+  packed
   shipped
   delivered
+  returned
   cancelled
+  expired
+  failed_payment
+  confirmed // legacy — superseded by `paid`, kept only so old rows/reports don't break
 }
 
 enum ActivityType {
@@ -394,7 +417,7 @@ model Order {
   paymentStatus   PaymentStatus @default(pending)
   mayaPaymentId   String?
   mayaCheckoutUrl String?
-  orderStatus     OrderStatus   @default(processing)
+  orderStatus     OrderStatus   @default(awaiting_payment)
   courier         String?
   trackingNumber  String?
   shippingMethod  String?

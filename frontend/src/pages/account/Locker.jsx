@@ -5,8 +5,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ProductCard from '../../components/products/ProductCard';
 import { Panel, Pagination, EmptyState, ErrorState } from '../../components/ui';
 import accountService from '../../services/accountService';
-
-const STATUS_OPTIONS = ['processing', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+import { ORDER_STATUS_LABELS, ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
 
 // docs/MY_PUSO_MANIFESTO.md: Locker is one destination — what's mine, plus
 // a lighter Saved section for what a fan is thinking about adding — not a
@@ -105,9 +104,9 @@ const LockerMine = () => {
           className="input-field w-auto"
         >
           <option value="">All Statuses</option>
-          {STATUS_OPTIONS.map((s) => (
+          {ORDER_STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+              {ORDER_STATUS_LABELS[s]}
             </option>
           ))}
         </select>
@@ -155,7 +154,7 @@ const LockerMine = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Order Status</p>
-                <p className="font-semibold capitalize">{order.orderStatus}</p>
+                <p className="font-semibold">{orderStatusLabel(order.orderStatus)}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total</p>

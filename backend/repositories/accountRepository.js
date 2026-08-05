@@ -15,12 +15,22 @@ const RECENT_DAYS = 14;
 const MIN_REAL_MOMENTS = 4;
 const FEED_CAP = 15;
 
+// Payment Platform Redesign, Phase 2 — matches the fuller OrderStatus
+// vocabulary now. 'awaiting_payment' is deliberately absent: an unpaid
+// order isn't a "your order" moment worth celebrating in the feed the way
+// a real status change is — Phase 5's Resume Checkout moment covers that
+// case with its own, more actionable card instead.
 const ORDER_STATUS_TITLE = {
+  paid: 'Your order is confirmed',
   processing: 'Your order is being processed',
-  confirmed: 'Your order is confirmed',
+  packed: 'Your order has been packed',
   shipped: 'Your order has shipped',
   delivered: 'Your order was delivered',
+  returned: 'Your return was received',
   cancelled: 'Your order was cancelled',
+  expired: 'Your order has expired',
+  failed_payment: 'Your payment did not go through',
+  confirmed: 'Your order is confirmed', // legacy — no new order reaches this
 };
 
 const recentCutoff = () => new Date(Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000);

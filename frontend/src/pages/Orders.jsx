@@ -9,6 +9,7 @@ import orderService from '../services/orderService';
 import productService from '../services/productService';
 import SEO from '../components/common/SEO';
 import { toTitleCase } from '../utils/text';
+import { orderStatusLabel } from '../utils/orderStatus';
 
 const StarSelect = ({ value, onChange }) => (
   <div className="flex gap-1">
@@ -209,7 +210,7 @@ const Orders = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Order Status</p>
-                    <p className="font-semibold capitalize">{order.orderStatus}</p>
+                    <p className="font-semibold">{orderStatusLabel(order.orderStatus)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total</p>

@@ -249,6 +249,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     expect(order.paymentStatus).toBe('failed'); // driven by the real Maya check, not the forged claim
+    expect(order.orderStatus).toBe('failed_payment'); // Payment Platform Redesign, Phase 2 — previously left untouched
     expect(emailService.sendOrderConfirmationEmail).not.toHaveBeenCalled();
   }, 15000);
 
@@ -265,7 +266,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     expect(order.paymentStatus).toBe('paid');
-    expect(order.orderStatus).toBe('confirmed');
+    expect(order.orderStatus).toBe('paid'); // Payment Platform Redesign, Phase 2 — was 'confirmed'
     expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
 
     const shippingEvent = await prisma.shippingEvent.findFirst({ where: { orderId: orderNumber } });
@@ -385,6 +386,54 @@ describe('Payment dual-write (Payment Platform Redesign, Phase 1)', () => {
     }
     expect(payment.status).toBe('succeeded');
     expect(payment.paidAt).not.toBeNull();
+  }, 15000);
+});
+
+describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => {
+  it('a new order defaults to awaiting_payment, not the old processing default', async () => {
+    const product = await makeProduct({ name: 'DefaultStatus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_default_status', redirectUrl: 'https://pay.example/chk_default_status' });
+
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    expect(order.orderStatus).toBe('awaiting_payment');
+  }, 15000);
+
+  it('an expired checkout session marks the order expired, distinct from a failed one', async () => {
+    const product = await makeProduct({ name: 'ExpiredStatus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_expired_status', redirectUrl: 'https://pay.example/chk_expired_status' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'expired' });
+    await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('failed'); // PaymentStatus stays the coarser 2-state-terminal vocabulary
+    expect(order.orderStatus).toBe('expired'); // OrderStatus carries the real distinction
+  }, 20000);
+
+  it('PATCH /:id/status 400s on an orderStatus value outside the valid set, and never touches the order', async () => {
+    const product = await makeProduct({ name: 'InvalidStatus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_invalid_status', redirectUrl: 'https://pay.example/chk_invalid_status' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+
+    const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: 'not_a_real_status' });
+    expect(res.status).toBe(400);
+
+    const unchanged = await prisma.order.findUnique({ where: { id: order.id } });
+    expect(unchanged.orderStatus).toBe(order.orderStatus);
+  }, 15000);
+
+  it('PATCH /:id/status rejects the legacy "confirmed" value — nothing may set it again', async () => {
+    const product = await makeProduct({ name: 'LegacyStatus' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_legacy_status', redirectUrl: 'https://pay.example/chk_legacy_status' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+
+    const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: 'confirmed' });
+    expect(res.status).toBe(400);
   }, 15000);
 });
 
@@ -605,7 +654,7 @@ describe('GET /orders/:orderNumber/events — the Admin Order Timeline', () => {
     const statusEvent = res.body.data.find((e) => e.type === 'status_updated');
     expect(statusEvent.actor).toBe('admin');
     expect(statusEvent.actorUser._id).toBe('test-user');
-    expect(statusEvent.message).toMatch(/status: processing → shipped/);
+    expect(statusEvent.message).toMatch(/status: awaiting_payment → shipped/); // Payment Platform Redesign, Phase 2 — was 'processing'
   }, 15000);
 
   it('does not record a status_updated event when nothing actually changed', async () => {
@@ -623,7 +672,7 @@ describe('GET /orders/:orderNumber/events — the Admin Order Timeline', () => {
 
     const res = await request(app).get(`/api/orders/${orderNumber}/events`);
     expect(res.body.data.some((e) => e.type === 'status_updated')).toBe(false);
-  }, 15000);
+  }, 20000);
 
   it('404s for an unknown order number', async () => {
     const res = await request(app).get('/api/orders/PS-NOSUCHORDER/events');

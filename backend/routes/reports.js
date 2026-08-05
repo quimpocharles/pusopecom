@@ -275,7 +275,10 @@ router.get('/dashboard-widgets/data', async (req, res) => {
     const [todaysOrders, lowStock, pendingShipments, failedToday, mostViewedProducts, mostTriedOnProducts] = await Promise.all([
       orderRepository.find({ where: todayFilter, include: {} }),
       productRepository.count({ where: { active: true, totalStock: { gt: 0, lte: 5 } } }),
-      orderRepository.count({ where: { paymentStatus: 'paid', orderStatus: { in: ['processing', 'confirmed'] } } }),
+      // Payment Platform Redesign, Phase 2 — 'processing'/'confirmed' meant
+      // "paid, not yet shipped" under the old model; that's now paid/
+      // processing/packed (never 'confirmed', which nothing sets anymore).
+      orderRepository.count({ where: { paymentStatus: 'paid', orderStatus: { in: ['paid', 'processing', 'packed'] } } }),
       orderRepository.count({ where: { paymentStatus: 'failed', ...todayFilter } }),
       productRepository.find({ where: { active: true }, orderBy: { totalViews: 'desc' }, take: 5 }),
       tryOnLogRepository.mostTried(5),
@@ -614,7 +617,12 @@ async function computeOrdersReport(query) {
   const total = orders.length;
   const delivered = orders.filter((o) => o.orderStatus === 'delivered').length;
   const cancelled = orders.filter((o) => o.orderStatus === 'cancelled').length;
-  const eligibleOrders = total - cancelled;
+  // Payment Platform Redesign, Phase 2 — an order that never got paid was
+  // never going to be fulfilled either, same reasoning 'cancelled' was
+  // already excluded for; expired/failed_payment now make that a real,
+  // distinguishable status instead of being invisible inside 'processing'.
+  const neverPaid = orders.filter((o) => o.orderStatus === 'expired' || o.orderStatus === 'failed_payment').length;
+  const eligibleOrders = total - cancelled - neverPaid;
   const fulfillmentRate = eligibleOrders > 0 ? Math.round((delivered / eligibleOrders) * 10000) / 100 : 0;
 
   const failedOrders = orders.filter((o) => o.paymentStatus === 'failed');

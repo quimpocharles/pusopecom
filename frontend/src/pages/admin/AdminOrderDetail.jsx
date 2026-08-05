@@ -2,14 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
+import { ORDER_STATUS_COLORS, orderStatusLabel } from '../../utils/orderStatus';
 
-const statusColors = {
-  processing: 'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  shipped: 'bg-purple-100 text-purple-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
+const statusColors = ORDER_STATUS_COLORS;
 
 const paymentColors = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -112,7 +107,7 @@ const AdminOrderDetail = () => {
             {order.paymentStatus}
           </span>
           <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.orderStatus]}`}>
-            {order.orderStatus}
+            {orderStatusLabel(order.orderStatus)}
           </span>
         </div>
       </div>

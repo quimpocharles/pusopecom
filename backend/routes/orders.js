@@ -19,6 +19,15 @@ import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 
 const router = express.Router();
 
+// Every OrderStatus value an admin may set manually, via PATCH /:id/status —
+// deliberately excludes 'confirmed', the legacy value Payment Platform
+// Redesign Phase 2 superseded with 'paid'; nothing should set it again,
+// including a manual admin edit.
+const VALID_ORDER_STATUSES = [
+  'awaiting_payment', 'paid', 'processing', 'packed', 'shipped', 'delivered',
+  'returned', 'cancelled', 'expired', 'failed_payment',
+];
+
 /**
  * Restores stock for every item on an order inside one transaction — the
  * symmetric inverse of the atomic reservation made at order creation.
@@ -86,7 +95,9 @@ async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
     // applied is false only when a concurrent request already resolved
     // this order — the gateway's answer is still authoritative either
     // way, so the caller can trust 'paid' as the return value regardless.
-    const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'confirmed' });
+    // orderStatus: 'paid', not the legacy 'confirmed' — Payment Platform
+    // Redesign, Phase 2.
+    const applied = await orderRepository.tryResolvePayment(order._id, 'paid', { orderStatus: 'paid' });
     if (applied) {
       logger.info(logContext, 'Payment verified — order marked paid');
 
@@ -141,7 +152,12 @@ async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
   }
 
   if (gatewayStatus === 'failed' || gatewayStatus === 'expired') {
-    const applied = await orderRepository.tryResolvePayment(order._id, 'failed');
+    // Previously left orderStatus untouched on this branch — paymentStatus
+    // alone carried "this didn't work," with no orderStatus signal at all.
+    // Payment Platform Redesign, Phase 2 gives it one of its own.
+    const applied = await orderRepository.tryResolvePayment(order._id, 'failed', {
+      orderStatus: gatewayStatus === 'expired' ? 'expired' : 'failed_payment',
+    });
     if (applied) {
       logger.info({ ...logContext, reason: gatewayStatus }, 'Payment did not succeed — order marked failed, stock released');
       await releaseStock(order);
@@ -730,6 +746,13 @@ router.patch('/:id/status',
   async (req, res) => {
     try {
       const { orderStatus, trackingNumber, courier } = req.body;
+
+      if (orderStatus !== undefined && !VALID_ORDER_STATUSES.includes(orderStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: `orderStatus must be one of: ${VALID_ORDER_STATUSES.join(', ')}`,
+        });
+      }
 
       const before = await orderRepository.findById(req.params.id);
       if (!before) {

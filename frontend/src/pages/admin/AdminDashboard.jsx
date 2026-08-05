@@ -11,6 +11,7 @@ import StatsCard from '../../components/admin/StatsCard';
 import PinnedWidgets from '../../components/admin/dashboard/PinnedWidgets';
 import orderService from '../../services/orderService';
 import authService from '../../services/authService';
+import { ORDER_STATUS_COLORS, orderStatusLabel } from '../../utils/orderStatus';
 
 const AdminDashboard = () => {
   const [orderStats, setOrderStats] = useState(null);
@@ -50,13 +51,7 @@ const AdminDashboard = () => {
     );
   }
 
-  const statusColors = {
-    processing: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    shipped: 'bg-purple-100 text-purple-800',
-    delivered: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-  };
+  const statusColors = ORDER_STATUS_COLORS;
 
   const paymentColors = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -65,7 +60,12 @@ const AdminDashboard = () => {
     refunded: 'bg-gray-100 text-gray-800',
   };
 
-  const pendingCount = orderStats?.ordersByStatus?.processing || 0;
+  // Payment Platform Redesign, Phase 2 — this card's original intent was
+  // "orders that need attention," which under the old model meant
+  // orderStatus='processing' (the only state an unpaid order sat in).
+  // That's now 'awaiting_payment'; 'processing' has been repurposed to
+  // mean fulfillment prep for an already-paid order.
+  const pendingCount = orderStats?.ordersByStatus?.awaiting_payment || 0;
 
   return (
     <div>
@@ -93,7 +93,7 @@ const AdminDashboard = () => {
           icon={ShoppingCartIcon}
           title="Total Orders"
           value={totalOrders}
-          subtitle={`${pendingCount} processing`}
+          subtitle={`${pendingCount} awaiting payment`}
           color="purple"
         />
         <StatsCard
@@ -226,7 +226,7 @@ const AdminDashboard = () => {
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.orderStatus]}`}>
-                      {order.orderStatus}
+                      {orderStatusLabel(order.orderStatus)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">

@@ -2,14 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDownTrayIcon, PencilIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
 
-const statusColors = {
-  processing: 'bg-yellow-100 text-yellow-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  shipped: 'bg-purple-100 text-purple-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
+const statusColors = ORDER_STATUS_COLORS;
 
 const paymentColors = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -144,11 +139,9 @@ const AdminOrders = () => {
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
           >
             <option value="">All Statuses</option>
-            <option value="processing">Processing</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="shipped">Shipped</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            {ORDER_STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+            ))}
           </select>
           <select
             value={paymentFilter}
@@ -223,7 +216,7 @@ const AdminOrders = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.orderStatus]}`}>
-                          {order.orderStatus}
+                          {orderStatusLabel(order.orderStatus)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
@@ -288,11 +281,9 @@ const AdminOrders = () => {
                             onChange={(e) => setField(order._id, 'orderStatus', e.target.value)}
                             className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                           >
-                            <option value="processing">Processing</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="shipped">Shipped</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
+                            {ORDER_STATUS_OPTIONS.map((s) => (
+                              <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+                            ))}
                           </select>
                           <button
                             onClick={() => handleStatusUpdate(order._id, order)}
