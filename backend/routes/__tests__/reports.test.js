@@ -241,6 +241,108 @@ describe('GET /reports/shipping', () => {
   }, 15000);
 });
 
+describe('GET /reports/checkout-recovery (Payment Platform Redesign, Phase 7)', () => {
+  const orderIds = [];
+  const shippingAddress = {
+    fullName: 'Recovery Test', phone: '09170000001', address: '1 Recovery St',
+    city: `${MARKER}City`, province: `${MARKER}Province`, zipCode: '1000',
+  };
+
+  async function makeOrder(suffix, overrides = {}) {
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `${MARKER}-RECOVERY-${suffix}`, email: `${MARKER}-recovery-${suffix}@test.local`,
+        shipToFullName: shippingAddress.fullName, shipToPhone: shippingAddress.phone,
+        shipToAddress: shippingAddress.address, shipToCity: shippingAddress.city,
+        shipToProvince: shippingAddress.province, shipToZipCode: shippingAddress.zipCode,
+        subtotal: 800, shippingFee: 0, total: 800,
+        ...overrides,
+      },
+    });
+    orderIds.push(order.id);
+    return order;
+  }
+
+  let recoveredOrder, lostOrder, firstTryOrder;
+
+  beforeAll(async () => {
+    // Recovered: first attempt expired, second attempt succeeded.
+    recoveredOrder = await makeOrder('RECOVERED', { paymentStatus: 'paid', orderStatus: 'paid' });
+    await prisma.payment.create({
+      data: { orderId: recoveredOrder.id, provider: 'maya', status: 'expired', createdAt: new Date(Date.now() - 60000) },
+    });
+    await prisma.payment.create({
+      data: { orderId: recoveredOrder.id, provider: 'maya', status: 'succeeded', paidAt: new Date() },
+    });
+
+    // Never recovered: two real attempts, both failed, order stays failed.
+    lostOrder = await makeOrder('LOST', { paymentStatus: 'failed', orderStatus: 'failed_payment' });
+    await prisma.payment.create({ data: { orderId: lostOrder.id, provider: 'maya', status: 'failed' } });
+    await prisma.payment.create({ data: { orderId: lostOrder.id, provider: 'maya', status: 'expired' } });
+
+    // Happy path — one attempt, succeeded. Not a "recovery" (no friction).
+    firstTryOrder = await makeOrder('FIRSTTRY', { paymentStatus: 'paid', orderStatus: 'paid' });
+    await prisma.payment.create({
+      data: { orderId: firstTryOrder.id, provider: 'maya', status: 'succeeded', paidAt: new Date() },
+    });
+  }, 20000);
+
+  afterAll(async () => {
+    await prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } });
+    await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
+  });
+
+  it('counts recovered vs. never-recovered orders, excluding single-attempt successes from "recovered"', async () => {
+    const res = await request(app).get(`/api/reports/checkout-recovery?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.recoveredPayments).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.neverRecovered).toBeGreaterThanOrEqual(1);
+    // revenueRecovered counts the recovered order's total, not the
+    // single-attempt firstTryOrder's — both are 'paid', only one recovered.
+    expect(res.body.data.revenueRecovered).toBeGreaterThanOrEqual(800);
+  }, 15000);
+
+  it('computes provider success rate from resolved Payment attempts', async () => {
+    const res = await request(app).get(`/api/reports/checkout-recovery?${rangeQS}`);
+    const maya = res.body.data.providerBreakdown.find((p) => p.provider === 'maya');
+    expect(maya).toBeTruthy();
+    expect(maya.total).toBeGreaterThanOrEqual(5); // 2 + 2 + 1 across the three fixtures
+    expect(maya.succeeded).toBeGreaterThanOrEqual(2);
+  }, 15000);
+
+  it('counts expired sessions and retry attempts across orders', async () => {
+    const res = await request(app).get(`/api/reports/checkout-recovery?${rangeQS}`);
+    expect(res.body.data.expiredSessions).toBeGreaterThanOrEqual(2); // 1 from recoveredOrder, 1 from lostOrder
+    expect(res.body.data.retryCount).toBeGreaterThanOrEqual(2); // 1 extra attempt each for recoveredOrder + lostOrder
+  }, 15000);
+});
+
+describe('GET /reports/webhook-health', () => {
+  it('reports how many Payments had a webhook processed recently, and when the most recent one landed', async () => {
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `${MARKER}-WEBHOOKHEALTH`, email: `${MARKER}-webhook@test.local`,
+        shipToFullName: 'Webhook Test', shipToPhone: '09170000002', shipToAddress: '1 St',
+        shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+        subtotal: 500, total: 500, paymentStatus: 'paid',
+      },
+    });
+    const payment = await prisma.payment.create({
+      data: { orderId: order.id, provider: 'maya', status: 'succeeded', webhookProcessedAt: new Date() },
+    });
+
+    try {
+      const res = await request(app).get('/api/reports/webhook-health');
+      expect(res.status).toBe(200);
+      expect(res.body.data.processedLast24h).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.lastWebhookAt).not.toBeNull();
+    } finally {
+      await prisma.payment.delete({ where: { id: payment.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+});
+
 describe('Report recipients admin CRUD', () => {
   it('adds, lists, deactivates, and removes a recipient', async () => {
     const email = `${MARKER}-recipient@test.local`;
@@ -320,7 +422,7 @@ describe('Report exports (CSV + Excel)', () => {
   // wiring — one correctness check above (sales) is enough to prove the pattern;
   // this loop just confirms the other five didn't get miswired (wrong route,
   // missing sheets, format branching broken).
-  it.each(['products', 'orders', 'customers', 'tryon', 'shipping'])('GET /%s/export responds with CSV by default and XLSX on request', async (report) => {
+  it.each(['products', 'orders', 'customers', 'tryon', 'shipping', 'checkout-recovery'])('GET /%s/export responds with CSV by default and XLSX on request', async (report) => {
     const csvRes = await request(app).get(`/api/reports/${report}/export?${rangeQS}`);
     expect(csvRes.status).toBe(200);
     expect(csvRes.headers['content-type']).toMatch(/text\/csv/);

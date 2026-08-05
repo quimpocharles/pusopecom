@@ -10,6 +10,7 @@ import * as reportRecipientRepository from '../repositories/reportRecipientRepos
 import * as reportRunRepository from '../repositories/reportRunRepository.js';
 import * as reportScheduleRepository from '../repositories/reportScheduleRepository.js';
 import * as dashboardWidgetRepository from '../repositories/dashboardWidgetRepository.js';
+import * as paymentRepository from '../repositories/paymentRepository.js';
 import { sendReportExport } from '../lib/reportExport.js';
 import {
   generateAndSendDailyBusinessReport,
@@ -973,6 +974,134 @@ router.get('/shipping/export', async (req, res) => {
     logger.error({ err: error }, 'Shipping report export error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to export shipping report' });
+  }
+});
+
+// ── Checkout Recovery (Payment Platform Redesign, Phase 7) ─────────────────
+// The metric the daily business report email has flagged as "not yet
+// tracked by the platform" since before this whole redesign started — now
+// buildable for real, off Payment (Phase 1) and OrderStatus (Phase 2)
+// rather than fabricated. Scoped to orders *created* within the selected
+// range, same convention every other report here uses.
+
+async function computeCheckoutRecoveryReport(query) {
+  const dateFilter = getDateFilter(query);
+
+  const orders = await orderRepository.find({
+    where: { ...dateFilter },
+    include: { payments: true },
+  });
+
+  const pendingOrders = orders.filter((o) => o.orderStatus === 'awaiting_payment');
+  const neverRecovered = orders.filter((o) => o.orderStatus === 'expired' || o.orderStatus === 'failed_payment');
+  const withAttempt = orders.filter((o) => o.payments.length > 0);
+  // "Recovered" means the order showed real friction (more than one
+  // checkout attempt) and still ended up paid — a session simply succeeding
+  // on the first try isn't a recovery, it's the happy path.
+  const recovered = orders.filter((o) => o.paymentStatus === 'paid' && o.payments.length > 1);
+
+  const atRiskCount = recovered.length + neverRecovered.length;
+  const recoveryRate = atRiskCount > 0 ? Math.round((recovered.length / atRiskCount) * 1000) / 10 : 0;
+  const abandonmentRate = withAttempt.length > 0 ? Math.round((neverRecovered.length / withAttempt.length) * 1000) / 10 : 0;
+
+  // paidAt lives on Payment, not Order — the succeeded attempt among this
+  // order's rows is the one that actually carries it.
+  const recoveryTimesMinutes = recovered
+    .map((o) => {
+      const paidAt = o.payments.find((p) => p.status === 'succeeded' && p.paidAt)?.paidAt;
+      return paidAt ? (new Date(paidAt).getTime() - new Date(o.createdAt).getTime()) / 60000 : null;
+    })
+    .filter((minutes) => minutes !== null);
+  const avgRecoveryTimeMinutes = recoveryTimesMinutes.length
+    ? Math.round(recoveryTimesMinutes.reduce((s, m) => s + m, 0) / recoveryTimesMinutes.length)
+    : 0;
+
+  const allPayments = orders.flatMap((o) => o.payments);
+  const resolvedPayments = allPayments.filter((p) => ['succeeded', 'failed', 'expired'].includes(p.status));
+  const providerBreakdown = [...groupBy(resolvedPayments, (p) => p.provider).entries()].map(([provider, payments]) => {
+    const succeeded = payments.filter((p) => p.status === 'succeeded').length;
+    return {
+      provider,
+      succeeded,
+      total: payments.length,
+      successRate: payments.length ? Math.round((succeeded / payments.length) * 1000) / 10 : 0,
+    };
+  });
+
+  const expiredSessions = allPayments.filter((p) => p.status === 'expired').length;
+  const revenueRecovered = recovered.reduce((s, o) => s + o.total, 0);
+  const retryCount = orders.reduce((s, o) => s + Math.max(0, o.payments.length - 1), 0);
+
+  return {
+    pendingOrders: pendingOrders.length,
+    recoveredPayments: recovered.length,
+    neverRecovered: neverRecovered.length,
+    recoveryRate,
+    abandonmentRate,
+    avgRecoveryTimeMinutes,
+    providerBreakdown,
+    expiredSessions,
+    revenueRecovered,
+    retryCount,
+    totalOrders: orders.length,
+  };
+}
+
+router.get('/checkout-recovery', async (req, res) => {
+  try {
+    res.json({ success: true, data: await computeCheckoutRecoveryReport(req.query) });
+  } catch (error) {
+    logger.error({ err: error }, 'Checkout recovery report error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate checkout recovery report' });
+  }
+});
+
+router.get('/checkout-recovery/export', async (req, res) => {
+  try {
+    const data = await computeCheckoutRecoveryReport(req.query);
+    await sendReportExport(res, {
+      format: exportFormat(req.query),
+      baseFilename: 'checkout-recovery-report',
+      summary: [
+        ['Pending Orders', data.pendingOrders],
+        ['Recovered Payments', data.recoveredPayments],
+        ['Never Recovered', data.neverRecovered],
+        ['Recovery Rate', `${data.recoveryRate}%`],
+        ['Abandonment Rate', `${data.abandonmentRate}%`],
+        ['Avg Recovery Time (min)', data.avgRecoveryTimeMinutes],
+        ['Expired Sessions', data.expiredSessions],
+        ['Revenue Recovered', data.revenueRecovered],
+        ['Retry Count', data.retryCount],
+      ],
+      sheets: [
+        {
+          name: 'Provider Success Rate',
+          columns: [
+            { header: 'Provider', key: 'provider' },
+            { header: 'Succeeded', key: 'succeeded' },
+            { header: 'Total', key: 'total' },
+            { header: 'Success Rate', key: 'successRate' },
+          ],
+          rows: data.providerBreakdown,
+        },
+      ],
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Checkout recovery report export error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to export checkout recovery report' });
+  }
+});
+
+// Webhook Health — no export (a live-status panel, not a period report).
+router.get('/webhook-health', async (req, res) => {
+  try {
+    res.json({ success: true, data: await paymentRepository.getWebhookHealth() });
+  } catch (error) {
+    logger.error({ err: error }, 'Webhook health error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to load webhook health' });
   }
 });
 

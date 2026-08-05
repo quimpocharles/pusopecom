@@ -60,4 +60,22 @@ export async function resolve(id, status, extra = {}, { client = prisma } = {}) 
   return result.count > 0;
 }
 
-export default { create, findById, findLatestForOrder, findByOrder, findLatestForOrders, resolve };
+/**
+ * Payment Platform Redesign, Phase 7 — Admin Dashboard's "Webhook Health."
+ * Deliberately only what's derivable from Payment's own webhookProcessedAt
+ * column: how many real Maya webhooks actually got processed recently, and
+ * when the last one landed. IP-allowlist rejections (mayaWebhookIpAllowlist)
+ * aren't persisted anywhere — they're a security-boundary event, already
+ * visible via logger.warn + the request logs/Sentry, not a business metric
+ * this report needs its own storage table for.
+ */
+export async function getWebhookHealth({ client = prisma } = {}) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [processedLast24h, mostRecent] = await Promise.all([
+    client.payment.count({ where: { webhookProcessedAt: { gte: since } } }),
+    client.payment.findFirst({ where: { webhookProcessedAt: { not: null } }, orderBy: { webhookProcessedAt: 'desc' } }),
+  ]);
+  return { processedLast24h, lastWebhookAt: mostRecent?.webhookProcessedAt ?? null };
+}
+
+export default { create, findById, findLatestForOrder, findByOrder, findLatestForOrders, resolve, getWebhookHealth };

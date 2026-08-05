@@ -5,6 +5,7 @@ import ProductsSection from '../../components/admin/reports/ProductsSection';
 import OrdersSection from '../../components/admin/reports/OrdersSection';
 import CustomersSection from '../../components/admin/reports/CustomersSection';
 import TryOnSection from '../../components/admin/reports/TryOnSection';
+import CheckoutRecoverySection from '../../components/admin/reports/CheckoutRecoverySection';
 import ReportRecipients from '../../components/admin/reports/ReportRecipients';
 import ReportSchedules from '../../components/admin/reports/ReportSchedules';
 
@@ -40,6 +41,7 @@ const AdminReports = () => {
       <SalesSection dateParams={dateParams} />
       <ProductsSection dateParams={dateParams} />
       <OrdersSection dateParams={dateParams} />
+      <CheckoutRecoverySection dateParams={dateParams} />
       <CustomersSection dateParams={dateParams} />
       <TryOnSection dateParams={dateParams} />
     </div>

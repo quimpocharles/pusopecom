@@ -26,9 +26,20 @@ export const reportService = {
     return response.data;
   },
 
+  // Payment Platform Redesign, Phase 7
+  getCheckoutRecoveryReport: async (params = {}) => {
+    const response = await api.get('/reports/checkout-recovery', { params });
+    return response.data;
+  },
+
+  getWebhookHealth: async () => {
+    const response = await api.get('/reports/webhook-health');
+    return response.data;
+  },
+
   // Downloads a report as CSV or Excel, preserving whatever date-range
   // params the on-screen report is currently filtered by. `reportKey` is
-  // one of sales|products|orders|customers|tryon|shipping.
+  // one of sales|products|orders|customers|tryon|shipping|checkout-recovery.
   exportReport: async (reportKey, format, params = {}) => {
     const response = await api.get(`/reports/${reportKey}/export`, {
       params: { ...params, format },
