@@ -67,6 +67,28 @@ describe('routes/settings.js', () => {
     await request(app).put('/api/settings').send({ tryOn: { title: before.body.data.tryOn.title } });
   });
 
+  it('GET / includes payment (Payment Platform Redesign, Phase 4), distinct from fitCheck', async () => {
+    const res = await request(app).get('/api/settings');
+    expect(res.body.data.payment).toMatchObject({
+      orderExpirationEnabled: expect.any(Boolean),
+      orderRetentionHours: expect.any(Number),
+    });
+  });
+
+  it('PUT / updates payment without touching fitCheck/tryOn, and vice versa', async () => {
+    const before = await request(app).get('/api/settings');
+
+    const res = await request(app).put('/api/settings').send({ payment: { orderRetentionHours: 24 } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.payment.orderRetentionHours).toBe(24);
+    expect(res.body.data.payment.orderExpirationEnabled).toBe(before.body.data.payment.orderExpirationEnabled);
+    expect(res.body.data.fitCheck).toEqual(before.body.data.fitCheck);
+
+    // restore, so this test doesn't permanently change real settings —
+    // lib/expireStaleOrders.js's default assumption (48h) depends on this.
+    await request(app).put('/api/settings').send({ payment: { orderRetentionHours: before.body.data.payment.orderRetentionHours } });
+  });
+
   it('GET /venue-pickup returns a safe default when no config exists yet', async () => {
     const res = await request(app).get('/api/settings/venue-pickup');
     expect(res.status).toBe(200);

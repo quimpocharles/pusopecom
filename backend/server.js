@@ -20,6 +20,7 @@ import {
   generateAndSendMonthlyBusinessReport,
   generateAndSendQuarterlyBusinessReport,
 } from './services/dailyBusinessReportService.js';
+import { expireStaleOrders } from './lib/expireStaleOrders.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -271,6 +272,28 @@ cron.schedule('0 5 1 1,4,7,10 *', async () => {
     await generateAndSendQuarterlyBusinessReport();
   } catch (error) {
     logger.error({ err: error }, 'Quarterly business report failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Payment Platform Redesign, Phase 4 — sweeps orders that have sat
+// paymentStatus='pending' past the admin-configured retention window
+// (default 48h) into Expired, releasing their reserved stock. Hourly, not
+// daily like the jobs above: this holds live inventory, not just a report
+// number, so stock shouldn't stay artificially locked for up to a full day
+// waiting on a once-a-day sweep.
+cron.schedule('0 * * * *', async () => {
+  try {
+    const result = await expireStaleOrders();
+    if (result.expiredCount > 0 || result.errors.length > 0) {
+      logger.info(result, 'Stale order expiration sweep completed');
+    }
+    for (const { orderNumber, error } of result.errors) {
+      logger.error({ err: error, orderNumber }, 'Failed to expire a stale order');
+      Sentry.captureException(error);
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Stale order expiration sweep failed');
     Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });

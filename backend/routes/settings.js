@@ -23,13 +23,14 @@ router.get('/', async (req, res) => {
 router.put('/', authenticate, isAdmin, async (req, res) => {
   try {
     // siteSettingsRepository.update() accepts the same { tryOn, tryOnAd,
-    // fitCheck } shape the request body already has, and does the partial-
-    // merge + flatten-to-columns + reshape-back internally — this route
-    // doesn't need to know the database storage shape changed at all.
+    // fitCheck, payment } shape the request body already has, and does the
+    // partial-merge + flatten-to-columns + reshape-back internally — this
+    // route doesn't need to know the database storage shape changed at all.
     const settings = await siteSettingsRepository.update({
       tryOn: req.body.tryOn,
       tryOnAd: req.body.tryOnAd,
       fitCheck: req.body.fitCheck,
+      payment: req.body.payment,
     });
     res.json({ success: true, data: settings });
   } catch (error) {

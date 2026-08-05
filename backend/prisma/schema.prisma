@@ -852,6 +852,13 @@ model SiteSettings {
   fitCheckTrendingWindowDays Int @default(7)
   fitCheckTrendingLimit      Int @default(8)
 
+  // Payment Platform Redesign, Phase 4 — how long a still-unpaid order
+  // stays recoverable before lib/expireStaleOrders.js's hourly sweep
+  // marks it Expired and releases its reserved stock. A real kill switch,
+  // not just a config number nobody can turn off if something looks wrong.
+  orderExpirationEnabled Boolean @default(true)
+  orderRetentionHours    Int     @default(48)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

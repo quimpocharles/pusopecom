@@ -51,12 +51,20 @@ function toNestedShape(row) {
         limit: row.fitCheckTrendingLimit,
       },
     },
+    // Payment Platform Redesign, Phase 4 — how long an unpaid order stays
+    // recoverable before lib/expireStaleOrders.js's hourly sweep marks it
+    // Expired. Its own top-level group, not nested under fitCheck's
+    // sibling groups — a different domain entirely.
+    payment: {
+      orderExpirationEnabled: row.orderExpirationEnabled,
+      orderRetentionHours: row.orderRetentionHours,
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {}) {
+function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck, payment } = {}) {
   // Mirrors the original route's Object.assign(settings.tryOn, req.body.tryOn)
   // — a partial merge per sub-object, not a wholesale replace, so a caller
   // updating only `tryOn.title` doesn't blow away `tryOn.image`.
@@ -69,6 +77,7 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
       bonus: { ...existingNested.fitCheck.bonus, ...fitCheck?.bonus },
       trending: { ...existingNested.fitCheck.trending, ...fitCheck?.trending },
     },
+    payment: { ...existingNested.payment, ...payment },
   };
   return {
     tryOnTitle: merged.tryOn.title,
@@ -87,6 +96,8 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck } = {})
     fitCheckBonusFirstPurchase: merged.fitCheck.bonus.firstPurchase,
     fitCheckTrendingWindowDays: merged.fitCheck.trending.windowDays,
     fitCheckTrendingLimit: merged.fitCheck.trending.limit,
+    orderExpirationEnabled: merged.payment.orderExpirationEnabled,
+    orderRetentionHours: merged.payment.orderRetentionHours,
   };
 }
 

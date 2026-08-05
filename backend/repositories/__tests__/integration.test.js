@@ -13,6 +13,7 @@ import * as userActivityRepo from '../userActivityRepository.js';
 import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepo from '../fitCheckCampaignRepository.js';
 import * as paymentRepo from '../paymentRepository.js';
+import { expireStaleOrders } from '../../lib/expireStaleOrders.js';
 
 /**
  * Real integration tests against a live database — the honest gap flagged
@@ -1146,6 +1147,106 @@ describe('paymentRepository.resolve — the exact race two concurrent resolution
     } finally {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+});
+
+describe('expireStaleOrders — Payment Platform Redesign, Phase 4', () => {
+  it('marks a stale pending order Expired, releases its stock, and resolves the Payment row', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: `ExpireTest ${Date.now()}`, slug: `expire-test-${Date.now()}`, description: 'x',
+        price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
+        totalStock: 10, sizes: { create: [{ size: 'M', stock: 10 }] },
+      },
+    });
+    const staleOrder = await prisma.order.create({
+      data: {
+        orderNumber: `PS-EXPIRETEST-${Date.now()}`,
+        email: 'expire-test@example.com',
+        shipToFullName: 'Test', shipToPhone: '09171234567', shipToAddress: '1 St',
+        shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+        subtotal: 1000, total: 1000,
+        paymentStatus: 'pending',
+        createdAt: new Date(Date.now() - 49 * 60 * 60 * 1000), // 49h ago — past the 48h default
+        items: { create: [{ productId: product.id, name: product.name, price: 500, quantity: 2, size: 'M', image: 'x.jpg' }] },
+      },
+    });
+    // Simulate the real reservation-at-placement flow this order would have gone through.
+    await prisma.productSize.updateMany({ where: { productId: product.id, size: 'M' }, data: { stock: { decrement: 2 } } });
+    await prisma.product.update({ where: { id: product.id }, data: { totalStock: { decrement: 2 } } });
+
+    const payment = await prisma.payment.create({
+      data: { orderId: staleOrder.id, provider: 'maya', status: 'pending', checkoutReference: 'chk_expire_test', expiresAt: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    });
+
+    try {
+      const result = await expireStaleOrders();
+      expect(result.skipped).toBe(false);
+      // Not an exact count — a long-running shared dev DB may have other
+      // genuinely stale rows too; the real assertion is what happened to
+      // *this* fixture, checked individually below.
+      expect(result.expiredCount).toBeGreaterThanOrEqual(1);
+
+      const updatedOrder = await prisma.order.findUnique({ where: { id: staleOrder.id } });
+      expect(updatedOrder.paymentStatus).toBe('failed');
+      expect(updatedOrder.orderStatus).toBe('expired');
+
+      const restoredSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+      expect(restoredSize.stock).toBe(10); // released back to inventory
+
+      const updatedPayment = await prisma.payment.findUnique({ where: { id: payment.id } });
+      expect(updatedPayment.status).toBe('expired');
+
+      const event = await prisma.orderEvent.findFirst({ where: { orderId: staleOrder.id, type: 'payment_expired' } });
+      expect(event).not.toBeNull();
+    } finally {
+      await prisma.orderEvent.deleteMany({ where: { orderId: staleOrder.id } });
+      await prisma.payment.deleteMany({ where: { orderId: staleOrder.id } });
+      await prisma.orderItem.deleteMany({ where: { orderId: staleOrder.id } });
+      await prisma.order.delete({ where: { id: staleOrder.id } });
+      await prisma.product.delete({ where: { id: product.id } });
+    }
+  }, 20000);
+
+  it('never touches an order still inside the retention window', async () => {
+    const product = await prisma.product.create({
+      data: {
+        name: `RecentTest ${Date.now()}`, slug: `recent-test-${Date.now()}`, description: 'x',
+        price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
+      },
+    });
+    const recentOrder = await prisma.order.create({
+      data: {
+        orderNumber: `PS-RECENTTEST-${Date.now()}`,
+        email: 'recent-test@example.com',
+        shipToFullName: 'Test', shipToPhone: '09171234567', shipToAddress: '1 St',
+        shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+        subtotal: 500, total: 500,
+        paymentStatus: 'pending', // createdAt defaults to now — well inside any real retention window
+      },
+    });
+
+    try {
+      await expireStaleOrders();
+      const unchanged = await prisma.order.findUnique({ where: { id: recentOrder.id } });
+      expect(unchanged.paymentStatus).toBe('pending');
+      expect(unchanged.orderStatus).toBe('awaiting_payment');
+    } finally {
+      await prisma.order.delete({ where: { id: recentOrder.id } });
+      await prisma.product.delete({ where: { id: product.id } });
+    }
+  }, 15000);
+
+  it('skips the entire sweep when orderExpirationEnabled is off — a real kill switch, not just a number', async () => {
+    const before = await siteSettingsRepo.get();
+    await siteSettingsRepo.update({ payment: { orderExpirationEnabled: false } });
+
+    try {
+      const result = await expireStaleOrders();
+      expect(result).toEqual({ skipped: true, expiredCount: 0, candidateCount: 0, errors: [] });
+    } finally {
+      await siteSettingsRepo.update({ payment: { orderExpirationEnabled: before.payment.orderExpirationEnabled } });
     }
   }, 15000);
 });

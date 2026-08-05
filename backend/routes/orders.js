@@ -88,7 +88,12 @@ async function dualWritePaymentResolution(order, status, extra, logContext) {
   }
 }
 
-async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
+// Named-exported (not just used internally) so lib/expireStaleOrders.js's
+// hourly sweep (Payment Platform Redesign, Phase 4) can drive the exact
+// same atomic-resolve + releaseStock + dual-write Payment + OrderEvent
+// sequence for a stale order as a real gateway 'expired' report already
+// does — one resolution path, not two copies of it that could drift.
+export async function applyPaymentResolution(order, gatewayStatus, source = 'system') {
   const logContext = { orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod };
 
   if (gatewayStatus === 'succeeded') {

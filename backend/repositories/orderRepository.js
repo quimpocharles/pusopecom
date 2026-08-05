@@ -196,6 +196,24 @@ export async function tryResolvePayment(id, paymentStatus, extra = {}, { client 
   return result.count > 0;
 }
 
+/**
+ * Payment Platform Redesign, Phase 4 — orders lib/expireStaleOrders.js's
+ * hourly sweep should mark Expired: still genuinely unresolved
+ * (paymentStatus never moved off 'pending' — a resolved order, whichever
+ * way, is never a candidate here) and placed before the retention cutoff.
+ * Measured from Order.createdAt, not the latest Payment attempt's own
+ * createdAt — regenerating a checkout session (Phase 3's "Generate New
+ * Payment Link") extends how long a fan can *try* to pay, not how long
+ * their reserved stock stays held for a purchase that still hasn't happened.
+ */
+export async function findStalePending({ cutoff, client = prisma } = {}) {
+  const orders = await client.order.findMany({
+    where: { paymentStatus: 'pending', createdAt: { lt: cutoff } },
+    include: DEFAULT_INCLUDE,
+  });
+  return serialize(orders.map(withOrderFallbacks)).map(reshapeOrder);
+}
+
 /** Replaces the revenue $group aggregations behind admin order stats. */
 export async function getRevenueStats({ client = prisma } = {}) {
   const now = new Date();
@@ -287,6 +305,7 @@ export default {
   create,
   updateById,
   tryResolvePayment,
+  findStalePending,
   getRevenueStats,
   getTopSellingProducts,
   getOrdersByStatus,

@@ -38,6 +38,13 @@ const AdminSettings = () => {
     emailVerified: 1,
     firstPurchase: 2,
   });
+  // Payment Platform Redesign, Phase 4 — how long an unpaid order stays
+  // recoverable before the hourly sweep marks it Expired and releases its
+  // reserved stock. Defaults match lib/expireStaleOrders.js's own defaults.
+  const [payment, setPayment] = useState({
+    orderExpirationEnabled: true,
+    orderRetentionHours: 48,
+  });
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -72,6 +79,12 @@ const AdminSettings = () => {
               firstPurchase:   res.data.fitCheck.bonus.firstPurchase ?? 2,
             });
           }
+        }
+        if (res.data?.payment) {
+          setPayment({
+            orderExpirationEnabled: res.data.payment.orderExpirationEnabled ?? true,
+            orderRetentionHours:    res.data.payment.orderRetentionHours ?? 48,
+          });
         }
       } catch (error) {
         console.error('Failed to fetch settings:', error);
@@ -126,7 +139,7 @@ const AdminSettings = () => {
     setSaving(true);
     setMessage(null);
     try {
-      await settingsService.updateSettings({ tryOn, tryOnAd, fitCheck: { ...fitCheck, bonus: fitCheckBonus } });
+      await settingsService.updateSettings({ tryOn, tryOnAd, fitCheck: { ...fitCheck, bonus: fitCheckBonus }, payment });
       setMessage({ type: 'success', text: 'Settings saved successfully' });
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -382,6 +395,36 @@ const AdminSettings = () => {
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-3">To grant a one-off bonus to a specific fan (a giveaway, a customer-service gesture), use "Grant Fit Checks" on their row in Users.</p>
+        </div>
+
+        {/* Order Expiration */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-start justify-between gap-4 mb-1">
+            <h2 className="text-lg font-semibold text-gray-900">Order Expiration</h2>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={payment.orderExpirationEnabled}
+                onChange={(e) => setPayment((prev) => ({ ...prev, orderExpirationEnabled: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Enabled</span>
+            </label>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">How long an unpaid order stays recoverable before it's marked Expired and its reserved stock is released back to inventory.</p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Retention window (hours)</label>
+            <input
+              type="number"
+              min="1"
+              disabled={!payment.orderExpirationEnabled}
+              value={payment.orderRetentionHours}
+              onChange={(e) => setPayment((prev) => ({ ...prev, orderRetentionHours: Number(e.target.value) }))}
+              className="w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+            />
+            <p className="text-xs text-gray-500 mt-1">Checked hourly — an order can sit up to an hour past this window before the sweep catches it.</p>
+          </div>
         </div>
 
         {/* Message */}
