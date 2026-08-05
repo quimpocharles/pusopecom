@@ -307,6 +307,23 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     expect(afterSize.stock).toBe(10);
   }, 15000);
 
+  it('resolves an order from a requestReferenceNumber carrying mayaGateway.js\'s attempt-unique "#" suffix', async () => {
+    const product = await makeProduct({ name: 'HashSuffixWebhook' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_hash', redirectUrl: 'https://pay.example/chk_hash' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
+    const res = await request(app).post('/api/orders/webhooks/maya').send({
+      requestReferenceNumber: `${orderNumber}#1785950000000`,
+      status: 'PAYMENT_SUCCESS',
+    });
+    expect(res.status).toBe(200);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('paid');
+  }, 15000);
+
   it('silently acknowledges a webhook for an unknown order, without erroring', async () => {
     const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: 'PS-NOSUCHORDER', status: 'PAYMENT_SUCCESS' });
     expect(res.status).toBe(200);

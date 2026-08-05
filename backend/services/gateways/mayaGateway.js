@@ -93,7 +93,18 @@ export async function createCheckoutSession(order) {
         failure: `${process.env.FRONTEND_URL}/order/${order.orderNumber}?payment=failed`,
         cancel: `${process.env.FRONTEND_URL}/checkout?payment=cancelled`
       },
-      requestReferenceNumber: order.orderNumber,
+      // Unique per checkout attempt, not just per order. Reusing the bare
+      // order number on every "Generate New Payment Link" regeneration
+      // (Payment Platform Redesign, Phase 3) was reproduced handing back a
+      // reference to the SAME underlying Maya checkout session as the
+      // original attempt — which, being the one that already lapsed, sends
+      // the customer straight to Maya's "Invalid Request... already
+      // expired" page instead of a genuinely new, live session. The order
+      // number is still the prefix (parsed back out in routes/orders.js's
+      // webhook handler via requestReferenceNumber.split('#')[0]), so
+      // reconciliation is unaffected — Maya just can never conflate two
+      // different attempts as the same request again.
+      requestReferenceNumber: `${order.orderNumber}#${Date.now()}`,
       metadata: {
         orderNumber: order.orderNumber,
         userId: order.user?.toString() || 'guest'

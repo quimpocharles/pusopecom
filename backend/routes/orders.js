@@ -850,9 +850,13 @@ router.post('/webhooks/maya', mayaWebhookIpAllowlist, async (req, res) => {
       return res.status(400).json({ success: false });
     }
 
-    logger.info({ orderNumber: requestReferenceNumber, gateway: 'maya' }, 'Webhook received');
+    // mayaGateway.js sends `${orderNumber}#${attempt-unique suffix}`, not
+    // the bare order number — see that file's comment for why. The order
+    // number is always everything before the first '#'.
+    const orderNumber = requestReferenceNumber.split('#')[0];
+    logger.info({ orderNumber, gateway: 'maya' }, 'Webhook received');
 
-    const order = await orderRepository.findByOrderNumber(requestReferenceNumber);
+    const order = await orderRepository.findByOrderNumber(orderNumber);
     if (!order || order.paymentStatus === 'paid' || order.paymentStatus === 'failed' || !order.mayaPaymentId) {
       return res.json({ success: true });
     }
