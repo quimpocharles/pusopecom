@@ -180,6 +180,22 @@
   }
 
   /*
+   * A <select> ignores .input-field's background/border in favor of the
+   * browser's own native chrome (the grey gradient fill + spinner-style
+   * arrows) unless appearance is explicitly reset — every other input type
+   * doesn't have this problem, only <select> does. appearance-none strips
+   * that chrome so the same flat bg-gray-50/border-gray-200 treatment
+   * actually renders; the custom chevron replaces the native arrow that
+   * appearance-none also removes.
+   */
+  select.input-field {
+    @apply appearance-none bg-no-repeat pr-10 cursor-pointer disabled:cursor-not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%239CA3AF' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 1rem center;
+    background-size: 1rem 1rem;
+  }
+
+  /*
    * ---- Panel (docs/design/COMPONENT_SPECIFICATION.md § Panels) ----
    * Replaces the old "Card" — one flat, bordered treatment, no shadow, no
    * hover elevation. Used directly by real pages (Checkout, OrderConfirmation,
