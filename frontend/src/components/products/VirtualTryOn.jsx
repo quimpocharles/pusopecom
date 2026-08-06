@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { XMarkIcon, ArrowDownTrayIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ArrowDownTrayIcon, ShoppingCartIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/outline';
 import api from '../../services/api';
 import useCartStore from '../../store/cartStore';
 import settingsService from '../../services/settingsService';
@@ -38,6 +38,17 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
   const [sponsorship, setSponsorship] = useState(null);
+  // Muted by default so the browser actually honors autoplay (see the
+  // in-panel ad below) — a shared toggle rather than two independent ones,
+  // since the same ad video plays in both the fullscreen takeover and the
+  // compact in-panel view a fan sees after dismissing it.
+  const [adMuted, setAdMuted] = useState(true);
+  // A fullscreen takeover shown the instant generation starts — closable
+  // any time, and auto-dismissed the moment loading finishes (success or
+  // error) so a fan is never stuck looking at an ad once their result is
+  // ready. Generation itself is unaffected either way; this is purely
+  // what's on screen while it's running.
+  const [showAdOverlay, setShowAdOverlay] = useState(false);
 
   // Acquisition flow state — everything before an image is handed to
   // handleGenerate().
@@ -216,6 +227,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
 
     setLoading(true);
     setError('');
+    if (ad.videoUrl) setShowAdOverlay(true);
 
     try {
       const formData = new FormData();
@@ -248,6 +260,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
       );
     } finally {
       setLoading(false);
+      setShowAdOverlay(false);
       // Refetch — every real attempt consumes today's allowance whether it
       // succeeds or fails, so the count shown needs to move either way.
       setQuotaRefreshKey((k) => k + 1);
@@ -317,13 +330,15 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
           </div>
           )}
 
-          {/* Lower Half: Ad video with overlaid CTA */}
-          {ad.videoUrl && (
+          {/* Lower Half: Ad video with overlaid CTA — shown once the fullscreen
+              takeover below has been dismissed (or never shown, if generation
+              started before it could open/load). */}
+          {ad.videoUrl && !showAdOverlay && (
             <div className="flex-1 relative overflow-hidden">
               <video
                 autoPlay
                 loop
-                muted
+                muted={adMuted}
                 playsInline
                 style={{
                   position: 'absolute',
@@ -337,6 +352,13 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
               >
                 <source src={ad.videoUrl} type="video/mp4" />
               </video>
+              <button
+                onClick={() => setAdMuted((m) => !m)}
+                className="absolute top-2 right-2 p-1.5 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-colors"
+                aria-label={adMuted ? 'Unmute video' : 'Mute video'}
+              >
+                {adMuted ? <SpeakerXMarkIcon className="w-4 h-4" /> : <SpeakerWaveIcon className="w-4 h-4" />}
+              </button>
               {ad.buttonText && ad.buttonUrl && (
                 <div className="absolute inset-x-0 bottom-4 flex justify-center">
                   <a
@@ -420,7 +442,62 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <>
+      {/* Fullscreen ad takeover — opens the instant generation starts,
+          sits above the modal itself (higher z-index), and is purely a
+          "what's on screen" layer: closing it early or leaving it up
+          until it auto-dismisses has zero effect on the generation
+          request already running underneath. */}
+      {showAdOverlay && ad.videoUrl && (
+        <div className="fixed inset-0 bg-black z-[60] flex items-center justify-center">
+          <video
+            autoPlay
+            loop
+            muted={adMuted}
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            <source src={ad.videoUrl} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30" />
+
+          <button
+            onClick={() => setShowAdOverlay(false)}
+            className="absolute top-4 right-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-colors"
+            aria-label="Close ad"
+          >
+            <XMarkIcon className="w-6 h-6" />
+          </button>
+          <button
+            onClick={() => setAdMuted((m) => !m)}
+            className="absolute top-4 left-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-colors"
+            aria-label={adMuted ? 'Unmute video' : 'Mute video'}
+          >
+            {adMuted ? <SpeakerXMarkIcon className="w-5 h-5" /> : <SpeakerWaveIcon className="w-5 h-5" />}
+          </button>
+
+          {ad.buttonText && ad.buttonUrl && (
+            <div className="absolute inset-x-0 bottom-16 flex justify-center">
+              <a
+                href={ad.buttonUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-white/90 hover:bg-white text-gray-900 px-6 py-3 rounded-xl font-semibold text-sm transition-colors shadow-lg backdrop-blur-sm"
+              >
+                {ad.buttonText}
+              </a>
+            </div>
+          )}
+
+          <div className="absolute bottom-5 inset-x-0 flex justify-center">
+            <p className="text-white/90 text-sm font-medium drop-shadow">
+              Creating your look… {Math.round(loadingProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b">
@@ -505,7 +582,8 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
           </div>}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
