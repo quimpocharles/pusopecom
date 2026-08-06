@@ -1,6 +1,7 @@
 import axios from 'axios';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
+import { buildTryOnPrompt } from '../lib/tryOnPrompt.js';
 
 const REPLICATE_API_URL = 'https://api.replicate.com/v1';
 
@@ -44,40 +45,24 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
       : `data:image/png;base64,${productImageBase64}`;
 
     // Craft a detailed prompt for virtual try-on
-    const prompt = `Virtual try-on: Take the person from the second image and dress them in the wearable exterior of the garment from the first image.
+    const prompt = buildTryOnPrompt(productName, {
+      garment: { inline: 'the first image', label: 'First image' },
+      person: { inline: 'the second image', label: 'Second image' },
+    });
 
-CRITICAL REQUIREMENTS:
-- The garment is a ${productName || 'shirt or jersey'}
-- Use ONLY the exterior wearable fabric of the garment
-- IGNORE, REMOVE, or HIDE any internal elements such as:
-  - neck tags
-  - size tags
-  - wash/care labels
-  - brand tags located inside the collar or seams
-- Internal tags MUST NOT appear on the outside of the garment
-
-- PRESERVE EXACTLY all exterior logos, text, numbers, patterns, prints, embroidery, and designs
-- Do NOT alter, blur, stretch, mirror, or recreate any exterior design detail
-- Keep the person's face, body shape, skin tone, hairstyle, and pose exactly as shown
-- Make the garment fit naturally with realistic folds, drape, and fabric tension
-- Ensure the collar, sleeves, and hem align naturally with the body
-- Maintain the person's original background
-- The final output must look like a professional product photo of a real person wearing this exact garment
-
-IMAGE DEFINITIONS:
-- First image: Garment reference (design reference only; internal tags are NOT part of the design)
-- Second image: Person to wear the garment`;
-
-    // Create prediction using Seedream 4.5
+    // Create prediction using google/nano-banana — called via the
+    // model-scoped endpoint (not a pinned version hash) so it always runs
+    // the model's current latest version, same as browsing to
+    // replicate.com/google/nano-banana directly. Its input schema is just
+    // prompt/image_input/aspect_ratio/output_format — no `size` field like
+    // the old Seedream 4.5 call had.
     const createResponse = await axios.post(
-      `${REPLICATE_API_URL}/predictions`,
+      `${REPLICATE_API_URL}/models/google/nano-banana/predictions`,
       {
-        version: '8356ab00a2acd0f79338ecf1ffa0e32493c6f7cdfc7178b5cfbdb1461202fdc2',
         input: {
           prompt: prompt,
           image_input: [garmentImage, personImage],
           aspect_ratio: '3:4',
-          size: '2K'
         }
       },
       {

@@ -2,6 +2,7 @@ import axios from 'axios';
 import cloudinary from '../config/cloudinary.js';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
+import { buildTryOnPrompt } from '../lib/tryOnPrompt.js';
 
 const WAVESPEED_API_URL = 'https://api.wavespeed.ai/api/v3';
 
@@ -64,29 +65,10 @@ export const generateTryOn = async (userImageBuffer, userImageMimeType, productI
     userPublicId = publicId;
     logger.debug({ durationMs: Date.now() - uploadStart }, '[WaveSpeed] Cloudinary upload');
 
-    const prompt = `Virtual try-on: Take the person from Figure 2 and dress them in the wearable exterior of the garment from Figure 1.
-
-CRITICAL REQUIREMENTS:
-- The garment is a ${productName || 'shirt or jersey'}
-- Use ONLY the exterior wearable fabric of the garment
-- IGNORE, REMOVE, or HIDE any internal elements such as:
-  - neck tags
-  - size tags
-  - wash/care labels
-  - brand tags located inside the collar or seams
-- Internal tags MUST NOT appear on the outside of the garment
-
-- PRESERVE EXACTLY all exterior logos, text, numbers, patterns, prints, embroidery, and designs
-- Do NOT alter, blur, stretch, mirror, or recreate any exterior design detail
-- Keep the person's face, body shape, skin tone, hairstyle, and pose exactly as shown
-- Make the garment fit naturally with realistic folds, drape, and fabric tension
-- Ensure the collar, sleeves, and hem align naturally with the body
-- Maintain the person's original background
-- The final output must look like a professional product photo of a real person wearing this exact garment
-
-IMAGE DEFINITIONS:
-- Figure 1: Garment reference (design reference only; internal tags are NOT part of the design)
-- Figure 2: Person to wear the garment`;
+    const prompt = buildTryOnPrompt(productName, {
+      garment: { inline: 'Figure 1', label: 'Figure 1' },
+      person: { inline: 'Figure 2', label: 'Figure 2' },
+    });
 
     logger.debug({ endpoint: model.endpoint }, '[WaveSpeed] Using model');
 

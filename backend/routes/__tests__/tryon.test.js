@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import prisma from '../../lib/prisma.js';
@@ -68,6 +68,7 @@ app.use('/api/tryon', tryonRouter);
 
 const originalWavespeedKey = process.env.WAVESPEED_API_KEY;
 const originalWavespeedModel = process.env.WAVESPEED_MODEL;
+const originalReplicateToken = process.env.REPLICATE_API_TOKEN;
 const createdProductIds = [];
 const createdCampaignIds = [];
 // Each test uses its own productName so /tryon's fire-and-forget log write
@@ -91,6 +92,8 @@ afterAll(async () => {
   else process.env.WAVESPEED_API_KEY = originalWavespeedKey;
   if (originalWavespeedModel === undefined) delete process.env.WAVESPEED_MODEL;
   else process.env.WAVESPEED_MODEL = originalWavespeedModel;
+  if (originalReplicateToken === undefined) delete process.env.REPLICATE_API_TOKEN;
+  else process.env.REPLICATE_API_TOKEN = originalReplicateToken;
   await prisma.tryOnLog.deleteMany({ where: { productName: { startsWith: 'TryOnTest-' } } });
   await prisma.fitCheckCampaign.deleteMany({ where: { id: { in: createdCampaignIds } } });
   await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
@@ -123,6 +126,10 @@ describe('POST /tryon — validation', () => {
 
 describe('POST /tryon — WaveSpeed path', () => {
   beforeEach(() => {
+    // Replicate is primary now — these tests exercise the "only WaveSpeed
+    // configured" case, so REPLICATE_API_TOKEN must be off or every one of
+    // these would route to Replicate instead.
+    delete process.env.REPLICATE_API_TOKEN;
     process.env.WAVESPEED_API_KEY = 'test-key';
     process.env.WAVESPEED_MODEL = 'nano-banana-2'; // fixed, so the provider-label assertions below are deterministic
   });
@@ -282,8 +289,12 @@ describe('POST /tryon — WaveSpeed path', () => {
   }, 15000);
 });
 
-describe('POST /tryon — Replicate path (no WAVESPEED_API_KEY)', () => {
-  beforeEach(() => { delete process.env.WAVESPEED_API_KEY; });
+describe('POST /tryon — Replicate path (primary; REPLICATE_API_TOKEN set, no WAVESPEED_API_KEY)', () => {
+  beforeEach(() => {
+    process.env.REPLICATE_API_TOKEN = 'test-token';
+    delete process.env.WAVESPEED_API_KEY;
+  });
+  afterEach(() => { delete process.env.REPLICATE_API_TOKEN; }); // don't leak into later describe blocks that assume it's off
 
   it('fetches the product image, calls the Replicate service, and logs provider "replicate"', async () => {
     axios.get.mockResolvedValueOnce({ data: png });
@@ -312,15 +323,130 @@ describe('POST /tryon — Replicate path (no WAVESPEED_API_KEY)', () => {
     expect(log.generatedImageUrl).toBe('https://res.cloudinary.com/test/puso-shop/tryon-results/fake.jpg');
   }, 15000);
 
-  it('400s when the product image cannot be fetched', async () => {
+  it('500s when the product image cannot be fetched and no WaveSpeed fallback is configured, logging provider "replicate"', async () => {
     axios.get.mockRejectedValueOnce(new Error('network error'));
+    const productName = uniqueName('replicate-fetch-fails');
 
     const res = await request(app)
       .post('/api/tryon')
       .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
       .attach('userImage', png, 'me.png');
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/failed to fetch product image/i);
+    expect(res.status).toBe(500);
+    expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
+
+    const log = await waitForLog(productName);
+    expect(log.success).toBe(false);
+    expect(log.provider).toBe('replicate');
+  }, 15000);
+});
+
+describe('POST /tryon — Replicate-primary, WaveSpeed-fallback', () => {
+  beforeEach(() => {
+    process.env.REPLICATE_API_TOKEN = 'test-token';
+    process.env.WAVESPEED_API_KEY = 'test-key';
+    process.env.WAVESPEED_MODEL = 'nano-banana-2';
+  });
+  afterEach(() => { delete process.env.REPLICATE_API_TOKEN; });
+
+  it('tries Replicate first and never touches WaveSpeed when Replicate succeeds', async () => {
+    axios.get.mockResolvedValueOnce({ data: png });
+    replicateService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+    const productName = uniqueName('replicate-wins');
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(200);
+    expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
+
+    const log = await waitForLog(productName);
+    expect(log.provider).toBe('replicate');
+  }, 15000);
+
+  it('falls back to WaveSpeed and logs provider "wavespeed" when Replicate throws', async () => {
+    axios.get.mockResolvedValueOnce({ data: png });
+    replicateService.generateTryOn.mockRejectedValueOnce(new Error('Replicate is down'));
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+    const productName = uniqueName('falls-back-to-wavespeed');
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(200);
+    expect(res.body.image).toBe('data:image/png;base64,xyz');
+    expect(replicateService.generateTryOn).toHaveBeenCalled();
+    expect(wavespeedService.generateTryOn).toHaveBeenCalled();
+
+    const log = await waitForLog(productName);
+    expect(log.success).toBe(true);
+    expect(log.provider).toBe('wavespeed');
+    expect(log.aiModel).toBe('nano-banana-2');
+  }, 15000);
+
+  it('falls back to WaveSpeed when fetching the product image for Replicate fails (WaveSpeed needs no local fetch)', async () => {
+    axios.get.mockRejectedValueOnce(new Error('network error'));
+    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+    const productName = uniqueName('image-fetch-falls-back');
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(200);
+    expect(wavespeedService.generateTryOn).toHaveBeenCalled();
+
+    const log = await waitForLog(productName);
+    expect(log.provider).toBe('wavespeed');
+  }, 15000);
+
+  it('500s and logs provider "wavespeed" when both Replicate and the WaveSpeed fallback fail', async () => {
+    axios.get.mockResolvedValueOnce({ data: png });
+    replicateService.generateTryOn.mockRejectedValueOnce(new Error('Replicate is down'));
+    wavespeedService.generateTryOn.mockRejectedValueOnce(new Error('WaveSpeed is also down'));
+    const productName = uniqueName('both-fail');
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', productName)
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(500);
+
+    const log = await waitForLog(productName);
+    expect(log.success).toBe(false);
+    // The last attempt made is what gets logged — that's the WaveSpeed
+    // fallback, since it's the one whose error actually propagated.
+    expect(log.provider).toBe('wavespeed');
+  }, 15000);
+});
+
+describe('POST /tryon — neither provider configured', () => {
+  beforeEach(() => {
+    delete process.env.REPLICATE_API_TOKEN;
+    delete process.env.WAVESPEED_API_KEY;
+  });
+
+  it('500s with a clear config error and never calls either service', async () => {
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productName', uniqueName('no-provider'))
+      .attach('userImage', png, 'me.png');
+
+    expect(res.status).toBe(500);
+    expect(res.body.message).toMatch(/no ai fit check provider is configured/i);
+    expect(replicateService.generateTryOn).not.toHaveBeenCalled();
+    expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
   });
 });
 

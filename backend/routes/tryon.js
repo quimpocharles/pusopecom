@@ -48,18 +48,6 @@ const upload = multer({
   }
 });
 
-// Records which provider/model actually served the request — read once per
-// request so a mid-flight env var change never mislabels an in-progress
-// attempt. Split into two real fields (not the old compound
-// "wavespeed:nano-banana-2" string) now that the Fit Check gallery needs
-// them separately filterable/reportable.
-function currentProviderAndModel() {
-  if (process.env.WAVESPEED_API_KEY) {
-    return { provider: 'wavespeed', aiModel: (process.env.WAVESPEED_MODEL || 'seedream').toLowerCase() };
-  }
-  return { provider: 'replicate', aiModel: null };
-}
-
 /**
  * Durably re-hosts the AI result on Cloudinary — neither provider's own
  * image reference is meant to last (WaveSpeed's is provider-hosted and
@@ -143,8 +131,11 @@ router.get('/campaigns/active-for-product/:productId', async (req, res) => {
 // convention) is now sent by the frontend for guest requests — see
 // VirtualTryOn.jsx — and also powers the daily quota check below.
 router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
-  const { provider, aiModel } = currentProviderAndModel();
-  const costUsd = aiModel ? MODEL_COST_USD[aiModel] ?? null : null;
+  // Set right before each attempt (success or not) — not just on success —
+  // so the outer catch below can still log which provider/model the
+  // failing attempt actually was, the same way a single-provider failure
+  // always could.
+  let provider, aiModel, costUsd;
   let genStart;
 
   try {
@@ -202,39 +193,47 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       }
     }
 
+    // Replicate (google/nano-banana) is faster in practice, so it's the
+    // primary path whenever it's configured — WaveSpeed only runs at all
+    // if Replicate isn't configured, or if a configured Replicate attempt
+    // actually throws (including its own product-image fetch below, which
+    // WaveSpeed doesn't need — WaveSpeed passes productImageUrl straight
+    // through and lets its own API fetch it).
+    async function attemptReplicate() {
+      provider = 'replicate';
+      aiModel = null;
+      costUsd = null;
+
+      const userImageBase64 = req.file.buffer.toString('base64');
+      const productImageResponse = await axios.get(productImageUrl, { responseType: 'arraybuffer' });
+      const productImageBase64 = Buffer.from(productImageResponse.data).toString('base64');
+
+      return replicateGenerateTryOn(userImageBase64, productImageBase64, productName || 'clothing item');
+    }
+
+    async function attemptWaveSpeed() {
+      provider = 'wavespeed';
+      aiModel = (process.env.WAVESPEED_MODEL || 'seedream').toLowerCase();
+      costUsd = MODEL_COST_USD[aiModel] ?? null;
+
+      return wavespeedGenerateTryOn(req.file.buffer, req.file.mimetype, productImageUrl, productName || 'clothing item');
+    }
+
     let result;
     genStart = Date.now();
 
-    if (process.env.WAVESPEED_API_KEY) {
-      // WaveSpeed path — passes buffer + public URL directly (no base64 conversion)
-      result = await wavespeedGenerateTryOn(
-        req.file.buffer,
-        req.file.mimetype,
-        productImageUrl,
-        productName || 'clothing item'
-      );
-    } else {
-      // Replicate path — existing flow (SeedDream 4.5)
-      const userImageBase64 = req.file.buffer.toString('base64');
-
-      let productImageBase64;
+    if (process.env.REPLICATE_API_TOKEN) {
       try {
-        const productImageResponse = await axios.get(productImageUrl, {
-          responseType: 'arraybuffer'
-        });
-        productImageBase64 = Buffer.from(productImageResponse.data).toString('base64');
-      } catch (fetchError) {
-        return res.status(400).json({
-          success: false,
-          message: 'Failed to fetch product image'
-        });
+        result = await attemptReplicate();
+      } catch (replicateError) {
+        if (!process.env.WAVESPEED_API_KEY) throw replicateError;
+        logger.warn({ err: replicateError }, '[Fit Check] Replicate failed — falling back to WaveSpeed');
+        result = await attemptWaveSpeed();
       }
-
-      result = await replicateGenerateTryOn(
-        userImageBase64,
-        productImageBase64,
-        productName || 'clothing item'
-      );
+    } else if (process.env.WAVESPEED_API_KEY) {
+      result = await attemptWaveSpeed();
+    } else {
+      throw new Error('No AI Fit Check provider is configured (set REPLICATE_API_TOKEN or WAVESPEED_API_KEY)');
     }
 
     const durationMs = Date.now() - genStart;
