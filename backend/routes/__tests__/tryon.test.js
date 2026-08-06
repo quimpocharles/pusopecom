@@ -292,11 +292,15 @@ describe('POST /tryon — WaveSpeed path', () => {
 describe('POST /tryon — Replicate path (primary; REPLICATE_API_TOKEN set, no WAVESPEED_API_KEY)', () => {
   beforeEach(() => {
     process.env.REPLICATE_API_TOKEN = 'test-token';
+    process.env.REPLICATE_MODEL = 'nano-banana-2-lite'; // fixed, so the aiModel assertion below is deterministic
     delete process.env.WAVESPEED_API_KEY;
   });
-  afterEach(() => { delete process.env.REPLICATE_API_TOKEN; }); // don't leak into later describe blocks that assume it's off
+  afterEach(() => {
+    delete process.env.REPLICATE_API_TOKEN; // don't leak into later describe blocks that assume it's off
+    delete process.env.REPLICATE_MODEL;
+  });
 
-  it('fetches the product image, calls the Replicate service, and logs provider "replicate"', async () => {
+  it('fetches the product image, calls the Replicate service, and logs provider "replicate" with its aiModel', async () => {
     axios.get.mockResolvedValueOnce({ data: png });
     replicateService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
     const productName = uniqueName('replicate-path');
@@ -313,7 +317,10 @@ describe('POST /tryon — Replicate path (primary; REPLICATE_API_TOKEN set, no W
 
     const log = await waitForLog(productName);
     expect(log.provider).toBe('replicate');
-    expect(log.aiModel).toBeNull();
+    expect(log.aiModel).toBe('nano-banana-2-lite');
+    // Unlike WaveSpeed, no Replicate model has a verified per-image price
+    // anywhere Replicate's API/docs expose it — see replicateService.js's
+    // own comment on why this stays null rather than a guessed number.
     expect(log.costUsd).toBeNull();
     expect(log.durationMs).not.toBeNull();
     expect(cloudinary.uploader.upload).toHaveBeenCalledWith(

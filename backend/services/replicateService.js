@@ -5,6 +5,36 @@ import { buildTryOnPrompt } from '../lib/tryOnPrompt.js';
 
 const REPLICATE_API_URL = 'https://api.replicate.com/v1';
 
+// Switch models via REPLICATE_MODEL env var. All three verified in real
+// side-by-side generations against actual product images (not just their
+// published example run times) — see the model comparison this session:
+//   nano-banana        → google/nano-banana        (~10s) — the default.
+//     Reliable face/body/logo fidelity in every test; tighter/flatter crop
+//     than the -2 tier, but no known fidelity issues.
+//   nano-banana-2       → google/nano-banana-2       (~14s) — best
+//     composition/drape of the three, needs resolution set (no default).
+//     Ruled out as the default on cost, not quality (confirmed against
+//     real Replicate billing — Replicate's API/docs never expose per-image
+//     price for any of these, so that check can only happen there).
+//   nano-banana-2-lite → google/nano-banana-2-lite (~8s, fastest) —
+//     DISQUALIFIED. Confirmed unreliable on real product photos across
+//     three independent failure modes: garbled small secondary-logo text,
+//     changed face identity, and mismatched body/head proportions. A more
+//     emphatic face-preservation prompt measurably helped the face-identity
+//     case specifically but did not fix the other two — this is a model
+//     capability limit of the lite tier, not a prompt-wording problem.
+//     Left in MODELS for reference; never the default.
+const MODELS = {
+  'nano-banana': { endpoint: 'google/nano-banana', params: () => ({}) },
+  'nano-banana-2': { endpoint: 'google/nano-banana-2', params: () => ({ resolution: '1K' }) },
+  'nano-banana-2-lite': { endpoint: 'google/nano-banana-2-lite', params: () => ({}) },
+};
+
+const getModel = () => {
+  const key = (process.env.REPLICATE_MODEL || 'nano-banana').toLowerCase();
+  return MODELS[key] || MODELS['nano-banana'];
+};
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const cancelPrediction = async (apiToken, predictionId) => {
@@ -50,19 +80,19 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
       person: { inline: 'the second image', label: 'Second image' },
     });
 
-    // Create prediction using google/nano-banana — called via the
-    // model-scoped endpoint (not a pinned version hash) so it always runs
-    // the model's current latest version, same as browsing to
-    // replicate.com/google/nano-banana directly. Its input schema is just
-    // prompt/image_input/aspect_ratio/output_format — no `size` field like
-    // the old Seedream 4.5 call had.
+    const model = getModel();
+
+    // Called via the model-scoped endpoint (not a pinned version hash) so
+    // it always runs the model's current latest version, same as browsing
+    // to replicate.com/google/<model> directly.
     const createResponse = await axios.post(
-      `${REPLICATE_API_URL}/models/google/nano-banana/predictions`,
+      `${REPLICATE_API_URL}/models/${model.endpoint}/predictions`,
       {
         input: {
           prompt: prompt,
           image_input: [garmentImage, personImage],
           aspect_ratio: '3:4',
+          ...model.params(),
         }
       },
       {
@@ -79,8 +109,8 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
       throw new Error('Failed to start try-on generation');
     }
 
-    // Poll for completion — based on Replicate data: successful runs take 28–44s.
-    // 30 attempts × 2s = 60s max (gives ~16s buffer above the observed worst case).
+    // Poll for completion — 30 attempts × 2s = 60s max, well above every
+    // model above's observed real-world worst case (~14s).
     const maxAttempts = 30;
     let attempts = 0;
 

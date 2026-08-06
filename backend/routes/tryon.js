@@ -193,15 +193,22 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       }
     }
 
-    // Replicate (google/nano-banana) is faster in practice, so it's the
-    // primary path whenever it's configured — WaveSpeed only runs at all
-    // if Replicate isn't configured, or if a configured Replicate attempt
-    // actually throws (including its own product-image fetch below, which
-    // WaveSpeed doesn't need — WaveSpeed passes productImageUrl straight
-    // through and lets its own API fetch it).
+    // Replicate is faster in practice, so it's the primary path whenever
+    // it's configured — WaveSpeed only runs at all if Replicate isn't
+    // configured, or if a configured Replicate attempt actually throws
+    // (including its own product-image fetch below, which WaveSpeed
+    // doesn't need — WaveSpeed passes productImageUrl straight through and
+    // lets its own API fetch it).
     async function attemptReplicate() {
       provider = 'replicate';
-      aiModel = null;
+      // Mirrors WaveSpeed's own aiModel labeling below — replicateService.js
+      // switches its actual model via this same env var, so the log needs
+      // to record it too, not just leave it null the way it could when
+      // there was only ever one hardcoded Replicate model to record.
+      aiModel = (process.env.REPLICATE_MODEL || 'nano-banana-2-lite').toLowerCase();
+      // No verified per-image price for any Replicate model — see
+      // replicateService.js's own comment on why, unlike WaveSpeed's
+      // MODEL_COST_USD, none of these are guessed.
       costUsd = null;
 
       const userImageBase64 = req.file.buffer.toString('base64');
