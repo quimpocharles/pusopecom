@@ -118,7 +118,18 @@ router.post('/video', authenticate, isAdmin, videoUpload.single('video'), async 
     }
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'puso-shop/ads', resource_type: 'video', disable_promises: true },
+        {
+          folder: 'puso-shop/ads',
+          resource_type: 'video',
+          // Cloudinary otherwise delivers whatever codec the source file
+          // came in as — a source encoded as AV1 gets served as AV1, which
+          // most browsers' <video> elements silently fail to decode
+          // (renders as a black frame, no error surfaced). Forcing H.264
+          // here mirrors uploadToCloudinary's baked-in image transformation
+          // above and guarantees universal playback.
+          transformation: [{ video_codec: 'h264', quality: 'auto' }],
+          disable_promises: true,
+        },
         (error, result) => { if (error) reject(error); else resolve(result); }
       );
       stream.on('error', reject); // see the matching comment on uploadToCloudinary above
