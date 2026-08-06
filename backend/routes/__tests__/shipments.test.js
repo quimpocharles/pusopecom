@@ -194,6 +194,50 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.order.delete({ where: { id: order.id } });
     }
   }, 20000);
+
+  // Enterprise Fulfillment Blueprint, Phase 3
+  it('resolving a courierAccountId dual-writes the account displayName onto both Shipment.courier and Order.courier', async () => {
+    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const account = await prisma.courierAccount.upsert({
+      where: { courierName: 'manual' },
+      create: { courierName: 'manual', displayName: 'Manual / Self-Arranged' },
+      update: {},
+    });
+
+    try {
+      const res = await request(app).patch(`/api/admin/shipments/${shipment.id}/status`).send({
+        status: 'picking', courierAccountId: account.id, trackingNumber: 'TRK-123',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.data.courierAccountId).toBe(account.id);
+      expect(res.body.data.courier).toBe('Manual / Self-Arranged');
+
+      const updatedOrder = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updatedOrder.courier).toBe('Manual / Self-Arranged');
+      expect(updatedOrder.trackingNumber).toBe('TRK-123');
+    } finally {
+      await prisma.shipmentEvent.deleteMany({ where: { shipmentId: shipment.id } });
+      await prisma.shipment.deleteMany({ where: { orderId: order.id } });
+      await prisma.payment.delete({ where: { id: payment.id } });
+      await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 20000);
+
+  it('rejects an unknown courierAccountId', async () => {
+    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    try {
+      const res = await request(app).patch(`/api/admin/shipments/${shipment.id}/status`).send({
+        status: 'picking', courierAccountId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      await prisma.shipment.deleteMany({ where: { orderId: order.id } });
+      await prisma.payment.delete({ where: { id: payment.id } });
+      await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 20000);
 });
 
 describe('POST /admin/shipments/:id/notes', () => {

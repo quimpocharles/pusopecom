@@ -704,13 +704,18 @@ model Shipment {
   assignedToUserId String?
   assignedToUser   User?   @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
 
-  // Free-text for now, matching Order.courier's existing convention — a
-  // real CourierAccount FK arrives in Phase 3 alongside the first actual
-  // courier API integration (Blueprint §6); no reason to model a registry
-  // of accounts before a second courier is ever really booked through one.
-  courier        String?
-  trackingNumber String?
-  labelUrl       String?
+  // Phase 3 — a real CourierAccount FK now exists alongside the free-text
+  // `courier` field. `courier` stays and is dual-written from
+  // courierAccount.displayName on every update (same coexistence pattern
+  // as Order.courier's own dual-write from Shipment) — nothing that reads
+  // the free-text field (AdminOrderDetail.jsx, OrderConfirmation.jsx)
+  // needs to change, and a Shipment created before this migration with no
+  // courierAccountId still displays exactly as it always did.
+  courierAccountId String?
+  courierAccount   CourierAccount? @relation(fields: [courierAccountId], references: [id], onDelete: SetNull)
+  courier          String?
+  trackingNumber   String?
+  labelUrl         String?
 
   packedAt    DateTime?
   pickedUpAt  DateTime?
@@ -964,6 +969,27 @@ model Warehouse {
   updatedAt DateTime @updatedAt
 
   @@map("warehouses")
+}
+
+// Enterprise Fulfillment Blueprint, Phase 3 — the account-registry half of
+// §6's courier abstraction. `courierName` matches a key in
+// courierService.js's own GATEWAYS registry ('manual' today, a real
+// provider's key once one exists) — the two are meant to be read
+// side-by-side, not duplicated vocabulary. `config` is a placeholder for
+// real API credentials, unused by the only gateway implemented so far.
+model CourierAccount {
+  id           String  @id @default(uuid())
+  courierName  String  @unique
+  displayName  String
+  config       Json?
+  active       Boolean @default(true)
+
+  shipments Shipment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("courier_accounts")
 }
 
 model WarehouseZone {

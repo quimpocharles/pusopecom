@@ -11,6 +11,7 @@ import * as productRepository from '../repositories/productRepository.js';
 import * as refundRepository from '../repositories/refundRepository.js';
 import * as stockAdjustmentRepository from '../repositories/stockAdjustmentRepository.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
+import * as courierAccountRepository from '../repositories/courierAccountRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import { sendOrderStatusEmail } from '../services/emailService.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
@@ -225,7 +226,7 @@ router.post('/:id/notes', async (req, res) => {
 // let any status follow any other.
 router.patch('/:id/status', async (req, res) => {
   try {
-    const { status, courier, trackingNumber } = req.body;
+    const { status, courier, trackingNumber, courierAccountId } = req.body;
     if (!status || !GENERIC_TRANSITIONS.has(status)) {
       return res.status(400).json({ success: false, message: `status must be one of: ${[...GENERIC_TRANSITIONS].join(', ')}` });
     }
@@ -239,9 +240,28 @@ router.patch('/:id/status', async (req, res) => {
     });
     if (!result.applied) return res.status(409).json({ success: false, message: 'Shipment status changed concurrently — refresh and try again' });
 
-    if (courier !== undefined || trackingNumber !== undefined) {
+    // Phase 3 — courierAccountId is the real FK; `courier` free-text stays
+    // dual-written from the account's displayName so every existing reader
+    // of the free-text field (AdminOrderDetail.jsx, OrderConfirmation.jsx,
+    // status emails) keeps working unchanged. A caller can still pass a
+    // bare `courier` string with no account for a courier that has no
+    // registered CourierAccount yet — same coexistence discipline this
+    // codebase applies to every other field it's ever migrated to a real FK.
+    let resolvedCourier = courier;
+    if (courierAccountId !== undefined) {
+      if (courierAccountId === null) {
+        resolvedCourier = resolvedCourier ?? null;
+      } else {
+        const account = await courierAccountRepository.findById(courierAccountId);
+        if (!account) return res.status(400).json({ success: false, message: 'Unknown courierAccountId' });
+        resolvedCourier = account.displayName;
+      }
+    }
+
+    if (courierAccountId !== undefined || resolvedCourier !== undefined || trackingNumber !== undefined) {
       await shipmentRepository.updateById(req.params.id, {
-        ...(courier !== undefined && { courier }),
+        ...(courierAccountId !== undefined && { courierAccountId }),
+        ...(resolvedCourier !== undefined && { courier: resolvedCourier }),
         ...(trackingNumber !== undefined && { trackingNumber }),
       });
       // Dual-write onto Order's own courier/trackingNumber fields — the
@@ -252,7 +272,7 @@ router.patch('/:id/status', async (req, res) => {
       // an operator setting a tracking number here would never actually
       // reach the customer viewing their own order.
       await orderRepository.updateById(before.order._id, {
-        ...(courier !== undefined && { courier }),
+        ...(resolvedCourier !== undefined && { courier: resolvedCourier }),
         ...(trackingNumber !== undefined && { trackingNumber }),
       });
     }
