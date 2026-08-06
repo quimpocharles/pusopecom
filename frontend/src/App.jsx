@@ -34,6 +34,7 @@ const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
 const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
+const AdminShipments = lazy(() => import('./pages/admin/AdminShipments'));
 const AdminReportArchive = lazy(() => import('./pages/admin/AdminReportArchive'));
 const AdminFAQ = lazy(() => import('./pages/admin/AdminFAQ'));
 const AdminPromoMessages = lazy(() => import('./pages/admin/AdminPromoMessages'));
@@ -107,6 +108,7 @@ function App() {
             <Route path="fit-check-campaigns" element={<AdminFitCheckCampaigns />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="orders/:orderNumber" element={<AdminOrderDetail />} />
+            <Route path="shipments" element={<AdminShipments />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />

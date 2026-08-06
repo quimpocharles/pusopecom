@@ -671,7 +671,14 @@ describe('GET /orders/user/:userId', () => {
 });
 
 describe('admin order routes', () => {
-  it('PATCH /:id/status updates status/tracking/courier', async () => {
+  // Enterprise Fulfillment Blueprint, Phase 1 — this endpoint's scope
+  // narrowed to payment-side statuses only; every post-payment fulfillment
+  // value (processing/packed/shipped/delivered/cancelled/returned) and
+  // courier/trackingNumber all moved to routes/shipments.js, covered in
+  // shipments.test.js. These tests now assert the narrower reality:
+  // rejecting a value this endpoint no longer owns, and silently ignoring
+  // courier/trackingNumber if sent (never reading or applying them).
+  it('PATCH /:id/status updates a payment-side orderStatus value', async () => {
     const product = await makeProduct({ name: 'AdminStatusUpdate' });
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin', redirectUrl: 'https://pay.example/chk_admin' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
@@ -679,18 +686,30 @@ describe('admin order routes', () => {
 
     const res = await request(app)
       .patch(`/api/orders/${order.id}/status`)
-      .send({ orderStatus: 'shipped', trackingNumber: 'TRACK123', courier: 'LBC' });
+      .send({ orderStatus: 'expired', trackingNumber: 'TRACK123', courier: 'LBC' });
     expect(res.status).toBe(200);
-    expect(res.body.data.orderStatus).toBe('shipped');
-    expect(res.body.data.trackingNumber).toBe('TRACK123');
-    // Payment Platform Redesign, Phase 6 — one parameterized email for
-    // every admin-driven fulfillment transition.
-    expect(emailService.sendOrderStatusEmail).toHaveBeenCalledWith(
-      order.email, expect.objectContaining({ orderNumber: order.orderNumber }), 'shipped'
-    );
+    expect(res.body.data.orderStatus).toBe('expired');
+    // Sent but never read by this endpoint anymore — no longer applied.
+    expect(res.body.data.trackingNumber).toBeFalsy();
+    expect(res.body.data.courier).toBeFalsy();
   }, 15000);
 
-  it('PATCH /:id/status does not email when orderStatus is unchanged (courier/tracking-only update)', async () => {
+  it('PATCH /:id/status rejects a fulfillment-side value — that only exists behind routes/shipments.js now', async () => {
+    const product = await makeProduct({ name: 'AdminStatusFulfillmentRejected' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin_reject', redirectUrl: 'https://pay.example/chk_admin_reject' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+
+    for (const status of ['processing', 'packed', 'shipped', 'delivered', 'cancelled', 'returned']) {
+      const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: status });
+      expect(res.status).toBe(400);
+    }
+
+    const unchanged = await prisma.order.findUnique({ where: { id: order.id } });
+    expect(unchanged.orderStatus).toBe('awaiting_payment');
+  }, 15000);
+
+  it('PATCH /:id/status does not email — sendOrderStatusEmail only ever covers fulfillment values, all outside this endpoint\'s scope now', async () => {
     const product = await makeProduct({ name: 'AdminStatusUnchanged' });
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin2', redirectUrl: 'https://pay.example/chk_admin2' });
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
@@ -699,13 +718,13 @@ describe('admin order routes', () => {
 
     const res = await request(app)
       .patch(`/api/orders/${order.id}/status`)
-      .send({ orderStatus: order.orderStatus, courier: 'J&T' });
+      .send({ orderStatus: 'failed_payment' });
     expect(res.status).toBe(200);
     expect(emailService.sendOrderStatusEmail).not.toHaveBeenCalled();
   }, 15000);
 
   it('PATCH /:id/status 404s for a non-existent order', async () => {
-    const res = await request(app).patch('/api/orders/00000000-0000-0000-0000-000000000000/status').send({ orderStatus: 'shipped' });
+    const res = await request(app).patch('/api/orders/00000000-0000-0000-0000-000000000000/status').send({ orderStatus: 'expired' });
     expect(res.status).toBe(404);
   });
 
@@ -784,13 +803,15 @@ describe('GET /orders/:orderNumber/events — the Admin Order Timeline', () => {
       .patch(`/api/orders/${order.id}/status`)
       .set('x-test-userid', 'test-user')
       .set('x-test-role', 'admin')
-      .send({ orderStatus: 'shipped', courier: 'LBC', trackingNumber: 'TRACK1' });
+      .send({ orderStatus: 'expired' });
 
     const res = await request(app).get(`/api/orders/${orderNumber}/events`);
     const statusEvent = res.body.data.find((e) => e.type === 'status_updated');
     expect(statusEvent.actor).toBe('admin');
     expect(statusEvent.actorUser._id).toBe('test-user');
-    expect(statusEvent.message).toMatch(/status: awaiting_payment → shipped/); // Payment Platform Redesign, Phase 2 — was 'processing'
+    // Enterprise Fulfillment Blueprint, Phase 1 — 'expired', not 'shipped':
+    // fulfillment-side values are no longer settable through this endpoint.
+    expect(statusEvent.message).toMatch(/status: awaiting_payment → expired/);
   }, 15000);
 
   it('does not record a status_updated event when nothing actually changed', async () => {

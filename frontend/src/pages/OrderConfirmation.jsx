@@ -177,6 +177,12 @@ const OrderConfirmation = () => {
                   </>
                 )}
                 <InfoRow label="Order Number" value={order.orderNumber} />
+                {/* Enterprise Fulfillment Blueprint, Phase 1 — captured by
+                    admin since Payment Platform Redesign shipped, never
+                    rendered anywhere in the customer's own order view until
+                    now (a Fulfillment Audit finding). */}
+                {order.courier && <InfoRow label="Courier" value={order.courier} />}
+                {order.trackingNumber && <InfoRow label="Tracking Number" value={order.trackingNumber} />}
               </dl>
             </div>
 

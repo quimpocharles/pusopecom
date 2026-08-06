@@ -13,6 +13,7 @@ import * as userActivityRepo from '../userActivityRepository.js';
 import * as bonusFitCheckGrantRepo from '../bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepo from '../fitCheckCampaignRepository.js';
 import * as paymentRepo from '../paymentRepository.js';
+import * as shipmentRepo from '../shipmentRepository.js';
 import { expireStaleOrders } from '../../lib/expireStaleOrders.js';
 import { sendPaymentReminders } from '../../lib/sendPaymentReminders.js';
 
@@ -1355,6 +1356,77 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
       expect(result).toEqual({ skipped: true, remindersSent: 0, candidateCount: 0, errors: [] });
     } finally {
       await siteSettingsRepo.update({ payment: { orderExpirationEnabled: before.payment.orderExpirationEnabled } });
+    }
+  }, 15000);
+});
+
+describe('shipmentRepository.transition — Enterprise Fulfillment Blueprint, Phase 1', () => {
+  it('rejects an illegal jump per the adjacency map, without touching the database', async () => {
+    const order = await makeMinimalOrder(prisma, `shipment-illegal-${Date.now()}`);
+    const shipment = await prisma.shipment.create({ data: { orderId: order.id } }); // default: awaiting_picking
+
+    try {
+      await expect(shipmentRepo.transition(shipment.id, 'delivered')).rejects.toThrow(shipmentRepo.InvalidTransitionError);
+
+      const unchanged = await prisma.shipment.findUnique({ where: { id: shipment.id } });
+      expect(unchanged.status).toBe('awaiting_picking');
+      const events = await prisma.shipmentEvent.count({ where: { shipmentId: shipment.id } });
+      expect(events).toBe(0); // no event written for a rejected transition
+    } finally {
+      await prisma.shipment.delete({ where: { id: shipment.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('a legal transition writes both the status change and its ShipmentEvent, with fromStatus/toStatus structured (not just a message string)', async () => {
+    const order = await makeMinimalOrder(prisma, `shipment-legal-${Date.now()}`);
+    const shipment = await prisma.shipment.create({ data: { orderId: order.id } });
+
+    try {
+      const result = await shipmentRepo.transition(shipment.id, 'picking', { actor: 'admin', actorUserId: null, message: 'Started picking' });
+      expect(result).toEqual({ applied: true, fromStatus: 'awaiting_picking', toStatus: 'picking' });
+
+      const updated = await prisma.shipment.findUnique({ where: { id: shipment.id } });
+      expect(updated.status).toBe('picking');
+
+      const event = await prisma.shipmentEvent.findFirst({ where: { shipmentId: shipment.id, type: 'status_changed' } });
+      expect(event.fromStatus).toBe('awaiting_picking');
+      expect(event.toStatus).toBe('picking');
+      expect(event.message).toBe('Started picking');
+    } finally {
+      await prisma.shipmentEvent.deleteMany({ where: { shipmentId: shipment.id } });
+      await prisma.shipment.delete({ where: { id: shipment.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('the exact race two concurrent transitions target — only one succeeds, matching tryResolvePayment\'s own guard shape', async () => {
+    const order = await makeMinimalOrder(prisma, `shipment-race-${Date.now()}`);
+    const shipment = await prisma.shipment.create({ data: { orderId: order.id, status: 'picking' } });
+
+    try {
+      const results = await Promise.allSettled([
+        shipmentRepo.transition(shipment.id, 'packing'),
+        shipmentRepo.transition(shipment.id, 'exception'),
+      ]);
+
+      const applied = results.filter((r) => r.status === 'fulfilled' && r.value.applied === true);
+      const lost = results.filter((r) => r.status === 'fulfilled' && r.value.applied === false);
+      expect(applied).toHaveLength(1);
+      expect(lost).toHaveLength(1);
+
+      const final = await prisma.shipment.findUnique({ where: { id: shipment.id } });
+      expect(['packing', 'exception']).toContain(final.status);
+
+      // Exactly one ShipmentEvent for the transition that actually won —
+      // the loser's updateMany matched zero rows and never reached the
+      // event-creation step at all.
+      const events = await prisma.shipmentEvent.count({ where: { shipmentId: shipment.id, type: 'status_changed' } });
+      expect(events).toBe(1);
+    } finally {
+      await prisma.shipmentEvent.deleteMany({ where: { shipmentId: shipment.id } });
+      await prisma.shipment.delete({ where: { id: shipment.id } });
+      await prisma.order.delete({ where: { id: order.id } });
     }
   }, 15000);
 });

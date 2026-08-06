@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import logger from '../../lib/logger.js';
 import Sentry from '../../lib/sentry.js';
 
@@ -104,7 +105,13 @@ export async function createCheckoutSession(order) {
       // webhook handler via requestReferenceNumber.split('#')[0]), so
       // reconciliation is unaffected — Maya just can never conflate two
       // different attempts as the same request again.
-      requestReferenceNumber: `${order.orderNumber}#${Date.now()}`,
+      //
+      // A random suffix, not Date.now() — two calls close enough together
+      // (a retry, or simply a fast test with a mocked instant response)
+      // can land in the same millisecond, which a timestamp alone can't
+      // tell apart. Found via exactly that: a test asserting two calls
+      // produce different references occasionally failed with both equal.
+      requestReferenceNumber: `${order.orderNumber}#${crypto.randomBytes(6).toString('hex')}`,
       metadata: {
         orderNumber: order.orderNumber,
         userId: order.user?.toString() || 'guest'

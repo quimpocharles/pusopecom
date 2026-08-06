@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDownTrayIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_STATUS_FILTER_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
 
 const statusColors = ORDER_STATUS_COLORS;
 
@@ -13,28 +13,12 @@ const paymentColors = {
   refunded: 'bg-gray-100 text-gray-800',
 };
 
-const COURIERS = [
-  'LBC',
-  'J&T Express',
-  'Ninja Van',
-  'Flash Express',
-  'GoGo Xpress',
-  '2GO',
-  'GrabExpress',
-  'Lalamove',
-  'DHL Express',
-  'FedEx',
-];
-
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
-  const [updating, setUpdating] = useState(null);
-  // editStatus[orderId] = { orderStatus, courier, trackingNumber, editingShipping }
-  const [editStatus, setEditStatus] = useState({});
   const [exportPeriod, setExportPeriod] = useState('daily');
   const [exporting, setExporting] = useState(false);
 
@@ -59,39 +43,6 @@ const AdminOrders = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const setField = (orderId, field, value) =>
-    setEditStatus((prev) => ({
-      ...prev,
-      [orderId]: { ...prev[orderId], [field]: value }
-    }));
-
-  const handleStatusUpdate = async (orderId, order) => {
-    const data = editStatus[orderId] || {};
-    const orderStatus = data.orderStatus || order.orderStatus;
-    const isPickup = order.shippingMethod === 'venue_pickup';
-
-    setUpdating(orderId);
-    try {
-      await orderService.updateOrderStatus(orderId, {
-        orderStatus,
-        ...(isPickup ? {} : {
-          courier: data.courier ?? order.courier,
-          trackingNumber: data.trackingNumber ?? order.trackingNumber,
-        }),
-      });
-      setEditStatus((prev) => {
-        const next = { ...prev };
-        delete next[orderId];
-        return next;
-      });
-      fetchOrders(pagination.page);
-    } catch (error) {
-      console.error('Failed to update order:', error);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -106,7 +57,16 @@ const AdminOrders = () => {
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+          {/* Enterprise Fulfillment Blueprint, Phase 1 — this list is now
+              read-and-find only; every fulfillment action (advance status,
+              assign, cancel) lives in the Shipment queue or an order's own
+              detail page, never edited inline from a flat table row again. */}
+          <p className="text-sm text-gray-500 mt-1">
+            Fulfillment actions live in <Link to="/admin/shipments" className="text-primary-600 hover:underline">Fulfillment</Link> — click an order to manage it.
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <select
             value={exportPeriod}
@@ -139,7 +99,7 @@ const AdminOrders = () => {
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
           >
             <option value="">All Statuses</option>
-            {ORDER_STATUS_OPTIONS.map((s) => (
+            {ORDER_STATUS_FILTER_OPTIONS.map((s) => (
               <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
             ))}
           </select>
@@ -170,7 +130,7 @@ const AdminOrders = () => {
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3">Date</th>
                 <th className="px-6 py-3">Shipping</th>
-                <th className="px-6 py-3">Update</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -188,10 +148,7 @@ const AdminOrders = () => {
                 </tr>
               ) : (
                 orders.map((order) => {
-                  const edit = editStatus[order._id] || {};
-                  const isEditingShipping = edit.editingShipping;
                   const isPickup = order.shippingMethod === 'venue_pickup';
-                  const hasSavedShipping = !isPickup && (order.courier || order.trackingNumber);
 
                   return (
                     <tr key={order._id} className="hover:bg-gray-50">
@@ -223,7 +180,7 @@ const AdminOrders = () => {
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
 
-                      {/* Shipping column — courier + tracking (hidden for pick-up orders) */}
+                      {/* Shipping column — read-only here now; edited from the order's own detail page */}
                       <td className="px-6 py-4">
                         {isPickup ? (
                           <div>
@@ -234,65 +191,23 @@ const AdminOrders = () => {
                               <p className="text-xs text-gray-500 mt-1">{order.shippingAddress.city}</p>
                             )}
                           </div>
-                        ) : hasSavedShipping && !isEditingShipping ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className="text-xs text-gray-700">
-                              <span className="font-medium">{order.courier}</span>
-                              {order.trackingNumber && (
-                                <span className="text-gray-500 ml-1">· {order.trackingNumber}</span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => setField(order._id, 'editingShipping', true)}
-                              className="p-1 text-gray-400 hover:text-primary-600 rounded transition-colors"
-                              title="Edit shipping"
-                            >
-                              <PencilIcon className="w-3.5 h-3.5" />
-                            </button>
+                        ) : (order.courier || order.trackingNumber) ? (
+                          <div className="text-xs text-gray-700">
+                            <span className="font-medium">{order.courier}</span>
+                            {order.trackingNumber && <span className="text-gray-500 ml-1">· {order.trackingNumber}</span>}
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1.5">
-                            <select
-                              value={edit.courier ?? order.courier ?? ''}
-                              onChange={(e) => setField(order._id, 'courier', e.target.value)}
-                              className="w-36 px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            >
-                              <option value="">Select courier</option>
-                              {COURIERS.map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                            <input
-                              type="text"
-                              placeholder="Tracking #"
-                              value={edit.trackingNumber ?? order.trackingNumber ?? ''}
-                              onChange={(e) => setField(order._id, 'trackingNumber', e.target.value)}
-                              className="w-36 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
-                            />
-                          </div>
+                          <span className="text-xs text-gray-400">—</span>
                         )}
                       </td>
 
-                      {/* Update column — status select + button */}
                       <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1.5">
-                          <select
-                            value={edit.orderStatus || order.orderStatus}
-                            onChange={(e) => setField(order._id, 'orderStatus', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          >
-                            {ORDER_STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleStatusUpdate(order._id, order)}
-                            disabled={updating === order._id}
-                            className="px-3 py-1 bg-primary-600 text-white rounded text-xs hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                          >
-                            {updating === order._id ? '…' : 'Save'}
-                          </button>
-                        </div>
+                        <Link
+                          to={`/admin/orders/${order.orderNumber}`}
+                          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 font-medium whitespace-nowrap"
+                        >
+                          Manage <ArrowRightIcon className="w-3 h-3" />
+                        </Link>
                       </td>
                     </tr>
                   );

@@ -17,11 +17,12 @@ import {
   sendOrderConfirmationEmail,
   sendPaymentPendingEmail,
   sendPaymentFailedEmail,
-  sendOrderStatusEmail,
 } from '../services/emailService.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
+import * as shipmentRepository from '../repositories/shipmentRepository.js';
+import * as shipmentEventRepository from '../repositories/shipmentEventRepository.js';
 
 const router = express.Router();
 
@@ -29,10 +30,20 @@ const router = express.Router();
 // deliberately excludes 'confirmed', the legacy value Payment Platform
 // Redesign Phase 2 superseded with 'paid'; nothing should set it again,
 // including a manual admin edit.
-const VALID_ORDER_STATUSES = [
-  'awaiting_payment', 'paid', 'processing', 'packed', 'shipped', 'delivered',
-  'returned', 'cancelled', 'expired', 'failed_payment',
-];
+//
+// Enterprise Fulfillment Blueprint, Phase 1 — also deliberately excludes
+// every post-payment fulfillment value ('processing', 'packed', 'shipped',
+// 'delivered', 'cancelled', 'returned'). Those used to be independently
+// editable here with zero consequence — no stock release or refund on
+// cancel/return (the Fulfillment Audit's #1 finding), and no connection at
+// all to the real fulfillment pipeline for the others. All six now live
+// exclusively behind routes/shipments.js: Order.orderStatus for a paid
+// order is derived from Shipment.status by SHIPMENT_TO_ORDER_STATUS there,
+// not set directly, so the two can never silently disagree with each
+// other the way two independently-editable copies of "what stage is this
+// order at" always eventually would. What's left settable here is
+// genuinely still Order's own domain — the payment-side states.
+const VALID_ORDER_STATUSES = ['awaiting_payment', 'paid', 'expired', 'failed_payment'];
 
 /**
  * Restores stock for every item on an order inside one transaction — the
@@ -136,6 +147,31 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
         logger.error({ err: shippingEventError, ...logContext }, 'Failed to record shipping event');
         Sentry.captureException(shippingEventError);
       }
+
+      // Enterprise Fulfillment Blueprint, Phase 1 — a Shipment is the real
+      // staff-facing fulfillment record (queue-driven, one per Order today
+      // — see the schema comment on Shipment for why this is not just
+      // another Order field). Created the moment payment resolves, not
+      // before: there is nothing to pick until the order is actually paid
+      // for. Fire-and-forget, not awaited: nothing in this request/
+      // response cycle (webhook ack, customer poll response) depends on
+      // the Shipment existing synchronously, and awaiting it here was
+      // measured adding two more sequential round trips to an already
+      // request-heavy code path — the exact kind of latency this branch's
+      // other non-critical side effects (fitCheckBonus grant) already
+      // avoid by not being awaited either.
+      shipmentRepository.create({ orderId: order._id })
+        .then((shipment) => shipmentEventRepository.create({
+          shipmentId: shipment._id,
+          type: 'created',
+          actor: source,
+          message: 'Shipment created — awaiting picking',
+          toStatus: 'awaiting_picking',
+        }))
+        .catch((shipmentError) => {
+          logger.error({ err: shipmentError, ...logContext }, 'Failed to create Shipment for paid order');
+          Sentry.captureException(shipmentError);
+        });
 
       try {
         await sendOrderConfirmationEmail(order.email, order);
@@ -903,7 +939,14 @@ router.patch('/:id/status',
   isAdmin,
   async (req, res) => {
     try {
-      const { orderStatus, trackingNumber, courier } = req.body;
+      // Enterprise Fulfillment Blueprint, Phase 1 — courier/trackingNumber
+      // are deliberately no longer settable here. Once a Shipment exists,
+      // routes/shipments.js's PATCH /:id/status is the only writer (and it
+      // dual-writes onto these same Order columns) — letting this endpoint
+      // ALSO write them directly would reopen the exact "two independently
+      // editable copies drift apart" problem this Blueprint exists to
+      // close, just for shipping fields instead of status.
+      const { orderStatus } = req.body;
 
       if (orderStatus !== undefined && !VALID_ORDER_STATUSES.includes(orderStatus)) {
         return res.status(400).json({
@@ -917,21 +960,11 @@ router.patch('/:id/status',
         return res.status(404).json({ success: false, message: 'Order not found' });
       }
 
-      const order = await orderRepository.updateById(req.params.id, {
-        orderStatus,
-        ...(trackingNumber !== undefined && { trackingNumber }),
-        ...(courier !== undefined && { courier })
-      });
+      const order = await orderRepository.updateById(req.params.id, { orderStatus });
 
       const changes = [];
       if (orderStatus && orderStatus !== before.orderStatus) {
         changes.push(`status: ${before.orderStatus} → ${orderStatus}`);
-      }
-      if (courier !== undefined && courier !== before.courier) {
-        changes.push(`courier: ${before.courier || '—'} → ${courier || '—'}`);
-      }
-      if (trackingNumber !== undefined && trackingNumber !== before.trackingNumber) {
-        changes.push(`tracking: ${before.trackingNumber || '—'} → ${trackingNumber || '—'}`);
       }
 
       if (changes.length > 0) {
@@ -941,32 +974,21 @@ router.patch('/:id/status',
           actor: 'admin',
           actorUserId: req.user._id,
           message: changes.join('; '),
-          metadata: { orderStatus, trackingNumber, courier },
+          metadata: { orderStatus },
         });
       }
 
       if (before.user) await accountCache.invalidateHome(before.user);
 
-      // Payment Platform Redesign, Phase 6 — one email/notification pair
-      // for every admin-driven fulfillment transition. sendOrderStatusEmail
-      // silently no-ops for statuses it doesn't cover (paid/awaiting_payment/
-      // expired/failed_payment already have their own dedicated emails
-      // elsewhere in the payment lifecycle), so this route doesn't need its
-      // own second copy of that status list to stay in sync with.
-      if (orderStatus && orderStatus !== before.orderStatus) {
-        sendOrderStatusEmail(order.email, order, orderStatus).catch((err) =>
-          logger.error({ err, orderNumber: order.orderNumber, orderStatus }, 'Failed to send order-status email')
-        );
-        if (order.user) {
-          notificationRepository.create({
-            userId: order.user,
-            type: 'order',
-            title: `Order ${orderStatus}`,
-            body: `Order #${order.orderNumber} is now ${orderStatus}.`,
-            link: `/order/${order.orderNumber}`,
-          }).catch((err) => logger.error({ err, orderNumber: order.orderNumber }, 'Failed to create order-status notification'));
-        }
-      }
+      // Payment Platform Redesign, Phase 6's sendOrderStatusEmail call
+      // used to live here too, but every value it actually covers
+      // (processing/packed/shipped/delivered/cancelled/returned) is no
+      // longer reachable through this endpoint as of the Enterprise
+      // Fulfillment Blueprint (see VALID_ORDER_STATUSES above) — it would
+      // have silently no-op'd for every remaining value this route can
+      // still set, which already have their own dedicated emails in the
+      // payment lifecycle (applyPaymentResolution). Removed rather than
+      // left calling a function that could never do anything here again.
 
       res.json({
         success: true,

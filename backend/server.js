@@ -27,6 +27,7 @@ import { sendPaymentReminders } from './lib/sendPaymentReminders.js';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
+import shipmentRoutes from './routes/shipments.js';
 import tryonRoutes from './routes/tryon.js';
 import reviewRoutes from './routes/reviews.js';
 import leagueRoutes from './routes/leagues.js';
@@ -156,6 +157,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/admin/shipments', shipmentRoutes);
 app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);
 app.use('/api/leagues', leagueRoutes);

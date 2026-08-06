@@ -224,6 +224,15 @@ model User {
   following             Follow[]
   bonusFitCheckGrants   BonusFitCheckGrant[]
 
+  // Enterprise Fulfillment Blueprint, Phase 1 — see the schema comment
+  // above Shipment for the reasoning. staffProfile is null for every
+  // customer-role User; only admin-role Users have one.
+  assignedShipments Shipment[]
+  shipmentEvents    ShipmentEvent[]
+  stockAdjustments  StockAdjustment[]
+  refundsInitiated  Refund[]
+  staffProfile      StaffProfile?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -349,6 +358,10 @@ model ProductSize {
   size      String // XS | S | M | L | XL | 2XL | 3XL | One Size — CHECK constraint added via raw SQL
   stock     Int     @default(0)
 
+  // Enterprise Fulfillment Blueprint, Phase 1
+  stockAdjustments StockAdjustment[]
+  locations        ProductLocation[]
+
   @@unique([productId, size])
   @@map("product_sizes")
 }
@@ -376,6 +389,10 @@ model ProductColorSize {
   color   ProductColor @relation(fields: [colorId], references: [id], onDelete: Cascade)
   size    String // same CHECK constraint as ProductSize.size
   stock   Int          @default(0)
+
+  // Enterprise Fulfillment Blueprint, Phase 1
+  stockAdjustments StockAdjustment[]
+  locations        ProductLocation[]
 
   @@unique([colorId, size])
   @@map("product_color_sizes")
@@ -452,6 +469,14 @@ model Order {
   // field that could drift out of sync with reality.
   payments Payment[]
 
+  // Enterprise Fulfillment Blueprint, Phase 1 — Order stays the
+  // customer-facing "purchase commitment" record, unchanged; these three
+  // are where the fulfillment/inventory/money detail this Blueprint adds
+  // actually lives. See the schema comment above Shipment.
+  shipments        Shipment[]
+  stockAdjustments StockAdjustment[]
+  refunds          Refund[]
+
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
   @@index([paymentStatus, orderStatus, userId, createdAt])
@@ -514,6 +539,10 @@ model Payment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Enterprise Fulfillment Blueprint, Phase 1 — a Refund optionally points
+  // back at the specific Payment attempt it's reversing.
+  refunds Refund[]
 
   @@index([orderId, createdAt(sort: Desc)])
   @@index([checkoutReference])
@@ -598,6 +627,329 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Enterprise Fulfillment Blueprint, Phase 1 — the same move this codebase
+// already made once for Payment (ADR-008), applied to fulfillment: Shipment
+// is its own entity, one-to-many with Order (today 1:1, since real
+// multi-Organization orders are still rare pre-full-migration), carrying
+// the granular staff-facing queue state Order.orderStatus was never built
+// to hold. Order.orderStatus is deliberately untouched — it stays the
+// customer-facing, coarse "where is my order" read every email/notification
+// already depends on. This is docs/DOMAIN_MODEL.md's own Shipment concept,
+// finally built: "belongs to one Order, or more precisely, to one
+// Organization's portion of an Order."
+// ---------------------------------------------------------------------------
+
+// Preparing -> Shipped -> In Transit -> Delivered, per DOMAIN_MODEL.md's own
+// Shipment lifecycle, expanded into the real operational queues a warehouse
+// actually works against. `exception` is a deliberate catch-all (failed
+// delivery, damage in transit, address issue) rather than enumerating every
+// courier failure mode up front — the same "no abstraction before the
+// second real use case" discipline this codebase applies everywhere else.
+enum ShipmentStatus {
+  awaiting_picking
+  picking
+  packing
+  quality_check
+  ready_for_courier
+  courier_scheduled
+  picked_up
+  in_transit
+  out_for_delivery
+  delivered
+  completed
+  return_requested
+  return_approved
+  returned
+  refund_pending
+  refunded
+  cancelled
+  exception
+}
+
+// Who's actually fulfilling this — a plain enum today (only self_fulfilled
+// is ever set), but the field exists from day one so a future Partner-
+// fulfilled order (Blueprint §14 — vetted logistics Partners, never an open
+// marketplace-seller model per ADR-001) doesn't require a migration.
+enum FulfillmentSource {
+  self_fulfilled
+  organization_fulfilled
+  partner_3pl
+}
+
+model Shipment {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status ShipmentStatus    @default(awaiting_picking)
+  source FulfillmentSource @default(self_fulfilled)
+
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+
+  // Ownership lives on the work item itself, not a separate assignment
+  // table — mirrors how Order.userId already works.
+  assignedToUserId String?
+  assignedToUser   User?   @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  // Free-text for now, matching Order.courier's existing convention — a
+  // real CourierAccount FK arrives in Phase 3 alongside the first actual
+  // courier API integration (Blueprint §6); no reason to model a registry
+  // of accounts before a second courier is ever really booked through one.
+  courier        String?
+  trackingNumber String?
+  labelUrl       String?
+
+  packedAt    DateTime?
+  pickedUpAt  DateTime?
+  deliveredAt DateTime?
+
+  events ShipmentEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, warehouseId, createdAt])
+  @@index([assignedToUserId])
+  @@map("shipments")
+}
+
+// A smaller, more useful type set than one enum value per ShipmentStatus —
+// `status_changed` carries the transition in its own `fromStatus`/`toStatus`
+// columns instead of a free-text message, which is the actual fix for the
+// Fulfillment Audit's finding that OrderEvent's generic `status_updated`
+// can't be queried ("every shipment marked delivered in the last hour")
+// without parsing message strings. This event type can.
+enum ShipmentEventType {
+  created
+  status_changed
+  assigned
+  note_added
+}
+
+model ShipmentEvent {
+  id         String   @id @default(uuid())
+  shipmentId String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  type  ShipmentEventType
+  // Reuses OrderEvent's own actor vocabulary rather than inventing a
+  // parallel one — system/webhook/customer/admin already covers every
+  // fulfillment-side actor too (webhook = a future courier webhook,
+  // Phase 3; customer = a return request initiating the event chain).
+  actor OrderEventActor
+
+  actorUserId String?
+  actorUser   User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  fromStatus ShipmentStatus?
+  toStatus   ShipmentStatus?
+
+  message  String
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([shipmentId, createdAt])
+  @@index([toStatus, createdAt])
+  @@map("shipment_events")
+}
+
+// The missing inventory audit trail the Fulfillment Audit flagged directly:
+// stock reservation/release today happens silently inside a transaction,
+// with no row anywhere saying why a count changed. Every adjustment here
+// carries a reason, an optional link back to what caused it, and who did it.
+enum StockAdjustmentType {
+  damaged
+  quarantine
+  returned
+  correction
+  incoming
+  outgoing
+}
+
+model StockAdjustment {
+  id String @id @default(uuid())
+
+  // Exactly one of these two is set, mirroring OrderItem's own
+  // size/color-optional convention — a product tracked in "simple" mode
+  // adjusts a ProductSize row, a color-variant product adjusts a
+  // ProductColorSize row.
+  productSizeId      String?
+  productSize        ProductSize?      @relation(fields: [productSizeId], references: [id], onDelete: SetNull)
+  productColorSizeId String?
+  productColorSize   ProductColorSize? @relation(fields: [productColorSizeId], references: [id], onDelete: SetNull)
+
+  type          StockAdjustmentType
+  quantityDelta Int // positive = added back to sellable stock, negative = removed
+  reason        String?
+
+  relatedOrderId String?
+  relatedOrder   Order?  @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
+
+  staffUserId String?
+  staffUser   User?   @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([productSizeId, createdAt])
+  @@index([productColorSizeId, createdAt])
+  @@index([relatedOrderId])
+  @@map("stock_adjustments")
+}
+
+// The first real writer PaymentStatus.refunded has ever had (Fulfillment
+// Audit: the enum value existed since Payment Platform Redesign Phase 1,
+// never once written). Phase 1 scope is deliberately minimal — just enough
+// to record that a refund is owed and track it to completion; the full
+// ReturnRequest/ReturnItem customer-facing flow this normally originates
+// from is Phase 2. A cancellation can create a Refund directly without a
+// ReturnRequest, since nothing was ever shipped to return.
+enum RefundStatus {
+  pending
+  processing
+  succeeded
+  failed
+}
+
+model Refund {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  amount Float
+  reason String?
+  status RefundStatus @default(pending)
+
+  // Populated once a real refund API call exists (paymentService.js's own
+  // "Issue Refund" interface comment has named this as intended, unbuilt,
+  // since Payment Platform Redesign — Phase 2 is what finally calls it).
+  providerRefundReference String?
+
+  initiatedByUserId String?
+  initiatedByUser   User?   @relation(fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([orderId, createdAt])
+  @@index([status])
+  @@map("refunds")
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse / Zone / Bin — deliberately three levels, not four. Shelf and
+// Row fold into Bin's own free-text location code (e.g. "A-12-3") rather
+// than two more join tables purely for hierarchy's sake — the same
+// "no abstraction before the second real use case" discipline this
+// codebase applies everywhere else. Every table carries a path back to
+// Warehouse from day one so a second warehouse is a data-entry operation
+// later, not a migration (the same pattern Payment.provider already proved
+// for a second payment gateway that doesn't exist yet either).
+// ---------------------------------------------------------------------------
+
+model Warehouse {
+  id      String  @id @default(uuid())
+  name    String
+  code    String  @unique
+  address String?
+  active  Boolean @default(true)
+
+  zones     WarehouseZone[]
+  shipments Shipment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("warehouses")
+}
+
+model WarehouseZone {
+  id          String    @id @default(uuid())
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  name        String
+
+  bins Bin[]
+
+  @@unique([warehouseId, name])
+  @@map("warehouse_zones")
+}
+
+model Bin {
+  id     String        @id @default(uuid())
+  zoneId String
+  zone   WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  label  String // e.g. "A-12-3" — see the hierarchy comment above
+
+  locations ProductLocation[]
+
+  @@unique([zoneId, label])
+  @@map("bins")
+}
+
+model ProductLocation {
+  id    String @id @default(uuid())
+  binId String
+  bin   Bin    @relation(fields: [binId], references: [id], onDelete: Cascade)
+
+  // Same exactly-one-of convention as StockAdjustment above.
+  productSizeId      String?
+  productSize        ProductSize?      @relation(fields: [productSizeId], references: [id], onDelete: Cascade)
+  productColorSizeId String?
+  productColorSize   ProductColorSize? @relation(fields: [productColorSizeId], references: [id], onDelete: Cascade)
+
+  quantity Int @default(0)
+
+  @@index([productSizeId])
+  @@index([productColorSizeId])
+  @@map("product_locations")
+}
+
+// ---------------------------------------------------------------------------
+// StaffProfile — Blueprint §5. Deliberately a separate table from User,
+// gated to admin-role Users only, rather than widening User itself with
+// mostly-null columns every customer row would carry. Two axes kept
+// distinct on purpose: User.role stays the coarse "can this person reach
+// /admin at all" gate (unchanged); department + permissions here answer
+// "what does this person actually do" — a question nothing in this
+// codebase could answer before this (the Fulfillment Audit found the only
+// existing permission distinction anywhere was a hardcoded email string
+// duplicated in two files).
+// ---------------------------------------------------------------------------
+
+enum StaffDepartment {
+  warehouse
+  support
+  finance
+  operations
+  marketing
+  executive
+}
+
+model StaffProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  department StaffDepartment
+  title      String?
+  // A string array, not a permission-per-department hardcode — the same
+  // "string, not enum" flexibility Payment.provider already uses, chosen
+  // for the same reason: a new permission shouldn't require a migration.
+  permissions String[] @default([])
+  active      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("staff_profiles")
 }
 
 // ---------------------------------------------------------------------------

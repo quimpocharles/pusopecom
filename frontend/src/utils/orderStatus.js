@@ -43,6 +43,19 @@ export const ORDER_STATUS_COLORS = {
 
 export const orderStatusLabel = (status) => ORDER_STATUS_LABELS[status] || status;
 
-// What an admin (or a customer-facing filter) may actually pick — every
-// real status except the legacy 'confirmed'.
-export const ORDER_STATUS_OPTIONS = Object.keys(ORDER_STATUS_LABELS).filter((s) => s !== 'confirmed');
+// What an admin may set directly on an Order via the generic status
+// dropdown — as of the Enterprise Fulfillment Blueprint's Phase 1, this is
+// only the payment-side states. Every post-payment fulfillment state
+// (processing/packed/shipped/delivered/cancelled/returned) now lives
+// exclusively in the Shipment queue (see AdminShipments.jsx) — Order's own
+// orderStatus is *derived* from Shipment.status there, not independently
+// edited, so the two can never silently disagree. Still valid values for
+// display everywhere — ORDER_STATUS_LABELS/COLORS above keep every one of
+// them — just not selectable through this dropdown anymore.
+export const ORDER_STATUS_OPTIONS = ['awaiting_payment', 'paid', 'expired', 'failed_payment'];
+
+// Every real status *except* legacy 'confirmed' — for read-only contexts
+// (the AdminOrders list's filter dropdown) where showing "shipped" or
+// "cancelled" as something to filter BY is exactly right, even though
+// neither is settable through ORDER_STATUS_OPTIONS above anymore.
+export const ORDER_STATUS_FILTER_OPTIONS = Object.keys(ORDER_STATUS_LABELS).filter((s) => s !== 'confirmed');
