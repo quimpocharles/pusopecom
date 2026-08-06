@@ -323,6 +323,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
               <video
                 autoPlay
                 loop
+                muted
                 playsInline
                 style={{
                   position: 'absolute',
