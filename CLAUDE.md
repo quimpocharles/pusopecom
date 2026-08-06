@@ -192,7 +192,9 @@ Use these words exactly as defined. If a term isn't here, check `docs/DOMAIN_MOD
 | **Wishlist** | Saved Commerce Items — purchase intent, not identity. |
 | **Order** | A Customer's purchase commitment. Can span multiple Organizations. Its own `paymentStatus`/`paymentMethod` fields stay the fast "what's the current state" read; **Payment** underneath carries the detailed history (Decision Log ADR-008). |
 | **Payment** | One checkout-gateway attempt against an Order — one-to-many, not a single mutable field on Order. A regenerated session after expiry is a new Payment row, not an overwrite; "the current payment" is just the most recent row. |
-| **Fulfillment** | The abstract "deliver on the promise" concept. Shipment is its Merchandise-specific form. |
+| **Fulfillment** | The abstract "deliver on the promise" concept. Shipment is its Merchandise-specific form. Shipment carries its own granular, staff-facing status, decoupled from Order's coarse customer-facing `orderStatus` the same way Payment is decoupled from Order (Decision Log ADR-009). |
+| **Return** | The customer-initiated request to send Commerce Items back, its own entity (`ReturnRequest`/`ReturnItem`) with a real state machine — not a status value on Order or Shipment (Decision Log ADR-009). |
+| **Refund** | One reversal of money against a specific Order — one-to-many, mirroring Payment's own shape, not a single mutable field. Only `Refund.status = succeeded` ever sets `Order.paymentStatus = 'refunded'` (Decision Log ADR-009). |
 | **Storefront** | An Organization's own branded destination. |
 | **Discovery Hub** | The platform-owned homepage — routing and introduction, owned by no single Organization. |
 | **Story** | Narrative content about an Organization/Team/Athlete/Campaign. |
