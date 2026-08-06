@@ -567,11 +567,23 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
       ['Successful Generations', report.tryOn.successful],
       ['Failed Generations', report.tryOn.failed],
       ['Success Rate', `${report.tryOn.successRate}%`],
+      ['Users Who Tried', report.tryOn.conversion.triedUsers],
+      ['Purchases (Try-On &rarr; Bought)', report.tryOn.conversion.purchases],
+      ['Conversion Rate', `${Math.round(report.tryOn.conversion.conversionRate * 10000) / 100}%`],
+      ['Attributed Revenue', `₱${report.tryOn.conversion.revenue.toFixed(2)}`],
     ], 'Metric', 'Value')}
     ${breakdownTable(report.tryOn.mostTriedOn.map((x) => [x.productName ?? 'Unknown', x.count]), 'Product', 'Sessions')}
 
+    ${sectionLabel('Fulfillment')}
+    ${breakdownTable([
+      ['Pending Fulfillment', report.fulfillment.pendingFulfillment],
+      ['Flagged / Needs Attention', report.fulfillment.exceptions],
+      ['Returns Awaiting Approval', report.fulfillment.returnsAwaitingApproval],
+      ['Refund Queue', report.fulfillment.refundQueue],
+    ], 'Metric', 'Value')}
+
     ${divider()}
-    ${p('Refund Requests and Support Issues are not shown — not yet tracked by the platform. Checkout Abandonment now has its own dedicated report (Admin &rarr; Reports &rarr; Checkout Recovery), not folded into this daily digest.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
+    ${p('Support Issues are not shown — no support/ticket model exists on the platform yet. Checkout Abandonment has its own dedicated report (Admin &rarr; Reports &rarr; Checkout Recovery), not folded into this daily digest.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
   `;
 
   await transporter.sendMail({

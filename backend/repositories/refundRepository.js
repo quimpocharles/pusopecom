@@ -8,11 +8,11 @@ import { serialize } from './serialize.js';
  * processing one against Maya's refund API is Phase 2.
  */
 export async function create(
-  { orderId, paymentId, amount, reason, initiatedByUserId },
+  { orderId, paymentId, returnRequestId, amount, reason, initiatedByUserId },
   { client = prisma } = {}
 ) {
   const refund = await client.refund.create({
-    data: { orderId, paymentId, amount, reason, initiatedByUserId },
+    data: { orderId, paymentId, returnRequestId, amount, reason, initiatedByUserId },
   });
   return serialize(refund);
 }
@@ -32,6 +32,10 @@ export async function find({ where, orderBy = { createdAt: 'desc' }, skip, take,
   return serialize(rows);
 }
 
+export async function count({ where, client = prisma } = {}) {
+  return client.refund.count({ where });
+}
+
 /** Same atomic conditional-update idempotency shape as paymentRepository.resolve. */
 export async function updateStatus(id, status, extra = {}, { client = prisma } = {}) {
   const result = await client.refund.updateMany({
@@ -41,4 +45,4 @@ export async function updateStatus(id, status, extra = {}, { client = prisma } =
   return result.count > 0;
 }
 
-export default { create, findById, findByOrder, find, updateStatus };
+export default { create, findById, findByOrder, find, count, updateStatus };

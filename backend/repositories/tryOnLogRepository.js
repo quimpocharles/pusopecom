@@ -225,4 +225,62 @@ export async function trending({ since, limit = 8, client = prisma } = {}) {
     .filter(Boolean);
 }
 
-export default { create, find, findByUser, countByUser, softDelete, setFavorite, migrateGuestSession, deleteOlderThan, mostTried, trending };
+/**
+ * Enterprise Fulfillment Blueprint §10/§11 — the platform-wide sibling of
+ * fitCheckCampaignRepository.analytics()'s per-campaign purchase
+ * correlation, using the exact same (userId, productId) pair-matching
+ * technique, just not filtered to one campaign. Answers the question
+ * dailyBusinessReportService.js's buildTryOnSection previously disclaimed
+ * as uncomputable ("no link exists between a TryOnLog row and a subsequent
+ * purchase") — that was only true because no product-wide query had been
+ * written yet, not because the data doesn't support it.
+ */
+export async function platformConversionStats({ since, until, client = prisma } = {}) {
+  const dateFilter = { ...(since && { gte: since }), ...(until && { lt: until }) };
+  const generatedPairs = await client.tryOnLog.findMany({
+    where: {
+      userId: { not: null },
+      productId: { not: null },
+      deletedAt: null,
+      ...(since || until ? { createdAt: dateFilter } : {}),
+    },
+    select: { userId: true, productId: true },
+    distinct: ['userId', 'productId'],
+  });
+
+  if (generatedPairs.length === 0) {
+    return { triedUsers: 0, purchases: 0, revenue: 0, conversionRate: 0 };
+  }
+
+  const pairKey = (userId, productId) => `${userId}:${productId}`;
+  const generatedSet = new Set(generatedPairs.map((p) => pairKey(p.userId, p.productId)));
+  const triedUsers = new Set(generatedPairs.map((p) => p.userId)).size;
+
+  const orderItems = await client.orderItem.findMany({
+    where: {
+      productId: { in: [...new Set(generatedPairs.map((p) => p.productId))] },
+      order: { userId: { in: [...new Set(generatedPairs.map((p) => p.userId))] }, paymentStatus: 'paid' },
+    },
+    select: { productId: true, price: true, quantity: true, order: { select: { userId: true } } },
+  });
+
+  let purchases = 0;
+  let revenue = 0;
+  const convertedUsers = new Set();
+  for (const item of orderItems) {
+    if (generatedSet.has(pairKey(item.order.userId, item.productId))) {
+      purchases += 1;
+      revenue += item.price * item.quantity;
+      convertedUsers.add(item.order.userId);
+    }
+  }
+
+  return {
+    triedUsers,
+    purchases,
+    revenue,
+    conversionRate: triedUsers > 0 ? convertedUsers.size / triedUsers : 0,
+  };
+}
+
+export default { create, find, findByUser, countByUser, softDelete, setFavorite, migrateGuestSession, deleteOlderThan, mostTried, trending, platformConversionStats };

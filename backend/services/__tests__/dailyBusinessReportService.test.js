@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../repositories/orderRepository.js', () => ({ find: vi.fn(), count: vi.fn() }));
 vi.mock('../../repositories/productRepository.js', () => ({ find: vi.fn(), count: vi.fn() }));
-vi.mock('../../repositories/tryOnLogRepository.js', () => ({ find: vi.fn() }));
+vi.mock('../../repositories/tryOnLogRepository.js', () => ({ find: vi.fn(), platformConversionStats: vi.fn() }));
 vi.mock('../../repositories/organizationRepository.js', () => ({ find: vi.fn() }));
 vi.mock('../../repositories/reportRecipientRepository.js', () => ({ findActiveEmails: vi.fn() }));
 vi.mock('../../repositories/reportRunRepository.js', () => ({ create: vi.fn().mockResolvedValue({ id: 'run-1' }) }));
+// Enterprise Fulfillment Blueprint, Phase 2 — buildFulfillmentSection reads
+// these three directly; unmocked they'd hit the real Prisma client.
+vi.mock('../../repositories/shipmentRepository.js', () => ({ count: vi.fn() }));
+vi.mock('../../repositories/returnRequestRepository.js', () => ({ count: vi.fn() }));
+vi.mock('../../repositories/refundRepository.js', () => ({ count: vi.fn() }));
 vi.mock('../emailService.js', () => ({ sendDailyBusinessReportEmail: vi.fn().mockResolvedValue(undefined) }));
 
 const orderRepository = await import('../../repositories/orderRepository.js');
@@ -14,6 +19,9 @@ const tryOnLogRepository = await import('../../repositories/tryOnLogRepository.j
 const organizationRepository = await import('../../repositories/organizationRepository.js');
 const reportRecipientRepository = await import('../../repositories/reportRecipientRepository.js');
 const reportRunRepository = await import('../../repositories/reportRunRepository.js');
+const shipmentRepository = await import('../../repositories/shipmentRepository.js');
+const returnRequestRepository = await import('../../repositories/returnRequestRepository.js');
+const refundRepository = await import('../../repositories/refundRepository.js');
 const emailService = await import('../emailService.js');
 const {
   generateDailyBusinessReport,
@@ -40,8 +48,12 @@ beforeEach(() => {
   productRepository.count.mockResolvedValue(0);
   productRepository.find.mockResolvedValue([]);
   tryOnLogRepository.find.mockResolvedValue([]);
+  tryOnLogRepository.platformConversionStats.mockResolvedValue({ triedUsers: 0, purchases: 0, revenue: 0, conversionRate: 0 });
   organizationRepository.find.mockResolvedValue([]);
   orderRepository.count.mockResolvedValue(1);
+  shipmentRepository.count.mockResolvedValue(0);
+  returnRequestRepository.count.mockResolvedValue(0);
+  refundRepository.count.mockResolvedValue(0);
 });
 
 describe('generateDailyBusinessReport — sales', () => {
@@ -195,8 +207,43 @@ describe('generateDailyBusinessReport — AI Try-On', () => {
     expect(report.tryOn.failed).toBe(2);
     expect(report.tryOn.successRate).toBe(50);
     expect(report.tryOn.mostTriedOn[0]).toMatchObject({ productName: 'Jersey', count: 2 });
-    // "conversion rate" language never appears — no purchase-linkage data exists to back it
-    expect(report.tryOn).not.toHaveProperty('conversionRate');
+  });
+
+  // Enterprise Fulfillment Blueprint, Phase 2 — platform-wide conversion is
+  // now real, computed via tryOnLogRepository.platformConversionStats, not
+  // a permanently-absent field.
+  it('nests platform-wide try-on-to-purchase conversion under tryOn.conversion', async () => {
+    orderRepository.find.mockResolvedValueOnce([]);
+    tryOnLogRepository.platformConversionStats.mockResolvedValueOnce({
+      triedUsers: 10, purchases: 4, revenue: 2000, conversionRate: 0.3,
+    });
+
+    const report = await generateDailyBusinessReport();
+
+    expect(report.tryOn.conversion).toEqual({ triedUsers: 10, purchases: 4, revenue: 2000, conversionRate: 0.3 });
+    const [{ since, until }] = tryOnLogRepository.platformConversionStats.mock.calls[0];
+    expect(since).toBeInstanceOf(Date);
+    expect(until).toBeInstanceOf(Date);
+  });
+});
+
+describe('generateDailyBusinessReport — Fulfillment', () => {
+  it('reads pending/exception/returns/refund counts as a live snapshot, not date-filtered', async () => {
+    orderRepository.find.mockResolvedValueOnce([]);
+    shipmentRepository.count.mockImplementation(({ where }) =>
+      where.status === 'exception' ? 2 : 7
+    );
+    returnRequestRepository.count.mockResolvedValueOnce(3);
+    refundRepository.count.mockResolvedValueOnce(5);
+
+    const report = await generateDailyBusinessReport();
+
+    expect(report.fulfillment).toEqual({
+      pendingFulfillment: 7, exceptions: 2, returnsAwaitingApproval: 3, refundQueue: 5,
+    });
+    // Refund queue is filtered by status, not by a date range
+    const [{ where }] = refundRepository.count.mock.calls[0];
+    expect(where).toEqual({ status: 'pending' });
   });
 });
 
@@ -293,7 +340,11 @@ describe('dailyBusinessReportToExportShape', () => {
       customers: { newCustomers: 1, returningCustomers: 1 },
       payments: { successful: 2, failed: 0, pending: 0, refunded: 1, byMethod: [{ method: 'maya', count: 2 }] },
       shipping: { awaitingShipment: 1, inTransit: 0, delivered: 1 },
-      tryOn: { sessions: 4, successful: 2, successRate: 50, mostTriedOn: [{ productName: 'Jersey', count: 2 }] },
+      tryOn: {
+        sessions: 4, successful: 2, successRate: 50, mostTriedOn: [{ productName: 'Jersey', count: 2 }],
+        conversion: { triedUsers: 3, purchases: 1, revenue: 500, conversionRate: 0.33 },
+      },
+      fulfillment: { pendingFulfillment: 2, exceptions: 0, returnsAwaitingApproval: 1, refundQueue: 1 },
     };
 
     const shape = dailyBusinessReportToExportShape(data);
@@ -302,7 +353,7 @@ describe('dailyBusinessReportToExportShape', () => {
     const sheetNames = shape.sheets.map((s) => s.name);
     expect(sheetNames).toEqual([
       'Top Selling Products', 'Sales by Organization', 'Sales by League',
-      'Payments', 'Payment Methods', 'Shipping', 'Most Tried-On',
+      'Payments', 'Payment Methods', 'Shipping', 'Most Tried-On', 'Fulfillment',
     ]);
     const paymentsSheet = shape.sheets.find((s) => s.name === 'Payments');
     expect(paymentsSheet.rows).toContainEqual({ status: 'Refunded', count: 1 });

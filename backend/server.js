@@ -22,12 +22,16 @@ import {
 } from './services/dailyBusinessReportService.js';
 import { expireStaleOrders } from './lib/expireStaleOrders.js';
 import { sendPaymentReminders } from './lib/sendPaymentReminders.js';
+import { sweepFulfillmentSLA } from './lib/sweepFulfillmentSLA.js';
+import { sendRefundReminders } from './lib/sendRefundReminders.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import orderRoutes from './routes/orders.js';
 import shipmentRoutes from './routes/shipments.js';
+import { router as returnRoutes, adminRouter as adminReturnRoutes } from './routes/returns.js';
+import refundRoutes from './routes/refunds.js';
 import tryonRoutes from './routes/tryon.js';
 import reviewRoutes from './routes/reviews.js';
 import leagueRoutes from './routes/leagues.js';
@@ -158,6 +162,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/shipments', shipmentRoutes);
+app.use('/api/returns', returnRoutes);
+app.use('/api/admin/returns', adminReturnRoutes);
+app.use('/api/admin/refunds', refundRoutes);
 app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);
 app.use('/api/leagues', leagueRoutes);
@@ -318,6 +325,44 @@ cron.schedule('5 * * * *', async () => {
     }
   } catch (error) {
     logger.error({ err: error }, 'Payment reminder sweep failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Enterprise Fulfillment Blueprint §13.1 — flags Shipments stuck past their
+// stage's SLA threshold into `exception` so they surface on the queue
+// instead of silently sitting unworked. Offset 10 minutes past the payment
+// sweeps above so all three hourly jobs don't collide on the same tick.
+cron.schedule('10 * * * *', async () => {
+  try {
+    const result = await sweepFulfillmentSLA();
+    if (result.flaggedCount > 0 || result.errors.length > 0) {
+      logger.info(result, 'Fulfillment SLA sweep completed');
+    }
+    for (const { shipmentId, error } of result.errors) {
+      logger.error({ err: error, shipmentId }, 'Failed to flag a stuck shipment');
+      Sentry.captureException(error);
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Fulfillment SLA sweep failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
+// Enterprise Fulfillment Blueprint §13.4 — same cadence discipline, offset
+// again so it never collides with the sweep above.
+cron.schedule('15 * * * *', async () => {
+  try {
+    const result = await sendRefundReminders();
+    if (result.remindersSent > 0 || result.errors.length > 0) {
+      logger.info(result, 'Refund reminder sweep completed');
+    }
+    for (const { refundId, error } of result.errors) {
+      logger.error({ err: error, refundId }, 'Failed to send a refund reminder');
+      Sentry.captureException(error);
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Refund reminder sweep failed');
     Sentry.captureException(error);
   }
 }, { timezone: 'Asia/Manila' });

@@ -19,11 +19,15 @@ const upload = multer({
   },
 });
 
-const uploadToCloudinary = (buffer) => {
+// Exported — Enterprise Fulfillment Blueprint, Phase 2 reuses this exact
+// upload mechanics for customer-submitted return photos (routes/returns.js),
+// with its own folder rather than a second copy of the stream-upload logic
+// and its documented Cloudinary SDK unhandled-rejection workaround below.
+export const uploadToCloudinary = (buffer, folder = 'puso-shop/products') => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: 'puso-shop/products',
+        folder,
         transformation: [
           { width: 1200, height: 1200, crop: 'limit', quality: 'auto', fetch_format: 'auto' },
         ],

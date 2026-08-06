@@ -74,4 +74,14 @@ export function getSessionDurationMs(gatewayName = 'maya') {
   return gateway.SESSION_DURATION_MS ?? null;
 }
 
-export default { createCheckoutSession, getPaymentStatus, getSessionDurationMs };
+// Enterprise Fulfillment Blueprint, Phase 2 — the "Issue Refund" half of
+// this interface, finally called for real (routes/refunds.js).
+export async function issueRefund(providerPaymentReference, amount, reason, gatewayName = 'maya') {
+  const gateway = resolveGateway(gatewayName);
+  if (!gateway.issueRefund) {
+    throw new Error(`Gateway "${gatewayName}" does not support refunds`);
+  }
+  return gateway.issueRefund(providerPaymentReference, amount, reason);
+}
+
+export default { createCheckoutSession, getPaymentStatus, getSessionDurationMs, issueRefund };

@@ -17,7 +17,8 @@ import {
   SparklesIcon,
   RectangleGroupIcon,
   MegaphoneIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 
 const navItems = [
@@ -29,6 +30,7 @@ const navItems = [
   { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon },
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
   { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon },
+  { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
   { label: 'Shipping Analytics', to: '/admin/reports/shipping', icon: TruckIcon },

@@ -13,6 +13,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const CompleteProfile = lazy(() => import('./pages/CompleteProfile'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderConfirmation = lazy(() => import('./pages/OrderConfirmation'));
+const RequestReturn = lazy(() => import('./pages/RequestReturn'));
 const PortalLayout = lazy(() => import('./pages/account/PortalLayout'));
 const PortalHome = lazy(() => import('./pages/account/PortalHome'));
 const Locker = lazy(() => import('./pages/account/Locker'));
@@ -35,6 +36,7 @@ const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCam
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
 const AdminShipments = lazy(() => import('./pages/admin/AdminShipments'));
+const AdminReturns = lazy(() => import('./pages/admin/AdminReturns'));
 const AdminReportArchive = lazy(() => import('./pages/admin/AdminReportArchive'));
 const AdminFAQ = lazy(() => import('./pages/admin/AdminFAQ'));
 const AdminPromoMessages = lazy(() => import('./pages/admin/AdminPromoMessages'));
@@ -80,6 +82,7 @@ function App() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:orderNumber" element={<OrderConfirmation />} />
+          <Route path="/order/:orderNumber/return" element={<RequestReturn />} />
           <Route path="/account" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
             <Route path="locker" element={<Locker />} />
@@ -109,6 +112,7 @@ function App() {
             <Route path="orders" element={<AdminOrders />} />
             <Route path="orders/:orderNumber" element={<AdminOrderDetail />} />
             <Route path="shipments" element={<AdminShipments />} />
+            <Route path="returns" element={<AdminReturns />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />

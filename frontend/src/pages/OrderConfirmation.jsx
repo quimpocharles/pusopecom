@@ -270,6 +270,15 @@ const OrderConfirmation = () => {
               <ClipboardDocumentIcon className="w-4 h-4" />
               {copied ? 'Copied!' : 'Copy Order Number'}
             </button>
+            {/* Enterprise Fulfillment Blueprint, Phase 2 — self-service
+                returns only apply to a paid order; the backend enforces the
+                same rule (routes/returns.js), this just avoids offering a
+                dead-end action. */}
+            {order.paymentStatus === 'paid' && (
+              <Link to={`/order/${order.orderNumber}/return`} className="btn-outline">
+                Request a Return
+              </Link>
+            )}
           </div>
         </div>
       </div>

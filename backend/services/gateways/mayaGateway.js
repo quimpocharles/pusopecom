@@ -162,8 +162,47 @@ export async function getPaymentStatus(paymentReference) {
   }
 }
 
+/**
+ * Enterprise Fulfillment Blueprint, Phase 2 — the "Issue Refund" half of
+ * paymentService.js's interface comment, finally implemented. Maya's
+ * Payments API refunds a settled payment by its own paymentId (Payment.
+ * providerPaymentReference here, not the checkout session id), full or
+ * partial amount. requestReferenceNumber is required by Maya and, same
+ * reasoning as createCheckoutSession's own, must be unique per attempt —
+ * a retried refund call needs its own reference, not a reused one.
+ */
+export async function issueRefund(providerPaymentReference, amount, reason) {
+  try {
+    const response = await axios.post(
+      `${MAYA_API_URL}/payments/v1/payments/${providerPaymentReference}/refunds`,
+      {
+        totalAmount: { value: amount, currency: 'PHP' },
+        reason: reason || 'Customer return',
+        requestReferenceNumber: `refund-${providerPaymentReference}-${crypto.randomBytes(6).toString('hex')}`,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: getSecretAuthHeader(),
+        },
+      }
+    );
+
+    return {
+      providerRefundReference: response.data.id,
+      status: response.data.status === 'REFUNDED' ? 'succeeded' : 'processing',
+      raw: response.data,
+    };
+  } catch (error) {
+    logger.error({ err: error, providerPaymentReference, gateway: 'maya' }, 'Maya refund error');
+    Sentry.captureException(error);
+    throw new Error(error.response?.data?.message || 'Failed to issue refund');
+  }
+}
+
 export default {
   createCheckoutSession,
   getPaymentStatus,
+  issueRefund,
   SESSION_DURATION_MS,
 };

@@ -5,7 +5,11 @@ import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as organizationRepository from '../repositories/organizationRepository.js';
 import * as reportRecipientRepository from '../repositories/reportRecipientRepository.js';
 import * as reportRunRepository from '../repositories/reportRunRepository.js';
+import * as shipmentRepository from '../repositories/shipmentRepository.js';
+import * as returnRequestRepository from '../repositories/returnRequestRepository.js';
+import * as refundRepository from '../repositories/refundRepository.js';
 import { sendDailyBusinessReportEmail } from './emailService.js';
+import { STAGE_THRESHOLD_HOURS } from '../lib/sweepFulfillmentSLA.js';
 
 const LOW_STOCK_THRESHOLD = 5; // matches the threshold already used by admin stats / products report
 
@@ -229,18 +233,42 @@ async function buildTryOnSection(start, end) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
+  // Enterprise Fulfillment Blueprint §10/§11 — platform-wide try-on to
+  // purchase conversion, for this same window. Previously disclaimed as
+  // uncomputable; tryOnLogRepository.platformConversionStats finally
+  // implements the join (same technique fitCheckCampaignRepository
+  // .analytics() already proved works per-campaign).
+  const conversion = await tryOnLogRepository.platformConversionStats({ since: start, until: end });
+
   return {
     sessions,
     successful,
     failed,
-    // Renamed from the spec's "Conversion Rate" deliberately — no link
-    // exists between a TryOnLog row and a subsequent purchase, so a real
-    // try-on-to-purchase conversion rate isn't computable today (same
-    // "omit/relabel rather than fabricate" rule as Operations below). This
-    // is generation success rate, which the data actually supports.
+    // Generation success rate — distinct from conversion.conversionRate
+    // below, which is the real try-on-to-purchase number.
     successRate: sessions > 0 ? Math.round((successful / sessions) * 10000) / 100 : 0,
     mostTriedOn,
+    conversion,
   };
+}
+
+/**
+ * Enterprise Fulfillment Blueprint §11 — Pending Fulfillment / Late
+ * Shipments / Returns / Refunds, read directly off Shipment/ReturnRequest/
+ * Refund. Deliberately a live snapshot at generation time, not filtered to
+ * the report's [start, end) window — these are operational queues (like
+ * the existing low-stock inventory alert), not period-scoped activity.
+ */
+async function buildFulfillmentSection() {
+  const ACTIVE_STATUSES = Object.keys(STAGE_THRESHOLD_HOURS);
+  const [pendingFulfillment, exceptions, returnsAwaitingApproval, refundQueue] = await Promise.all([
+    shipmentRepository.count({ where: { status: { in: ACTIVE_STATUSES } } }),
+    shipmentRepository.count({ where: { status: 'exception' } }),
+    returnRequestRepository.count({ where: { status: { in: ['requested', 'under_review'] } } }),
+    refundRepository.count({ where: { status: 'pending' } }),
+  ]);
+
+  return { pendingFulfillment, exceptions, returnsAwaitingApproval, refundQueue };
 }
 
 /**
@@ -262,12 +290,13 @@ export const generateBusinessReportForRange = async (start, end) => {
   });
   const paidOrders = allOrders.filter((o) => o.paymentStatus === 'paid');
 
-  const [sales, products, organizations, customers, tryOn] = await Promise.all([
+  const [sales, products, organizations, customers, tryOn, fulfillment] = await Promise.all([
     buildSalesSection(allOrders, paidOrders),
     buildProductsSection(paidOrders),
     buildOrganizationsSection(paidOrders),
     buildCustomersSection(paidOrders),
     buildTryOnSection(start, end),
+    buildFulfillmentSection(),
   ]);
 
   return {
@@ -281,12 +310,12 @@ export const generateBusinessReportForRange = async (start, end) => {
     payments: buildPaymentsSection(allOrders),
     shipping: buildShippingSection(allOrders),
     tryOn,
-    // Operations: Checkout Abandonment, Refund Requests, and Support Issues
-    // are deliberately absent, not zeroed — none of the three have real
-    // tracking behind them yet (no cart-started event, no refund-request
-    // record beyond the paymentStatus flag, no support/ticket model at
-    // all). Showing "0" here would read as "nothing happened" rather than
-    // "we don't measure this yet."
+    fulfillment,
+    // Operations: Checkout Abandonment is deliberately still absent, not
+    // zeroed — no cart-started event exists yet (the cart is client-only
+    // until submit). Refund Requests and Support Issues, previously in the
+    // same bucket, now have real tracking (`fulfillment` above,
+    // Refund/ReturnRequest) as of the Enterprise Fulfillment Blueprint.
   };
 };
 
@@ -318,6 +347,15 @@ async function archiveRun(fields) {
  * rather than recomputing against today's (since-changed) data.
  */
 export function dailyBusinessReportToExportShape(data) {
+  // Enterprise Fulfillment Blueprint, Phase 2 added tryOn.conversion and the
+  // whole `fulfillment` section — a ReportRun archived before this shipped
+  // has neither in its frozen snapshot. Report Archive's Download action
+  // replays that exact old snapshot (deliberately, see the comment above),
+  // so this must degrade gracefully rather than assume every archive was
+  // written by today's version of this function.
+  const conversion = data.tryOn.conversion || { conversionRate: 0, revenue: 0 };
+  const fulfillment = data.fulfillment || { pendingFulfillment: 0, exceptions: 0, returnsAwaitingApproval: 0, refundQueue: 0 };
+
   return {
     summary: [
       ['Gross Revenue', data.sales.grossRevenue],
@@ -330,6 +368,10 @@ export function dailyBusinessReportToExportShape(data) {
       ['Returning Customers', data.customers.returningCustomers],
       ['Try-On Sessions', data.tryOn.sessions],
       ['Try-On Success Rate', `${data.tryOn.successRate}%`],
+      ['Try-On Conversion Rate', `${Math.round(conversion.conversionRate * 10000) / 100}%`],
+      ['Try-On Attributed Revenue', conversion.revenue],
+      ['Pending Fulfillment', fulfillment.pendingFulfillment],
+      ['Refund Queue', fulfillment.refundQueue],
     ],
     sheets: [
       {
@@ -380,6 +422,16 @@ export function dailyBusinessReportToExportShape(data) {
         columns: [{ header: 'Product', key: 'productName' }, { header: 'Sessions', key: 'count' }],
         rows: data.tryOn.mostTriedOn,
         totals: { count: true },
+      },
+      {
+        name: 'Fulfillment',
+        columns: [{ header: 'Metric', key: 'metric' }, { header: 'Count', key: 'count' }],
+        rows: [
+          { metric: 'Pending Fulfillment', count: fulfillment.pendingFulfillment },
+          { metric: 'Flagged / Needs Attention', count: fulfillment.exceptions },
+          { metric: 'Returns Awaiting Approval', count: fulfillment.returnsAwaitingApproval },
+          { metric: 'Refund Queue', count: fulfillment.refundQueue },
+        ],
       },
     ],
   };

@@ -232,6 +232,11 @@ model User {
   stockAdjustments  StockAdjustment[]
   refundsInitiated  Refund[]
   staffProfile      StaffProfile?
+  // Phase 2 — two distinct relations to the same model need explicit
+  // names on both sides (Prisma requirement): the customer who filed the
+  // return, and the (possibly different) admin who reviewed it.
+  returnRequests         ReturnRequest[] @relation("ReturnRequester")
+  returnRequestsReviewed ReturnRequest[] @relation("ReturnReviewer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -476,6 +481,7 @@ model Order {
   shipments        Shipment[]
   stockAdjustments StockAdjustment[]
   refunds          Refund[]
+  returnRequests   ReturnRequest[]
 
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
@@ -623,6 +629,9 @@ model OrderItem {
   size      String
   color     String?
   image     String
+
+  // Enterprise Fulfillment Blueprint, Phase 2
+  returnItems ReturnItem[]
 
   @@index([orderId])
   @@index([productId])
@@ -823,6 +832,14 @@ model Refund {
   paymentId String?
   payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
+  // Set when this Refund originated from a Return inspection (routes/
+  // returns.js's POST /:id/inspect) rather than a bare Shipment
+  // cancellation (routes/shipments.js) — lets the admin Returns queue
+  // resolve straight to "the" refund for a given return without parsing
+  // Refund.reason as a pseudo-foreign-key.
+  returnRequestId String?
+  returnRequest   ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+
   amount Float
   reason String?
   status RefundStatus @default(pending)
@@ -841,6 +858,85 @@ model Refund {
   @@index([orderId, createdAt])
   @@index([status])
   @@map("refunds")
+}
+
+// ---------------------------------------------------------------------------
+// ReturnRequest / ReturnItem — Enterprise Fulfillment Blueprint, Phase 2.
+// The customer-submitted intake record (reason, photos, which items) that
+// drives a Shipment through its own return_requested -> return_approved ->
+// returned -> refund_pending -> refunded states (Phase 1's adjacency map
+// already has all five). ReturnRequest.status is the detailed record of
+// that same journey — reason, reviewer, resolution notes — that Shipment's
+// bare status alone was never meant to carry; see COMMERCE_ENGINE.md's own
+// governing rule this implements: "a return is a coordinated reversal...
+// Inventory is restocked, or isn't... Payment is refunded... Fulfillment
+// status is updated."
+// ---------------------------------------------------------------------------
+
+enum ReturnStatus {
+  requested
+  under_review
+  approved
+  rejected
+  return_shipped
+  received
+  inspected
+  refund_pending
+  refunded
+  closed
+}
+
+// Drives whether a received item's stock goes back to a sellable Bin or a
+// quarantine one (Blueprint §7/§8) — never assumed sellable by default.
+enum ReturnItemCondition {
+  sellable
+  damaged
+  unsellable
+}
+
+model ReturnRequest {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Guest orders have no User row — same optional-userId convention Order
+  // itself already uses; ownership for a guest's return is instead proven
+  // the same way a guest's order lookup already is (order number + email).
+  userId String?
+  user   User?   @relation("ReturnRequester", fields: [userId], references: [id], onDelete: SetNull)
+
+  reason      String
+  description String?
+  photos      String[] @default([])
+
+  status ReturnStatus @default(requested)
+
+  reviewedByUserId String?
+  reviewedByUser   User?   @relation("ReturnReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  resolutionNotes  String?
+
+  items   ReturnItem[]
+  refunds Refund[]
+
+  requestedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status, requestedAt])
+  @@map("return_requests")
+}
+
+model ReturnItem {
+  id              String        @id @default(uuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderItemId     String
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity        Int
+  condition       ReturnItemCondition?
+
+  @@map("return_items")
 }
 
 // ---------------------------------------------------------------------------
