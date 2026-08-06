@@ -48,8 +48,14 @@ const AdminFooter = lazy(() => import('./pages/admin/AdminFooter'));
 const AdminHomepageBuilder = lazy(() => import('./pages/admin/AdminHomepageBuilder'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
-const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
-const AdminPickup = lazy(() => import('./pages/admin/AdminPickup'));
+const SettingsLayout = lazy(() => import('./components/admin/settings/SettingsLayout'));
+const SettingsOverview = lazy(() => import('./pages/admin/settings/SettingsOverview'));
+const FitCheckSettings = lazy(() => import('./pages/admin/settings/FitCheckSettings'));
+const CommerceSettings = lazy(() => import('./pages/admin/settings/CommerceSettings'));
+const NotificationSettings = lazy(() => import('./pages/admin/settings/NotificationSettings'));
+const SecuritySettings = lazy(() => import('./pages/admin/settings/SecuritySettings'));
+const IntegrationsSettings = lazy(() => import('./pages/admin/settings/IntegrationsSettings'));
+const AdvancedSettings = lazy(() => import('./pages/admin/settings/AdvancedSettings'));
 const AdminShippingReports = lazy(() => import('./pages/admin/AdminShippingReports'));
 const DesignSystemDemo = lazy(() => import('./pages/_dev/DesignSystemDemo'));
 
@@ -115,8 +121,15 @@ function App() {
             <Route path="returns" element={<AdminReturns />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="reports" element={<AdminReports />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="settings/pickup" element={<AdminPickup />} />
+            <Route path="settings" element={<SettingsLayout />}>
+              <Route index element={<SettingsOverview />} />
+              <Route path="fit-check" element={<FitCheckSettings />} />
+              <Route path="commerce" element={<CommerceSettings />} />
+              <Route path="notifications" element={<NotificationSettings />} />
+              <Route path="security" element={<SecuritySettings />} />
+              <Route path="integrations" element={<IntegrationsSettings />} />
+              <Route path="advanced" element={<AdvancedSettings />} />
+            </Route>
             <Route path="reports/shipping" element={<AdminShippingReports />} />
             <Route path="reports/archive" element={<AdminReportArchive />} />
             <Route path="homepage/faq" element={<AdminFAQ />} />

@@ -13,14 +13,22 @@ export async function findByUserId(userId, { client = prisma } = {}) {
   return serialize(profile);
 }
 
-export async function upsert({ userId, department, title, permissions }, { client = prisma } = {}) {
+/** Batched sibling to findByUserId — powers the Settings > Security roles list without N+1 queries. */
+export async function findByUserIds(userIds, { client = prisma } = {}) {
+  if (userIds.length === 0) return [];
+  const profiles = await client.staffProfile.findMany({ where: { userId: { in: userIds } } });
+  return profiles.map(serialize);
+}
+
+export async function upsert({ userId, department, title, permissions, updatedByUserId }, { client = prisma } = {}) {
   const profile = await client.staffProfile.upsert({
     where: { userId },
-    create: { userId, department, title, permissions: permissions ?? [] },
+    create: { userId, department, title, permissions: permissions ?? [], updatedByUserId },
     update: {
       department,
       ...(title !== undefined && { title }),
       ...(permissions !== undefined && { permissions }),
+      ...(updatedByUserId !== undefined && { updatedByUserId }),
     },
   });
   return serialize(profile);
@@ -36,4 +44,4 @@ export async function find({ department, active, client = prisma } = {}) {
   return rows.map((r) => serialize(r));
 }
 
-export default { findByUserId, upsert, find };
+export default { findByUserId, findByUserIds, upsert, find };

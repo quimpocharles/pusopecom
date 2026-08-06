@@ -585,26 +585,24 @@ describe('Review — aggregation methods replacing Mongo $group pipelines', () =
 });
 
 describe('SiteSettings — flat columns reshaped back into the original nested API contract', () => {
-  it('get() returns the original { tryOn: {...}, tryOnAd: {...} } shape, not flat columns', () =>
+  it('get() returns the nested { tryOnAd: {...} } shape, not flat columns, and no dead tryOn group', () =>
     withRollback(async (tx) => {
       const settings = await siteSettingsRepo.get({ client: tx });
-      expect(settings).toHaveProperty('tryOn.title');
-      expect(settings).toHaveProperty('tryOn.image');
-      expect(settings).toHaveProperty('tryOn.productUrl');
       expect(settings).toHaveProperty('tryOnAd.videoUrl');
       expect(settings).not.toHaveProperty('tryOnTitle'); // flat column name must not leak through
+      expect(settings).not.toHaveProperty('tryOn'); // removed entirely — see Settings IA redesign
     }));
 
-  it('update() partially merges tryOn without clobbering tryOnAd, matching Object.assign semantics', () =>
+  it('update() partially merges tryOnAd without clobbering fitCheck, matching Object.assign semantics', () =>
     withRollback(async (tx) => {
       await siteSettingsRepo.get({ client: tx }); // ensure a row exists
       const before = await siteSettingsRepo.get({ client: tx });
 
-      const updated = await siteSettingsRepo.update({ tryOn: { title: 'New Title Only' } }, { client: tx });
+      const updated = await siteSettingsRepo.update({ tryOnAd: { buttonText: 'New Button Only' } }, { client: tx });
 
-      expect(updated.tryOn.title).toBe('New Title Only');
-      expect(updated.tryOn.productUrl).toBe(before.tryOn.productUrl); // untouched field preserved
-      expect(updated.tryOnAd).toEqual(before.tryOnAd); // untouched sub-object preserved entirely
+      expect(updated.tryOnAd.buttonText).toBe('New Button Only');
+      expect(updated.tryOnAd.videoUrl).toBe(before.tryOnAd.videoUrl); // untouched field preserved
+      expect(updated.fitCheck).toEqual(before.fitCheck); // untouched sub-object preserved entirely
     }));
 });
 

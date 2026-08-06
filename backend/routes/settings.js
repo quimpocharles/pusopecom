@@ -22,16 +22,18 @@ router.get('/', async (req, res) => {
 // PUT /api/settings — admin only
 router.put('/', authenticate, isAdmin, async (req, res) => {
   try {
-    // siteSettingsRepository.update() accepts the same { tryOn, tryOnAd,
-    // fitCheck, payment } shape the request body already has, and does the
+    // siteSettingsRepository.update() accepts the same { tryOnAd, fitCheck,
+    // payment } shape the request body already has, and does the
     // partial-merge + flatten-to-columns + reshape-back internally — this
     // route doesn't need to know the database storage shape changed at all.
+    // updatedByUserId always comes from the authenticated admin, never the
+    // client — the same discipline every other "who did this" field in
+    // this codebase already follows.
     const settings = await siteSettingsRepository.update({
-      tryOn: req.body.tryOn,
       tryOnAd: req.body.tryOnAd,
       fitCheck: req.body.fitCheck,
       payment: req.body.payment,
-    });
+    }, { updatedByUserId: req.user._id });
     res.json({ success: true, data: settings });
   } catch (error) {
     logger.error({ err: error }, 'Update settings error');

@@ -1,25 +1,23 @@
 import prisma from '../lib/prisma.js';
 
 /**
- * SiteSettings.tryOn / .tryOnAd were nested Mongoose subdocuments; the
- * Prisma schema flattens them to plain columns (tryOnTitle, tryOnImage,
- * etc. — see the schema comment on SiteSettings). Flattening was the right
- * call for the database, but the API contract must not change: every
- * existing caller (AdminSettings.jsx, Home.jsx's tryOnSettings.productUrl)
- * expects the original nested shape. This module is the one place that
- * reshapes flat columns back into { tryOn: {...}, tryOnAd: {...} } on the
- * way out, and flattens the same nested shape back down on the way in —
- * routes/settings.js should never need to know the database is flat.
+ * The Prisma schema flattens what used to be nested Mongoose subdocuments
+ * to plain columns (tryOnAdVideoUrl, fitCheckDailyLimitGuest, etc. — see
+ * the schema comment on SiteSettings). This module is the one place that
+ * reshapes flat columns back into a nested API shape on the way out, and
+ * flattens the same nested shape back down on the way in — callers should
+ * never need to know the database is flat.
+ *
+ * `tryOn` (title/image/productUrl) was removed from this shape entirely
+ * during the Settings IA redesign — confirmed dead (Home.jsx's Fit Check
+ * teaser reads from Campaign(placement='tryOn') exclusively; nothing ever
+ * read settingsService's tryOn group outside the admin form that wrote
+ * it). `tryOnAd` is a separate, genuinely live feature and stays.
  */
 function toNestedShape(row) {
   if (!row) return row;
   return {
     _id: row.id,
-    tryOn: {
-      title: row.tryOnTitle,
-      image: row.tryOnImage,
-      productUrl: row.tryOnProductUrl,
-    },
     tryOnAd: {
       videoUrl: row.tryOnAdVideoUrl,
       buttonText: row.tryOnAdButtonText,
@@ -59,17 +57,21 @@ function toNestedShape(row) {
       orderExpirationEnabled: row.orderExpirationEnabled,
       orderRetentionHours: row.orderRetentionHours,
     },
+    updatedBy: row.updatedByUser
+      ? { firstName: row.updatedByUser.firstName, lastName: row.updatedByUser.lastName }
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck, payment } = {}) {
-  // Mirrors the original route's Object.assign(settings.tryOn, req.body.tryOn)
+const WITH_UPDATED_BY = { updatedByUser: { select: { firstName: true, lastName: true } } };
+
+function flattenPartialUpdate(existingNested, { tryOnAd, fitCheck, payment } = {}) {
+  // Mirrors the original route's Object.assign(settings.tryOnAd, req.body.tryOnAd)
   // — a partial merge per sub-object, not a wholesale replace, so a caller
-  // updating only `tryOn.title` doesn't blow away `tryOn.image`.
+  // updating only one field doesn't blow away its siblings.
   const merged = {
-    tryOn: { ...existingNested.tryOn, ...tryOn },
     tryOnAd: { ...existingNested.tryOnAd, ...tryOnAd },
     fitCheck: {
       ...existingNested.fitCheck,
@@ -80,9 +82,6 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck, paymen
     payment: { ...existingNested.payment, ...payment },
   };
   return {
-    tryOnTitle: merged.tryOn.title,
-    tryOnImage: merged.tryOn.image,
-    tryOnProductUrl: merged.tryOn.productUrl,
     tryOnAdVideoUrl: merged.tryOnAd.videoUrl,
     tryOnAdButtonText: merged.tryOnAd.buttonText,
     tryOnAdButtonUrl: merged.tryOnAd.buttonUrl,
@@ -103,18 +102,22 @@ function flattenPartialUpdate(existingNested, { tryOn, tryOnAd, fitCheck, paymen
 
 /** Matches siteSettingsSchema.statics.get() — find the first row, creating it with defaults if none exists. */
 export async function get({ client = prisma } = {}) {
-  let settings = await client.siteSettings.findFirst();
+  let settings = await client.siteSettings.findFirst({ include: WITH_UPDATED_BY });
   if (!settings) {
-    settings = await client.siteSettings.create({ data: {} });
+    settings = await client.siteSettings.create({ data: {}, include: WITH_UPDATED_BY });
   }
   return toNestedShape(settings);
 }
 
-/** Accepts the same { tryOn, tryOnAd } partial shape the route already receives. */
-export async function update(partialNested, { client = prisma } = {}) {
+/** Accepts the same { tryOnAd, fitCheck, payment } partial shape the route already receives, plus who made the change. */
+export async function update(partialNested, { updatedByUserId, client = prisma } = {}) {
   const existing = await get({ client });
   const flatData = flattenPartialUpdate(existing, partialNested);
-  const updated = await client.siteSettings.update({ where: { id: existing._id }, data: flatData });
+  const updated = await client.siteSettings.update({
+    where: { id: existing._id },
+    data: { ...flatData, ...(updatedByUserId !== undefined && { updatedByUserId }) },
+    include: WITH_UPDATED_BY,
+  });
   return toNestedShape(updated);
 }
 

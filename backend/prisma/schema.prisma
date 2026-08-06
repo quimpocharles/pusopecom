@@ -238,6 +238,10 @@ model User {
   returnRequests         ReturnRequest[] @relation("ReturnRequester")
   returnRequestsReviewed ReturnRequest[] @relation("ReturnReviewer")
 
+  // Settings IA redesign — "Updated By" attribution.
+  siteSettingsUpdates      SiteSettings[]
+  staffProfileUpdatesMade  StaffProfile[] @relation("StaffProfileUpdatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1068,6 +1072,11 @@ model StaffProfile {
   permissions String[] @default([])
   active      Boolean  @default(true)
 
+  // Settings IA redesign — "who last changed someone's department/
+  // permissions" is a real security-relevant question, not just cosmetic.
+  updatedByUserId String?
+  updatedByUser   User?   @relation("StaffProfileUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1300,10 +1309,15 @@ model ShippingEvent {
 // ---------------------------------------------------------------------------
 
 model SiteSettings {
-  id                String @id @default(uuid())
-  tryOnTitle        String @default("Try on the Gilas Pilipinas shirt!")
-  tryOnImage        String @default("")
-  tryOnProductUrl   String @default("/products/gilas-pilipinas-t-shirt")
+  id String @id @default(uuid())
+
+  // The homepage Fit Check teaser's title/image/product-link fields
+  // (tryOnTitle/tryOnImage/tryOnProductUrl) were removed here — confirmed
+  // dead during the Settings IA redesign: Home.jsx renders that section
+  // from Campaign(placement='tryOn') exclusively, and settingsService's
+  // `tryOn` group had no reader anywhere outside the admin form that wrote
+  // it. tryOnAd* below is a separate, genuinely live feature (the Fit
+  // Check generation loading-screen ad) and stays.
   tryOnAdVideoUrl   String @default("")
   tryOnAdButtonText String @default("Visit Playtime.ph")
   tryOnAdButtonUrl  String @default("https://www.playtime.ph/")
@@ -1343,6 +1357,11 @@ model SiteSettings {
   // not just a config number nobody can turn off if something looks wrong.
   orderExpirationEnabled Boolean @default(true)
   orderRetentionHours    Int     @default(48)
+
+  // Settings IA redesign — "Last Updated / Updated By" on every category
+  // page. updatedAt already existed; this is the first real writer of who.
+  updatedByUserId String?
+  updatedByUser   User?   @relation(fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

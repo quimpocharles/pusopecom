@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import DateRangeSelector, { getDateRange } from '../../components/admin/reports/DateRangeSelector';
 import SalesSection from '../../components/admin/reports/SalesSection';
 import ProductsSection from '../../components/admin/reports/ProductsSection';
@@ -6,8 +8,6 @@ import OrdersSection from '../../components/admin/reports/OrdersSection';
 import CustomersSection from '../../components/admin/reports/CustomersSection';
 import TryOnSection from '../../components/admin/reports/TryOnSection';
 import CheckoutRecoverySection from '../../components/admin/reports/CheckoutRecoverySection';
-import ReportRecipients from '../../components/admin/reports/ReportRecipients';
-import ReportSchedules from '../../components/admin/reports/ReportSchedules';
 
 const AdminReports = () => {
   const [selectedPreset, setSelectedPreset] = useState('30d');
@@ -30,12 +30,16 @@ const AdminReports = () => {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <DateRangeSelector selected={selectedPreset} onSelect={handleSelect} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ReportRecipients />
-        <ReportSchedules />
+        <div className="flex items-center gap-3">
+          <Link
+            to="/admin/settings/notifications"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700"
+          >
+            <Cog6ToothIcon className="w-4 h-4" />
+            Recipients & Schedule
+          </Link>
+          <DateRangeSelector selected={selectedPreset} onSelect={handleSelect} />
+        </div>
       </div>
 
       <SalesSection dateParams={dateParams} />

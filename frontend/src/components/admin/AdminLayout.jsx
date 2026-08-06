@@ -8,7 +8,6 @@ import {
   TrophyIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-  MapPinIcon,
   TruckIcon,
   ArchiveBoxIcon,
   ArrowLeftIcon,
@@ -36,7 +35,6 @@ const navItems = [
   { label: 'Shipping Analytics', to: '/admin/reports/shipping', icon: TruckIcon },
   { label: 'Report Archive', to: '/admin/reports/archive', icon: ArchiveBoxIcon },
   { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon },
-  { label: 'Venue Pick-Up', to: '/admin/settings/pickup', icon: MapPinIcon },
 ];
 
 const AdminLayout = () => {
