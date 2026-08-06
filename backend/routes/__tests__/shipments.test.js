@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import prisma from '../../lib/prisma.js';
@@ -40,6 +40,25 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   emailService.sendOrderStatusEmail.mockResolvedValue(undefined);
+});
+
+// Safety net, not the primary cleanup mechanism — each test below already
+// deletes what it created in its own `finally` block. This catches what a
+// crashed/interrupted run (or a future test that forgets to clean up
+// fully, the exact bug fixed here) would otherwise leave behind against
+// the shared dev database. `cleanup.productIds`/`orderIds` accumulate
+// every row makePaidOrderWithShipment() creates, regardless of whether
+// the per-test cleanup already removed it.
+afterAll(async () => {
+  await prisma.shipmentEvent.deleteMany({ where: { shipment: { orderId: { in: cleanup.orderIds } } } });
+  await prisma.shipment.deleteMany({ where: { orderId: { in: cleanup.orderIds } } });
+  await prisma.stockAdjustment.deleteMany({ where: { relatedOrderId: { in: cleanup.orderIds } } });
+  await prisma.refund.deleteMany({ where: { orderId: { in: cleanup.orderIds } } });
+  await prisma.payment.deleteMany({ where: { orderId: { in: cleanup.orderIds } } });
+  await prisma.orderItem.deleteMany({ where: { orderId: { in: cleanup.orderIds } } });
+  await prisma.order.deleteMany({ where: { id: { in: cleanup.orderIds } } });
+  await prisma.product.deleteMany({ where: { id: { in: cleanup.productIds } } });
+  await prisma.$disconnect();
 });
 
 async function makePaidOrderWithShipment({ quantity = 2, startingStock = 10 } = {}) {
@@ -145,7 +164,7 @@ describe('POST /admin/shipments/:id/cancel — the Fulfillment Audit\'s #1 findi
 
 describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
   it('advances a legal transition and derives the coarse Order.orderStatus from it, emailing only when that coarse status actually changes', async () => {
-    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const { product, order, payment, shipment } = await makePaidOrderWithShipment();
 
     try {
       // awaiting_picking -> picking: both map to Order.orderStatus 'processing',
@@ -175,11 +194,12 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
+      await prisma.product.delete({ where: { id: product.id } });
     }
   }, 20000);
 
   it('rejects an illegal jump with 400, and rejects "cancelled" specifically — that only ever happens via /cancel', async () => {
-    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const { product, order, payment, shipment } = await makePaidOrderWithShipment();
 
     try {
       const illegal = await request(app).patch(`/api/admin/shipments/${shipment.id}/status`).send({ status: 'delivered' });
@@ -192,12 +212,13 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
+      await prisma.product.delete({ where: { id: product.id } });
     }
   }, 20000);
 
   // Enterprise Fulfillment Blueprint, Phase 3
   it('resolving a courierAccountId dual-writes the account displayName onto both Shipment.courier and Order.courier', async () => {
-    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const { product, order, payment, shipment } = await makePaidOrderWithShipment();
     const account = await prisma.courierAccount.upsert({
       where: { courierName: 'manual' },
       create: { courierName: 'manual', displayName: 'Manual / Self-Arranged' },
@@ -221,11 +242,12 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
+      await prisma.product.delete({ where: { id: product.id } });
     }
   }, 20000);
 
   it('rejects an unknown courierAccountId', async () => {
-    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const { product, order, payment, shipment } = await makePaidOrderWithShipment();
     try {
       const res = await request(app).patch(`/api/admin/shipments/${shipment.id}/status`).send({
         status: 'picking', courierAccountId: '00000000-0000-0000-0000-000000000000',
@@ -236,13 +258,14 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
+      await prisma.product.delete({ where: { id: product.id } });
     }
   }, 20000);
 });
 
 describe('POST /admin/shipments/:id/notes', () => {
   it('adds a note as a ShipmentEvent, distinct from a status change', async () => {
-    const { order, payment, shipment } = await makePaidOrderWithShipment();
+    const { product, order, payment, shipment } = await makePaidOrderWithShipment();
 
     try {
       const res = await request(app).post(`/api/admin/shipments/${shipment.id}/notes`).send({ message: 'Customer asked for gift wrap' });
@@ -262,6 +285,7 @@ describe('POST /admin/shipments/:id/notes', () => {
       await prisma.payment.delete({ where: { id: payment.id } });
       await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
       await prisma.order.delete({ where: { id: order.id } });
+      await prisma.product.delete({ where: { id: product.id } });
     }
   }, 15000);
 });

@@ -45,9 +45,16 @@ const createdProductIds = [];
 const createdUserIds = [];
 
 async function makeProduct(overrides = {}) {
+  // `name` is derived from overrides.name before the spread below, so
+  // ...overrides must not be allowed to clobber it back to the bare,
+  // unprefixed value — that previously stripped the MARKER prefix off
+  // every test product's name (e.g. 'Decrement' instead of
+  // 'OrderRouteTest<ts> Decrement'), leaving orphaned rows with no visual
+  // marker if a run never reached afterAll's cleanup.
+  const { name: nameOverride, ...restOverrides } = overrides;
   const product = await prisma.product.create({
     data: {
-      name: `${MARKER} ${overrides.name || 'Product'}`,
+      name: `${MARKER} ${nameOverride || 'Product'}`,
       slug: `order-route-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       description: 'x',
       price: 500,
@@ -57,7 +64,7 @@ async function makeProduct(overrides = {}) {
       active: true,
       totalStock: 10,
       sizes: { create: [{ size: 'M', stock: 10 }] },
-      ...overrides,
+      ...restOverrides,
     },
   });
   createdProductIds.push(product.id);
