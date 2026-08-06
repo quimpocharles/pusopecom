@@ -46,7 +46,7 @@ const PortalLayout = () => {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b border-gray-200 mb-8 overflow-x-auto">
+        <div className="flex gap-1 border-b border-gray-200 mb-8 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <NavLink
               key={tab.to}

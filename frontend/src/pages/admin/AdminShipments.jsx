@@ -76,7 +76,7 @@ const AdminShipments = () => {
       </div>
 
       {/* Queue tabs — the operational shape from Blueprint §2, not a generic dropdown */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
+      <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => setStatusFilter('')}
           className={`px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
