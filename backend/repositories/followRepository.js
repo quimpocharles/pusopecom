@@ -44,4 +44,20 @@ export async function followedOrganizationIds(userId, { client = prisma } = {}) 
   return rows.map((r) => r.organizationId);
 }
 
-export default { follow, unfollow, find, count, followedOrganizationIds };
+/**
+ * Follower count per organization — for the Organizations report (Reports
+ * module redesign, Phase 2). No such per-organization count existed before
+ * this; `count(userId)` above is the inverse (a user's own follow count),
+ * not what a report ranking organizations by followers needs.
+ */
+export async function followerCountsByOrganization(organizationIds, { client = prisma } = {}) {
+  if (!organizationIds || organizationIds.length === 0) return new Map();
+  const groups = await client.follow.groupBy({
+    by: ['organizationId'],
+    where: { organizationId: { in: organizationIds } },
+    _count: true,
+  });
+  return new Map(groups.map((g) => [g.organizationId, g._count]));
+}
+
+export default { follow, unfollow, find, count, followedOrganizationIds, followerCountsByOrganization };

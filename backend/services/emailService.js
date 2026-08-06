@@ -594,6 +594,36 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
   });
 };
 
+/**
+ * Reports Module Redesign, Phase 3 — the daily slot's 6-way split
+ * (Executive/Sales/Inventory/Fulfillment/Fit Check Analytics/Organization
+ * Performance) each gets its own email through here, rather than one bespoke
+ * HTML template per report shape. `keyStats` is deliberately the exact same
+ * [[label, value], ...] `summary` array each report's own toExportShape()
+ * already produces for its Excel "Summary" sheet — the email highlights the
+ * headline numbers, the attached Excel/CSV/PDF carry the full detail, so the
+ * two are guaranteed to agree instead of being two separately-maintained views.
+ */
+export const sendScheduledReportEmail = async (recipients, { title, dateStr, keyStats, dashboardLink, attachments }) => {
+  const content = `
+    ${h2(title)}
+    ${p(dateStr, 'font-size:13px;')}
+    ${divider()}
+    ${breakdownTable(keyStats, 'Metric', 'Value')}
+    ${pillButton(dashboardLink, 'View Full Dashboard')}
+    ${divider()}
+    ${p('The full report — every table above, plus underlying detail — is attached as Excel, CSV, and PDF.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
+  `;
+
+  await transporter.sendMail({
+    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+    to: recipients.join(', '),
+    subject: `${title} — ${dateStr}`,
+    html: getEmailTemplate(content),
+    attachments,
+  });
+};
+
 export default {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -603,4 +633,5 @@ export default {
   sendPaymentFailedEmail,
   sendOrderStatusEmail,
   sendDailyBusinessReportEmail,
+  sendScheduledReportEmail,
 };

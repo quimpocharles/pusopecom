@@ -8,8 +8,6 @@ import {
   TrophyIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-  TruckIcon,
-  ArchiveBoxIcon,
   ArrowLeftIcon,
   Bars3Icon,
   XMarkIcon,
@@ -31,9 +29,11 @@ const navItems = [
   { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon },
   { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon },
   { label: 'Users', to: '/admin/users', icon: UsersIcon },
+  // Single entry for the whole Reports module — 9 workspaces (Executive
+  // Dashboard, Sales, Products, Customers, Operations, Fit Check
+  // Analytics, Organizations, Finance, Exports) live inside ReportsLayout's
+  // own sub-nav, same pattern as Settings' single sidebar entry.
   { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
-  { label: 'Shipping Analytics', to: '/admin/reports/shipping', icon: TruckIcon },
-  { label: 'Report Archive', to: '/admin/reports/archive', icon: ArchiveBoxIcon },
   { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon },
 ];
 

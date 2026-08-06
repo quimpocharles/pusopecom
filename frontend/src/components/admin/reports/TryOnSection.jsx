@@ -3,7 +3,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import ReportCard from './ReportCard';
 import HorizontalBarList from './HorizontalBarList';
 import ExportButtons from './ExportButtons';
+import Pagination from '../../ui/Pagination';
 import reportService from '../../../services/reportService';
+
+const PAGE_SIZE = 20;
 
 const formatTimeAgo = (dateStr) => {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -19,11 +22,17 @@ const formatTimeAgo = (dateStr) => {
 const TryOnSection = ({ dateParams }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [logPage, setLogPage] = useState(1);
+
+  // A new date range invalidates whatever page the log table was on —
+  // reset to page 1 rather than risk landing past the end of a now-smaller
+  // result set.
+  useEffect(() => { setLogPage(1); }, [dateParams]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    reportService.getTryOnReport(dateParams).then(res => {
+    reportService.getTryOnReport({ ...dateParams, page: logPage, pageSize: PAGE_SIZE }).then(res => {
       if (!cancelled) setData(res.data);
     }).catch(err => {
       console.error('Try-on report error:', err);
@@ -31,7 +40,7 @@ const TryOnSection = ({ dateParams }) => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [dateParams]);
+  }, [dateParams, logPage]);
 
   if (loading) {
     return (
@@ -103,20 +112,23 @@ const TryOnSection = ({ dateParams }) => {
         </ReportCard>
       )}
 
-      {/* Recent try-ons table */}
-      {data.recentTryOns.length > 0 && (
-        <ReportCard title="Recent Try-Ons">
+      {/* Full Fit Check log — who used it, on what, and when. Paginated
+          server-side (data.tryOnLog is just the current page); totals/chart
+          above always reflect the whole date range regardless of page. */}
+      {data.tryOnLogTotal > 0 && (
+        <ReportCard title="Fit Check Log">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 pr-4 font-medium text-gray-500">Product</th>
+                  <th className="text-left py-2 pr-4 font-medium text-gray-500">Email</th>
                   <th className="text-left py-2 pr-4 font-medium text-gray-500">Status</th>
                   <th className="text-right py-2 font-medium text-gray-500">Time</th>
                 </tr>
               </thead>
               <tbody>
-                {data.recentTryOns.map((tryOn, i) => (
+                {data.tryOnLog.map((tryOn, i) => (
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
@@ -132,6 +144,9 @@ const TryOnSection = ({ dateParams }) => {
                         </span>
                       </div>
                     </td>
+                    <td className="py-2 pr-4 text-gray-700 truncate max-w-[220px]">
+                      {tryOn.email}
+                    </td>
                     <td className="py-2 pr-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         tryOn.success
@@ -141,7 +156,7 @@ const TryOnSection = ({ dateParams }) => {
                         {tryOn.success ? 'Success' : 'Failed'}
                       </span>
                     </td>
-                    <td className="py-2 text-right text-gray-500 whitespace-nowrap">
+                    <td className="py-2 text-right text-gray-500 whitespace-nowrap" title={new Date(tryOn.createdAt).toLocaleString()}>
                       {formatTimeAgo(tryOn.createdAt)}
                     </td>
                   </tr>
@@ -149,6 +164,12 @@ const TryOnSection = ({ dateParams }) => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={data.page}
+            totalPages={Math.max(1, Math.ceil(data.tryOnLogTotal / data.pageSize))}
+            onPageChange={setLogPage}
+            className="mt-4"
+          />
         </ReportCard>
       )}
     </div>

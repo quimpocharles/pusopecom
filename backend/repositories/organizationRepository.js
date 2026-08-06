@@ -78,6 +78,22 @@ export async function findParticipants(inOrganizationId, { client = prisma } = {
   return serialize(rows);
 }
 
+/**
+ * Batch counterpart to findParticipations — every participation row for a
+ * whole set of member organizations in one query, not one call per org.
+ * Added for the Organizations report's "Top Leagues" rollup (Reports
+ * module redesign, Phase 2): a school's (member org's) revenue attributes
+ * up to each league (body org, kind='league') it participates in.
+ */
+export async function findParticipationsForMembers(memberOrganizationIds, { client = prisma } = {}) {
+  if (!memberOrganizationIds || memberOrganizationIds.length === 0) return [];
+  const rows = await client.organizationParticipation.findMany({
+    where: { memberOrganizationId: { in: memberOrganizationIds } },
+    include: { inOrganization: true },
+  });
+  return serialize(rows);
+}
+
 export async function addParticipation({ memberOrganizationId, inOrganizationId, startDate }, { client = prisma } = {}) {
   const row = await client.organizationParticipation.create({
     data: { memberOrganizationId, inOrganizationId, startDate: startDate ?? null },
@@ -171,6 +187,7 @@ export default {
   deleteById,
   findParticipations,
   findParticipants,
+  findParticipationsForMembers,
   addParticipation,
   endParticipation,
   requestVerification,

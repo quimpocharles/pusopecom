@@ -1826,6 +1826,17 @@ enum ReportRunType {
   weekly_business_report
   monthly_business_report
   quarterly_business_report
+
+  // Reports Module Redesign, Phase 3 — the 5 AM daily slot's single email
+  // split into six, one per report workspace, each archived under its own
+  // type so it's independently downloadable in Exports > Archive. All six
+  // still share the one existing daily ReportSchedule on/off toggle.
+  executive_daily_report
+  sales_report
+  inventory_report
+  fulfillment_report
+  fit_check_analytics_report
+  organization_performance_report
 }
 
 enum ReportRunStatus {

@@ -1,7 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowPathIcon, ArrowDownTrayIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
-import Modal from '../../components/ui/Modal';
-import reportService from '../../services/reportService';
+import DateRangeSelector, { getDateRange } from '../../../components/admin/reports/DateRangeSelector';
+import ExportButtons from '../../../components/admin/reports/ExportButtons';
+import Modal from '../../../components/ui/Modal';
+import reportService from '../../../services/reportService';
+
+// Replaces export buttons scattered across every report tab with one
+// dedicated workspace, plus folds in the old standalone AdminReportArchive
+// page as its second tab — both are fundamentally the same job ("get a
+// report out of the system"), just ad-hoc vs. scheduled.
+//
+// Org/league/team/product/campaign filtering isn't built here yet — those
+// only become meaningful once the Organizations workspace (Phase 2) gives
+// them something real to filter against. Shipping dropdown inputs that
+// don't yet do anything would be worse than not having them.
+
+const REPORT_OPTIONS = [
+  { key: 'executive', label: 'Executive Dashboard' },
+  { key: 'sales', label: 'Sales' },
+  { key: 'products', label: 'Products' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'customers', label: 'Customers' },
+  { key: 'fit-check', label: 'Fit Check Analytics' },
+  { key: 'organizations', label: 'Organizations' },
+  { key: 'finance', label: 'Finance' },
+  { key: 'shipping', label: 'Shipping' },
+  { key: 'checkout-recovery', label: 'Checkout Recovery' },
+];
 
 const statusColors = {
   sent: 'bg-green-100 text-green-800',
@@ -14,17 +39,97 @@ const typeLabels = {
   weekly_business_report: 'Weekly Business Report',
   monthly_business_report: 'Monthly Business Report',
   quarterly_business_report: 'Quarterly Business Report',
+  // Reports Module Redesign, Phase 3 — the daily slot's 6-way split, each
+  // archived under its own type so it's independently downloadable here.
+  executive_daily_report: 'Executive Daily Report',
+  sales_report: 'Sales Report (Daily)',
+  inventory_report: 'Inventory Report (Daily)',
+  fulfillment_report: 'Fulfillment Report (Daily)',
+  fit_check_analytics_report: 'Fit Check Analytics (Daily)',
+  organization_performance_report: 'Organization Performance (Daily)',
 };
+
+// The in-page "View" modal below only knows how to render the original
+// composite business-report shape (data.sales/products/customers/tryOn).
+// The 6-way split's report types have their own, different data shapes —
+// they're still fully downloadable (Excel/CSV/PDF), just not previewable
+// in this modal without building 6 more bespoke viewers for marginal value.
+const VIEWABLE_TYPES = new Set([
+  'daily_business_report', 'weekly_business_report', 'monthly_business_report', 'quarterly_business_report',
+]);
 
 const money = (n) => `₱${Number(n ?? 0).toLocaleString()}`;
 
-const AdminReportArchive = () => {
+const TabButton = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+      active ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+    }`}
+  >
+    {children}
+  </button>
+);
+
+const AdHocExportTab = () => {
+  const [reportKey, setReportKey] = useState('executive');
+  const [selectedPreset, setSelectedPreset] = useState('30d');
+  const [dateRange, setDateRange] = useState(() => getDateRange('30d'));
+
+  const handleSelect = (preset, range) => {
+    setSelectedPreset(preset);
+    setDateRange(range);
+  };
+
+  const dateParams = useMemo(() => {
+    const params = {};
+    if (dateRange.startDate) params.startDate = dateRange.startDate;
+    if (dateRange.endDate) params.endDate = dateRange.endDate;
+    return params;
+  }, [dateRange.startDate, dateRange.endDate]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">Pick a report and a date range, then download it as CSV or Excel.</p>
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <select
+          value={reportKey}
+          onChange={(e) => setReportKey(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          {REPORT_OPTIONS.map((opt) => (
+            <option key={opt.key} value={opt.key}>{opt.label}</option>
+          ))}
+        </select>
+        <DateRangeSelector selected={selectedPreset} onSelect={handleSelect} />
+      </div>
+      <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{REPORT_OPTIONS.find((o) => o.key === reportKey)?.label}</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {dateRange.startDate && dateRange.endDate ? `${dateRange.startDate} to ${dateRange.endDate}` : 'All time'}
+          </p>
+        </div>
+        <ExportButtons reportKey={reportKey} dateParams={dateParams} />
+      </div>
+    </div>
+  );
+};
+
+const ViewStat = ({ label, value }) => (
+  <div className="bg-gray-50 rounded-lg p-3">
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-lg font-bold text-gray-900">{value}</p>
+  </div>
+);
+
+const ArchiveTab = () => {
   const [runs, setRuns] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateFrequency, setRegenerateFrequency] = useState('daily');
-  const [viewing, setViewing] = useState(null); // full run detail, or null
+  const [viewing, setViewing] = useState(null);
   const [error, setError] = useState('');
 
   const fetchRuns = useCallback(async (page = 1) => {
@@ -40,9 +145,7 @@ const AdminReportArchive = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchRuns();
-  }, [fetchRuns]);
+  useEffect(() => { fetchRuns(); }, [fetchRuns]);
 
   const handleRegenerate = async () => {
     setRegenerating(true);
@@ -85,11 +188,8 @@ const AdminReportArchive = () => {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Report Archive</h1>
-          <p className="text-sm text-gray-500 mt-1">Every scheduled report run, kept exactly as it was sent.</p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <p className="text-sm text-gray-500">Every scheduled report run, kept exactly as it was sent.</p>
         <div className="flex items-center gap-2">
           <select
             value={regenerateFrequency}
@@ -155,27 +255,13 @@ const AdminReportArchive = () => {
                     <td className="px-6 py-4 text-sm text-gray-500">{new Date(run.createdAt).toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleView(run)}
-                          disabled={!run.hasData}
-                          className="p-1.5 text-gray-400 hover:text-primary-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                          title="View"
-                        >
+                        <button onClick={() => handleView(run)} disabled={!run.hasData || !VIEWABLE_TYPES.has(run.type)} className="p-1.5 text-gray-400 hover:text-primary-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title={VIEWABLE_TYPES.has(run.type) ? 'View' : 'Preview not available for this report type — download instead'}>
                           <EyeIcon className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDownload(run, 'xlsx')}
-                          disabled={!run.hasData}
-                          className="p-1.5 text-gray-400 hover:text-primary-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                          title="Download Excel"
-                        >
+                        <button onClick={() => handleDownload(run, 'xlsx')} disabled={!run.hasData} className="p-1.5 text-gray-400 hover:text-primary-600 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Download Excel">
                           <ArrowDownTrayIcon className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(run)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors"
-                          title="Delete"
-                        >
+                        <button onClick={() => handleDelete(run)} className="p-1.5 text-gray-400 hover:text-red-600 rounded transition-colors" title="Delete">
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
@@ -193,18 +279,10 @@ const AdminReportArchive = () => {
               Showing {(pagination.page - 1) * 20 + 1}–{Math.min(pagination.page * 20, pagination.total)} of {pagination.total}
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => fetchRuns(pagination.page - 1)}
-                disabled={pagination.page <= 1}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => fetchRuns(pagination.page - 1)} disabled={pagination.page <= 1} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 Previous
               </button>
-              <button
-                onClick={() => fetchRuns(pagination.page + 1)}
-                disabled={pagination.page >= pagination.pages}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={() => fetchRuns(pagination.page + 1)} disabled={pagination.page >= pagination.pages} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 Next
               </button>
             </div>
@@ -240,16 +318,10 @@ const AdminReportArchive = () => {
               )}
             </div>
             <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => handleDownload(viewing, 'csv')}
-                className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
+              <button onClick={() => handleDownload(viewing, 'csv')} className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50">
                 Download CSV
               </button>
-              <button
-                onClick={() => handleDownload(viewing, 'xlsx')}
-                className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
+              <button onClick={() => handleDownload(viewing, 'xlsx')} className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50">
                 Download Excel
               </button>
             </div>
@@ -260,11 +332,18 @@ const AdminReportArchive = () => {
   );
 };
 
-const ViewStat = ({ label, value }) => (
-  <div className="bg-gray-50 rounded-lg p-3">
-    <p className="text-xs text-gray-500">{label}</p>
-    <p className="text-lg font-bold text-gray-900">{value}</p>
-  </div>
-);
+const ExportsWorkspace = () => {
+  const [tab, setTab] = useState('export'); // 'export' | 'archive'
 
-export default AdminReportArchive;
+  return (
+    <div className="space-y-4">
+      <div className="border-b border-gray-200 flex gap-4">
+        <TabButton active={tab === 'export'} onClick={() => setTab('export')}>Ad-hoc Export</TabButton>
+        <TabButton active={tab === 'archive'} onClick={() => setTab('archive')}>Scheduled Report Archive</TabButton>
+      </div>
+      {tab === 'export' ? <AdHocExportTab /> : <ArchiveTab />}
+    </div>
+  );
+};
+
+export default ExportsWorkspace;

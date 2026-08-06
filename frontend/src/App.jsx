@@ -4,6 +4,7 @@ import LoadingSpinner from './components/common/LoadingSpinner';
 import Home from './pages/Home';
 import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
+import NotFound from './pages/NotFound';
 const Checkout = lazy(() => import('./pages/Checkout'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -37,7 +38,6 @@ const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
 const AdminShipments = lazy(() => import('./pages/admin/AdminShipments'));
 const AdminReturns = lazy(() => import('./pages/admin/AdminReturns'));
-const AdminReportArchive = lazy(() => import('./pages/admin/AdminReportArchive'));
 const AdminFAQ = lazy(() => import('./pages/admin/AdminFAQ'));
 const AdminPromoMessages = lazy(() => import('./pages/admin/AdminPromoMessages'));
 const AdminHomepageSections = lazy(() => import('./pages/admin/AdminHomepageSections'));
@@ -47,7 +47,16 @@ const AdminNavigation = lazy(() => import('./pages/admin/AdminNavigation'));
 const AdminFooter = lazy(() => import('./pages/admin/AdminFooter'));
 const AdminHomepageBuilder = lazy(() => import('./pages/admin/AdminHomepageBuilder'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
-const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
+const ReportsLayout = lazy(() => import('./components/admin/reports/ReportsLayout'));
+const ExecutiveDashboard = lazy(() => import('./pages/admin/reports/ExecutiveDashboard'));
+const SalesReportPage = lazy(() => import('./pages/admin/reports/SalesReportPage'));
+const ProductsReportPage = lazy(() => import('./pages/admin/reports/ProductsReportPage'));
+const CustomersReportPage = lazy(() => import('./pages/admin/reports/CustomersReportPage'));
+const OperationsReportPage = lazy(() => import('./pages/admin/reports/OperationsReportPage'));
+const FitCheckAnalyticsPage = lazy(() => import('./pages/admin/reports/FitCheckAnalyticsPage'));
+const OrganizationsReportPage = lazy(() => import('./pages/admin/reports/OrganizationsReportPage'));
+const FinanceReportPage = lazy(() => import('./pages/admin/reports/FinanceReportPage'));
+const ExportsWorkspace = lazy(() => import('./pages/admin/reports/ExportsWorkspace'));
 const SettingsLayout = lazy(() => import('./components/admin/settings/SettingsLayout'));
 const SettingsOverview = lazy(() => import('./pages/admin/settings/SettingsOverview'));
 const FitCheckSettings = lazy(() => import('./pages/admin/settings/FitCheckSettings'));
@@ -56,7 +65,6 @@ const NotificationSettings = lazy(() => import('./pages/admin/settings/Notificat
 const SecuritySettings = lazy(() => import('./pages/admin/settings/SecuritySettings'));
 const IntegrationsSettings = lazy(() => import('./pages/admin/settings/IntegrationsSettings'));
 const AdvancedSettings = lazy(() => import('./pages/admin/settings/AdvancedSettings'));
-const AdminShippingReports = lazy(() => import('./pages/admin/AdminShippingReports'));
 const DesignSystemDemo = lazy(() => import('./pages/_dev/DesignSystemDemo'));
 
 import AdminRoute from './components/admin/AdminRoute';
@@ -120,7 +128,17 @@ function App() {
             <Route path="shipments" element={<AdminShipments />} />
             <Route path="returns" element={<AdminReturns />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="reports" element={<AdminReports />} />
+            <Route path="reports" element={<ReportsLayout />}>
+              <Route index element={<ExecutiveDashboard />} />
+              <Route path="sales" element={<SalesReportPage />} />
+              <Route path="products" element={<ProductsReportPage />} />
+              <Route path="customers" element={<CustomersReportPage />} />
+              <Route path="operations" element={<OperationsReportPage />} />
+              <Route path="fit-check" element={<FitCheckAnalyticsPage />} />
+              <Route path="organizations" element={<OrganizationsReportPage />} />
+              <Route path="finance" element={<FinanceReportPage />} />
+              <Route path="exports" element={<ExportsWorkspace />} />
+            </Route>
             <Route path="settings" element={<SettingsLayout />}>
               <Route index element={<SettingsOverview />} />
               <Route path="fit-check" element={<FitCheckSettings />} />
@@ -130,8 +148,6 @@ function App() {
               <Route path="integrations" element={<IntegrationsSettings />} />
               <Route path="advanced" element={<AdvancedSettings />} />
             </Route>
-            <Route path="reports/shipping" element={<AdminShippingReports />} />
-            <Route path="reports/archive" element={<AdminReportArchive />} />
             <Route path="homepage/faq" element={<AdminFAQ />} />
             <Route path="homepage/announcements" element={<AdminPromoMessages />} />
             <Route path="homepage/sections" element={<AdminHomepageSections />} />
@@ -141,6 +157,8 @@ function App() {
             <Route path="homepage/footer" element={<AdminFooter />} />
             <Route path="homepage" element={<AdminHomepageBuilder />} />
           </Route>
+
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
     </Router>

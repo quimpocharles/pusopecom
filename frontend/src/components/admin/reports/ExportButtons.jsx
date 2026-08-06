@@ -9,7 +9,7 @@ import reportService from '../../../services/reportService';
  * view and its export never disagree.
  */
 const ExportButtons = ({ reportKey, dateParams }) => {
-  const [exporting, setExporting] = useState(null); // 'csv' | 'xlsx' | null
+  const [exporting, setExporting] = useState(null); // 'csv' | 'xlsx' | 'pdf' | null
 
   const handleExport = async (format) => {
     setExporting(format);
@@ -39,6 +39,14 @@ const ExportButtons = ({ reportKey, dateParams }) => {
       >
         <ArrowDownTrayIcon className="w-3.5 h-3.5" />
         {exporting === 'xlsx' ? 'Exporting…' : 'Excel'}
+      </button>
+      <button
+        onClick={() => handleExport('pdf')}
+        disabled={exporting !== null}
+        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+      >
+        <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+        {exporting === 'pdf' ? 'Exporting…' : 'PDF'}
       </button>
     </div>
   );

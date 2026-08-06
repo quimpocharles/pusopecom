@@ -1,15 +1,20 @@
 import logger from '../lib/logger.js';
+import Sentry from '../lib/sentry.js';
 import * as orderRepository from '../repositories/orderRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as organizationRepository from '../repositories/organizationRepository.js';
 import * as reportRecipientRepository from '../repositories/reportRecipientRepository.js';
 import * as reportRunRepository from '../repositories/reportRunRepository.js';
-import * as shipmentRepository from '../repositories/shipmentRepository.js';
-import * as returnRequestRepository from '../repositories/returnRequestRepository.js';
-import * as refundRepository from '../repositories/refundRepository.js';
-import { sendDailyBusinessReportEmail } from './emailService.js';
-import { STAGE_THRESHOLD_HOURS } from '../lib/sweepFulfillmentSLA.js';
+import { sendDailyBusinessReportEmail, sendScheduledReportEmail } from './emailService.js';
+import { buildFulfillmentSection } from '../lib/fulfillmentSnapshot.js';
+import { buildReportAttachments } from '../lib/reportExport.js';
+import { computeExecutiveReport, executiveReportToExportShape } from './reportQueries/executive.js';
+import { computeSalesReport, salesReportToExportShape } from './reportQueries/sales.js';
+import { computeProductsReport, inventoryReportToExportShape } from './reportQueries/products.js';
+import { composeFulfillmentReport, fulfillmentReportToExportShape } from './reportQueries/fulfillment.js';
+import { computeFitCheckAnalyticsReport, fitCheckAnalyticsReportToExportShape } from './reportQueries/fitCheckAnalytics.js';
+import { computeOrganizationsReport, organizationsReportToExportShape } from './reportQueries/organizations.js';
 
 const LOW_STOCK_THRESHOLD = 5; // matches the threshold already used by admin stats / products report
 
@@ -253,25 +258,6 @@ async function buildTryOnSection(start, end) {
 }
 
 /**
- * Enterprise Fulfillment Blueprint §11 — Pending Fulfillment / Late
- * Shipments / Returns / Refunds, read directly off Shipment/ReturnRequest/
- * Refund. Deliberately a live snapshot at generation time, not filtered to
- * the report's [start, end) window — these are operational queues (like
- * the existing low-stock inventory alert), not period-scoped activity.
- */
-async function buildFulfillmentSection() {
-  const ACTIVE_STATUSES = Object.keys(STAGE_THRESHOLD_HOURS);
-  const [pendingFulfillment, exceptions, returnsAwaitingApproval, refundQueue] = await Promise.all([
-    shipmentRepository.count({ where: { status: { in: ACTIVE_STATUSES } } }),
-    shipmentRepository.count({ where: { status: 'exception' } }),
-    returnRequestRepository.count({ where: { status: { in: ['requested', 'under_review'] } } }),
-    refundRepository.count({ where: { status: 'pending' } }),
-  ]);
-
-  return { pendingFulfillment, exceptions, returnsAwaitingApproval, refundQueue };
-}
-
-/**
  * The Business Report's core — computes every section for an arbitrary
  * [start, end) window. generateDailyBusinessReport and its weekly/monthly/
  * quarterly siblings below are thin wrappers that just supply a different
@@ -484,9 +470,125 @@ async function generateAndSendBusinessReport({ type, start, end }) {
   logger.info({ recipientCount: recipients.length, type }, 'Business report sent');
 }
 
+// Same YYYY-MM-DD-in-PH-time formatting `dateKey`/DateRangeSelector already
+// use elsewhere for date-string query params — the six computeXReport(query)
+// functions below all filter by plain startDate/endDate strings (via
+// getDateFilter), not by a real PH-aware UTC instant range the way
+// generateBusinessReportForRange's {start, end} does. That's an existing
+// simplification shared by every interactive report workspace already
+// (Executive/Sales/Products/etc.), not a new inconsistency introduced here.
+function phDateString(date) {
+  return new Date(date.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Reports Module Redesign, Phase 3 — the daily 5 AM slot's single composite
+ * email split into six, one per report workspace. Each is computed by the
+ * exact same function powering its interactive tab (imported above) rather
+ * than a third reimplementation, and each is independently archived under
+ * its own ReportRunType so a bug in one (e.g. Fit Check Analytics) never
+ * blocks the other five from sending.
+ */
+const SCHEDULED_REPORT_DEFS = [
+  {
+    type: 'executive_daily_report',
+    title: 'Executive Daily Report',
+    baseFilename: 'executive-daily-report',
+    dashboardPath: '/admin/reports',
+    compute: computeExecutiveReport,
+    toExportShape: executiveReportToExportShape,
+  },
+  {
+    type: 'sales_report',
+    title: 'Sales Report',
+    baseFilename: 'sales-report',
+    dashboardPath: '/admin/reports/sales',
+    compute: computeSalesReport,
+    toExportShape: salesReportToExportShape,
+  },
+  {
+    type: 'inventory_report',
+    title: 'Inventory Report',
+    baseFilename: 'inventory-report',
+    dashboardPath: '/admin/reports/products',
+    compute: computeProductsReport,
+    toExportShape: inventoryReportToExportShape,
+  },
+  {
+    type: 'fulfillment_report',
+    title: 'Fulfillment Report',
+    baseFilename: 'fulfillment-report',
+    dashboardPath: '/admin/reports/operations',
+    compute: composeFulfillmentReport,
+    toExportShape: fulfillmentReportToExportShape,
+  },
+  {
+    type: 'fit_check_analytics_report',
+    title: 'Fit Check Analytics Report',
+    baseFilename: 'fit-check-analytics-report',
+    dashboardPath: '/admin/reports/fit-check',
+    compute: computeFitCheckAnalyticsReport,
+    toExportShape: fitCheckAnalyticsReportToExportShape,
+  },
+  {
+    type: 'organization_performance_report',
+    title: 'Organization Performance Report',
+    baseFilename: 'organization-performance-report',
+    dashboardPath: '/admin/reports/organizations',
+    compute: computeOrganizationsReport,
+    toExportShape: organizationsReportToExportShape,
+  },
+];
+
 export const generateAndSendDailyBusinessReport = async () => {
-  const { start, end } = yesterdayRangePH();
-  return generateAndSendBusinessReport({ type: 'daily_business_report', start, end });
+  const { start } = yesterdayRangePH();
+  const dateLabel = phDateString(start); // yesterday's PH calendar date
+  const query = { startDate: dateLabel, endDate: dateLabel };
+  const dateStr = start.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' });
+
+  let recipients = await reportRecipientRepository.findActiveEmails();
+
+  // Same ADMIN_EMAIL fallback generateAndSendBusinessReport uses for the
+  // other cadences — see that function's own comment for why.
+  if (recipients.length === 0 && process.env.ADMIN_EMAIL) {
+    logger.warn('No ReportRecipient rows configured — falling back to ADMIN_EMAIL. Add recipients in Admin > Reports to stop seeing this.');
+    recipients = [process.env.ADMIN_EMAIL];
+  }
+
+  if (recipients.length === 0) {
+    logger.warn('No report recipients configured — skipping the daily scheduled reports');
+    await Promise.all(SCHEDULED_REPORT_DEFS.map((def) =>
+      archiveRun({ type: def.type, status: 'skipped', reportDate: start, recipients: [] })
+    ));
+    return;
+  }
+
+  await Promise.all(SCHEDULED_REPORT_DEFS.map(async (def) => {
+    try {
+      const data = await def.compute(query);
+      const shape = def.toExportShape(data);
+      const attachments = await buildReportAttachments({
+        summary: shape.summary,
+        sheets: shape.sheets,
+        baseFilename: def.baseFilename,
+        title: def.title,
+      });
+      await sendScheduledReportEmail(recipients, {
+        title: def.title,
+        dateStr,
+        keyStats: shape.summary,
+        dashboardLink: `${process.env.FRONTEND_URL}${def.dashboardPath}`,
+        attachments,
+      });
+      await archiveRun({ type: def.type, status: 'sent', reportDate: start, data, recipients });
+    } catch (error) {
+      logger.error({ err: error, type: def.type }, 'Scheduled report failed');
+      Sentry.captureException(error);
+      await archiveRun({ type: def.type, status: 'failed', reportDate: start, recipients, errorMessage: error.message });
+    }
+  }));
+
+  logger.info({ recipientCount: recipients.length, reportCount: SCHEDULED_REPORT_DEFS.length }, 'Daily scheduled reports sent');
 };
 
 export const generateAndSendWeeklyBusinessReport = async () => {

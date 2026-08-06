@@ -1,6 +1,11 @@
 import api from './api';
 
 export const reportService = {
+  getExecutiveReport: async (params = {}) => {
+    const response = await api.get('/reports/executive', { params });
+    return response.data;
+  },
+
   getSalesReport: async (params = {}) => {
     const response = await api.get('/reports/sales', { params });
     return response.data;
@@ -26,9 +31,31 @@ export const reportService = {
     return response.data;
   },
 
+  getFitCheckAnalyticsReport: async (params = {}) => {
+    const response = await api.get('/reports/fit-check', { params });
+    return response.data;
+  },
+
+  getOrganizationsReport: async (params = {}) => {
+    const response = await api.get('/reports/organizations', { params });
+    return response.data;
+  },
+
+  getFinanceReport: async (params = {}) => {
+    const response = await api.get('/reports/finance', { params });
+    return response.data;
+  },
+
   // Payment Platform Redesign, Phase 7
   getCheckoutRecoveryReport: async (params = {}) => {
     const response = await api.get('/reports/checkout-recovery', { params });
+    return response.data;
+  },
+
+  // Was missing — AdminShippingReports.jsx called api.get('/reports/shipping...')
+  // directly instead of going through this service, unlike every other report.
+  getShippingReport: async (params = {}) => {
+    const response = await api.get('/reports/shipping', { params });
     return response.data;
   },
 
@@ -52,7 +79,9 @@ export const reportService = {
 
     const mimeType = format === 'xlsx'
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      : 'text/csv';
+      : format === 'pdf'
+        ? 'application/pdf'
+        : 'text/csv';
     const url = URL.createObjectURL(new Blob([response.data], { type: mimeType }));
     const a = document.createElement('a');
     a.href = url;
@@ -145,7 +174,9 @@ export const reportService = {
     const filename = match ? match[1] : `report-${id}.${format}`;
     const mimeType = format === 'xlsx'
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      : 'text/csv';
+      : format === 'pdf'
+        ? 'application/pdf'
+        : 'text/csv';
     const url = URL.createObjectURL(new Blob([response.data], { type: mimeType }));
     const a = document.createElement('a');
     a.href = url;

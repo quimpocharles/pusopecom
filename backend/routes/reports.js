@@ -5,13 +5,21 @@ import * as orderRepository from '../repositories/orderRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as userRepository from '../repositories/userRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
-import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as reportRecipientRepository from '../repositories/reportRecipientRepository.js';
 import * as reportRunRepository from '../repositories/reportRunRepository.js';
 import * as reportScheduleRepository from '../repositories/reportScheduleRepository.js';
 import * as dashboardWidgetRepository from '../repositories/dashboardWidgetRepository.js';
 import * as paymentRepository from '../repositories/paymentRepository.js';
 import { sendReportExport } from '../lib/reportExport.js';
+import { getDateFilter, getGranularity, dateKey, groupBy, sortByDateKey, exportFormat } from '../lib/reportQueryHelpers.js';
+import { computeSalesReport, salesReportToExportShape } from '../services/reportQueries/sales.js';
+import { computeProductsReport, productsReportToExportShape } from '../services/reportQueries/products.js';
+import { computeOrdersReport } from '../services/reportQueries/orders.js';
+import { computeExecutiveReport, executiveReportToExportShape } from '../services/reportQueries/executive.js';
+import { computeFitCheckAnalyticsReport, fitCheckAnalyticsReportToExportShape } from '../services/reportQueries/fitCheckAnalytics.js';
+import { computeOrganizationsReport, organizationsReportToExportShape } from '../services/reportQueries/organizations.js';
+import { computeFinanceReport, financeReportToExportShape } from '../services/reportQueries/finance.js';
+import { computeShippingReport, shippingReportToExportShape } from '../services/reportQueries/shipping.js';
 import {
   generateAndSendDailyBusinessReport,
   generateAndSendWeeklyBusinessReport,
@@ -121,7 +129,10 @@ router.get('/archive', async (req, res) => {
 });
 
 const REGENERATE_BY_FREQUENCY = {
-  daily: { type: 'daily_business_report', run: generateAndSendDailyBusinessReport },
+  // Daily now fans out into six archived runs (Reports Module Redesign,
+  // Phase 3) — no single ReportRunType to look up afterward the way the
+  // other three cadences still have.
+  daily: { type: null, run: generateAndSendDailyBusinessReport },
   weekly: { type: 'weekly_business_report', run: generateAndSendWeeklyBusinessReport },
   monthly: { type: 'monthly_business_report', run: generateAndSendMonthlyBusinessReport },
   quarterly: { type: 'quarterly_business_report', run: generateAndSendQuarterlyBusinessReport },
@@ -136,7 +147,7 @@ router.post('/archive/regenerate', async (req, res) => {
     const { type, run } = REGENERATE_BY_FREQUENCY[frequency];
 
     await run();
-    const [latest] = await reportRunRepository.find({ where: { type }, take: 1 });
+    const latest = type ? (await reportRunRepository.find({ where: { type }, take: 1 }))[0] ?? null : null;
     res.status(201).json({ success: true, data: latest });
   } catch (error) {
     logger.error({ err: error }, 'Regenerate business report error');
@@ -326,107 +337,48 @@ router.get('/dashboard-widgets/data', async (req, res) => {
  * duplicate the underlying query/aggregation logic. This is also the seam
  * a future cached/materialized-view version of a report would replace,
  * without either route needing to change.
+ *
+ * getDateFilter/getGranularity/dateKey/groupBy/sortByDateKey/exportFormat
+ * live in lib/reportQueryHelpers.js (not defined here) so the
+ * services/reportQueries/*.js modules below can reuse them without a
+ * circular import back into this router file.
  */
 
-// Helper: parse date range from query params into a Prisma-shaped filter
-export function getDateFilter(query) {
-  const range = {};
-  if (query.startDate) range.gte = new Date(query.startDate);
-  if (query.endDate) {
-    const end = new Date(query.endDate);
-    end.setHours(23, 59, 59, 999);
-    range.lte = end;
+// ── Executive Dashboard ─────────────────────────────────────────────────
+// computeExecutiveReport lives in services/reportQueries/executive.js — it
+// composes computeSalesReport/computeProductsReport/computeOrdersReport
+// rather than recomputing their totals, plus two genuinely new pieces
+// (the alerts feed, the deterministic executive summary text).
+
+router.get('/executive', async (req, res) => {
+  try {
+    res.json({ success: true, data: await computeExecutiveReport(req.query) });
+  } catch (error) {
+    logger.error({ err: error }, 'Executive report error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate executive report' });
   }
-  return Object.keys(range).length > 0 ? { createdAt: range } : {};
-}
+});
 
-// Helper: choose time granularity based on date range
-export function getGranularity(startDate, endDate) {
-  if (!startDate && !endDate) return 'month';
-  const start = startDate ? new Date(startDate) : new Date('2020-01-01');
-  const end = endDate ? new Date(endDate) : new Date();
-  const days = (end - start) / (1000 * 60 * 60 * 24);
-  if (days <= 31) return 'day';
-  if (days <= 180) return 'week';
-  return 'month';
-}
-
-/**
- * Buckets a date into the same key shape Mongo's $dateToString produced
- * ('%Y-%m-%d', '%Y-W%V', '%Y-%m'), so every report's date-bucketed output
- * is unchanged for API consumers. The week case needs real ISO-8601 week
- * math (weeks start Monday, week 1 contains the year's first Thursday,
- * matching Mongo's %V) — not just a naive days-since-epoch divide.
- */
-export function dateKey(date, granularity) {
-  const d = new Date(date);
-  if (granularity === 'day') return d.toISOString().slice(0, 10);
-  if (granularity === 'month') return d.toISOString().slice(0, 7);
-
-  const utc = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = utc.getUTCDay() || 7; // Mon=1..Sun=7
-  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum); // shift to this week's Thursday
-  const isoYear = utc.getUTCFullYear();
-  const yearStart = Date.UTC(isoYear, 0, 1);
-  const weekNum = Math.ceil(((utc.getTime() - yearStart) / 86400000 + 1) / 7);
-  return `${isoYear}-W${String(weekNum).padStart(2, '0')}`;
-}
-
-function groupBy(items, keyFn) {
-  const map = new Map();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(item);
+router.get('/executive/export', async (req, res) => {
+  try {
+    const data = await computeExecutiveReport(req.query);
+    await sendReportExport(res, {
+      format: exportFormat(req.query),
+      baseFilename: 'executive-report',
+      ...executiveReportToExportShape(data),
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Executive report export error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to export executive report' });
   }
-  return map;
-}
-
-const sortByDateKey = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
-
-function exportFormat(query) {
-  return query.format === 'xlsx' ? 'xlsx' : 'csv';
-}
+});
 
 // ── Sales ────────────────────────────────────────────────────────────────
-
-async function computeSalesReport(query) {
-  const dateFilter = getDateFilter(query);
-  const granularity = getGranularity(query.startDate, query.endDate);
-
-  const paidOrders = await orderRepository.find({
-    where: { paymentStatus: 'paid', ...dateFilter },
-    include: { items: { include: { product: true } } },
-  });
-
-  const revenueOverTime = [...groupBy(paidOrders, (o) => dateKey(o.createdAt, granularity))]
-    .map(([date, orders]) => ({ date, revenue: orders.reduce((s, o) => s + o.total, 0), orders: orders.length }))
-    .sort(sortByDateKey);
-
-  const allItems = paidOrders.flatMap((o) => o.items);
-
-  const salesByCategory = [...groupBy(allItems, (i) => i.product?.category ?? 'unknown')]
-    .map(([category, items]) => ({
-      category,
-      revenue: items.reduce((s, i) => s + i.price * i.quantity, 0),
-      units: items.reduce((s, i) => s + i.quantity, 0),
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  const salesBySport = [...groupBy(allItems, (i) => i.product?.sport ?? 'unknown')]
-    .map(([sport, items]) => ({
-      sport,
-      revenue: items.reduce((s, i) => s + i.price * i.quantity, 0),
-      units: items.reduce((s, i) => s + i.quantity, 0),
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  const totalRevenue = paidOrders.reduce((s, o) => s + o.total, 0);
-  const totalOrders = paidOrders.length;
-  const averageOrderValue = totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0;
-
-  return { revenueOverTime, salesByCategory, salesBySport, totalRevenue, totalOrders, averageOrderValue };
-}
+// computeSalesReport itself now lives in services/reportQueries/sales.js —
+// see that file's header comment for why (executive.js reuses it without a
+// circular import, and Phase 3's scheduled email will call it directly).
 
 router.get('/sales', async (req, res) => {
   try {
@@ -444,31 +396,7 @@ router.get('/sales/export', async (req, res) => {
     await sendReportExport(res, {
       format: exportFormat(req.query),
       baseFilename: 'sales-report',
-      summary: [
-        ['Total Revenue', data.totalRevenue],
-        ['Total Orders', data.totalOrders],
-        ['Average Order Value', data.averageOrderValue],
-      ],
-      sheets: [
-        {
-          name: 'Revenue Over Time',
-          columns: [{ header: 'Date', key: 'date' }, { header: 'Revenue', key: 'revenue' }, { header: 'Orders', key: 'orders' }],
-          rows: data.revenueOverTime,
-          totals: { revenue: true, orders: true },
-        },
-        {
-          name: 'By Category',
-          columns: [{ header: 'Category', key: 'category' }, { header: 'Revenue', key: 'revenue' }, { header: 'Units', key: 'units' }],
-          rows: data.salesByCategory,
-          totals: { revenue: true, units: true },
-        },
-        {
-          name: 'By Sport',
-          columns: [{ header: 'Sport', key: 'sport' }, { header: 'Revenue', key: 'revenue' }, { header: 'Units', key: 'units' }],
-          rows: data.salesBySport,
-          totals: { revenue: true, units: true },
-        },
-      ],
+      ...salesReportToExportShape(data),
     });
   } catch (error) {
     logger.error({ err: error }, 'Sales report export error');
@@ -478,62 +406,7 @@ router.get('/sales/export', async (req, res) => {
 });
 
 // ── Products ─────────────────────────────────────────────────────────────
-
-async function computeProductsReport(query) {
-  const dateFilter = getDateFilter(query);
-
-  const paidOrders = await orderRepository.find({
-    where: { paymentStatus: 'paid', ...dateFilter },
-    include: { items: { include: { product: true } } },
-  });
-  const allItems = paidOrders.flatMap((o) => o.items);
-
-  const productAgg = [...groupBy(allItems, (i) => i.product._id)].map(([, items]) => ({
-    name: items[0].name,
-    image: items[0].image,
-    units: items.reduce((s, i) => s + i.quantity, 0),
-    revenue: items.reduce((s, i) => s + i.price * i.quantity, 0),
-  }));
-  const bestSellers = [...productAgg].sort((a, b) => b.units - a.units).slice(0, 10);
-  const worstSellers = [...productAgg].sort((a, b) => a.units - b.units).slice(0, 10);
-
-  const salesByLeague = [...groupBy(allItems.filter((i) => i.product.league), (i) => i.product.league)]
-    .map(([league, items]) => ({
-      league,
-      revenue: items.reduce((s, i) => s + i.price * i.quantity, 0),
-      units: items.reduce((s, i) => s + i.quantity, 0),
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
-
-  const salesByTeam = [...groupBy(allItems.filter((i) => i.product.team), (i) => i.product.team)]
-    .map(([team, items]) => ({
-      team,
-      revenue: items.reduce((s, i) => s + i.price * i.quantity, 0),
-      units: items.reduce((s, i) => s + i.quantity, 0),
-    }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 15);
-
-  const [outOfStock, lowStock, healthy, lowStockProducts] = await Promise.all([
-    productRepository.count({ where: { active: true, totalStock: 0 } }),
-    productRepository.count({ where: { active: true, totalStock: { gt: 0, lte: 5 } } }),
-    productRepository.count({ where: { active: true, totalStock: { gt: 5 } } }),
-    productRepository.find({
-      where: { active: true, totalStock: { lte: 5 } },
-      orderBy: { totalStock: 'asc' },
-      take: 15,
-    }),
-  ]);
-
-  return {
-    bestSellers,
-    worstSellers,
-    salesByLeague,
-    salesByTeam,
-    stockLevels: { outOfStock, lowStock, healthy },
-    lowStockProducts,
-  };
-}
+// computeProductsReport now lives in services/reportQueries/products.js.
 
 router.get('/products', async (req, res) => {
   try {
@@ -551,42 +424,7 @@ router.get('/products/export', async (req, res) => {
     await sendReportExport(res, {
       format: exportFormat(req.query),
       baseFilename: 'products-report',
-      summary: [
-        ['Out of Stock', data.stockLevels.outOfStock],
-        ['Low Stock', data.stockLevels.lowStock],
-        ['Healthy Stock', data.stockLevels.healthy],
-      ],
-      sheets: [
-        {
-          name: 'Best Sellers',
-          columns: [{ header: 'Product', key: 'name' }, { header: 'Units', key: 'units' }, { header: 'Revenue', key: 'revenue' }],
-          rows: data.bestSellers,
-          totals: { units: true, revenue: true },
-        },
-        {
-          name: 'Worst Sellers',
-          columns: [{ header: 'Product', key: 'name' }, { header: 'Units', key: 'units' }, { header: 'Revenue', key: 'revenue' }],
-          rows: data.worstSellers,
-          totals: { units: true, revenue: true },
-        },
-        {
-          name: 'By League',
-          columns: [{ header: 'League', key: 'league' }, { header: 'Revenue', key: 'revenue' }, { header: 'Units', key: 'units' }],
-          rows: data.salesByLeague,
-          totals: { revenue: true, units: true },
-        },
-        {
-          name: 'By Team',
-          columns: [{ header: 'Team', key: 'team' }, { header: 'Revenue', key: 'revenue' }, { header: 'Units', key: 'units' }],
-          rows: data.salesByTeam,
-          totals: { revenue: true, units: true },
-        },
-        {
-          name: 'Low Stock',
-          columns: [{ header: 'Product', key: 'name' }, { header: 'Stock', key: 'totalStock' }],
-          rows: data.lowStockProducts,
-        },
-      ],
+      ...productsReportToExportShape(data),
     });
   } catch (error) {
     logger.error({ err: error }, 'Products report export error');
@@ -596,50 +434,7 @@ router.get('/products/export', async (req, res) => {
 });
 
 // ── Orders ───────────────────────────────────────────────────────────────
-
-async function computeOrdersReport(query) {
-  const dateFilter = getDateFilter(query);
-  const granularity = getGranularity(query.startDate, query.endDate);
-
-  const orders = await orderRepository.find({ where: { ...dateFilter }, include: {} });
-
-  const ordersOverTime = [...groupBy(orders, (o) => dateKey(o.createdAt, granularity))]
-    .map(([date, os]) => ({ date, count: os.length }))
-    .sort(sortByDateKey);
-
-  const statusBreakdown = [...groupBy(orders, (o) => o.orderStatus)]
-    .map(([status, os]) => ({ status, count: os.length }))
-    .sort((a, b) => b.count - a.count);
-
-  const paymentBreakdown = [...groupBy(orders, (o) => o.paymentStatus)]
-    .map(([status, os]) => ({ status, count: os.length }))
-    .sort((a, b) => b.count - a.count);
-
-  const total = orders.length;
-  const delivered = orders.filter((o) => o.orderStatus === 'delivered').length;
-  const cancelled = orders.filter((o) => o.orderStatus === 'cancelled').length;
-  // Payment Platform Redesign, Phase 2 — an order that never got paid was
-  // never going to be fulfilled either, same reasoning 'cancelled' was
-  // already excluded for; expired/failed_payment now make that a real,
-  // distinguishable status instead of being invisible inside 'processing'.
-  const neverPaid = orders.filter((o) => o.orderStatus === 'expired' || o.orderStatus === 'failed_payment').length;
-  const eligibleOrders = total - cancelled - neverPaid;
-  const fulfillmentRate = eligibleOrders > 0 ? Math.round((delivered / eligibleOrders) * 10000) / 100 : 0;
-
-  const failedOrders = orders.filter((o) => o.paymentStatus === 'failed');
-  const failedPayments = { count: failedOrders.length, totalValue: failedOrders.reduce((s, o) => s + o.total, 0) };
-
-  return {
-    ordersOverTime,
-    statusBreakdown,
-    paymentBreakdown,
-    fulfillmentRate,
-    totalOrders: total,
-    deliveredOrders: delivered,
-    cancelledOrders: cancelled,
-    failedPayments,
-  };
-}
+// computeOrdersReport now lives in services/reportQueries/orders.js.
 
 router.get('/orders', async (req, res) => {
   try {
@@ -814,7 +609,16 @@ async function computeTryOnReport(query) {
   const dateFilter = getDateFilter(query);
   const granularity = getGranularity(query.startDate, query.endDate);
 
-  const logs = await tryOnLogRepository.find({ where: { ...dateFilter }, orderBy: { createdAt: 'desc' } });
+  // `include: { user }` resolves the email for the full-log table below —
+  // for upper-management visibility into who's actually using Fit Check,
+  // not just aggregate counts. A guest attempt has no `user` row at all
+  // (userId is null), so `log.user?.email` naturally falls through to
+  // undefined and gets labeled "Guest" where this list is built.
+  const logs = await tryOnLogRepository.find({
+    where: { ...dateFilter },
+    orderBy: { createdAt: 'desc' },
+    include: { user: { select: { email: true } } },
+  });
 
   const tryOnOverTime = [...groupBy(logs, (l) => dateKey(l.createdAt, granularity))]
     .map(([date, ls]) => ({ date, count: ls.length }))
@@ -833,11 +637,17 @@ async function computeTryOnReport(query) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  const recentTryOns = logs.slice(0, 10).map((l) => ({
+  // The full per-attempt log for the date range, not just a "recent 10"
+  // preview — this is what answers "who used Fit Check and when" for
+  // upper-management reporting. Ordered desc (from the query above), never
+  // sliced here — the /tryon route paginates it for the live table, and
+  // /tryon/export ships it in full.
+  const tryOnLog = logs.map((l) => ({
     productName: l.productName,
     productImage: l.productImage,
     success: l.success,
     createdAt: l.createdAt,
+    email: l.user?.email || 'Guest',
   }));
 
   // Real observed speed/reliability per WaveSpeed model (or Replicate) —
@@ -863,12 +673,31 @@ async function computeTryOnReport(query) {
     })
     .sort((a, b) => b.attempts - a.attempts);
 
-  return { tryOnOverTime, totalAttempts, successfulAttempts, successRate, mostTriedProducts, recentTryOns, byProvider };
+  return { tryOnOverTime, totalAttempts, successfulAttempts, successRate, mostTriedProducts, tryOnLog, byProvider };
 }
 
 router.get('/tryon', async (req, res) => {
   try {
-    res.json({ success: true, data: await computeTryOnReport(req.query) });
+    const data = await computeTryOnReport(req.query);
+
+    // Pagination applies only to the live table, not the computed
+    // aggregates above it (chart/totals/most-tried already reflect the
+    // full date range regardless of which page of the log is showing).
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const start = (page - 1) * pageSize;
+    const pageRows = data.tryOnLog.slice(start, start + pageSize);
+
+    res.json({
+      success: true,
+      data: {
+        ...data,
+        tryOnLog: pageRows,
+        tryOnLogTotal: data.tryOnLog.length,
+        page,
+        pageSize,
+      },
+    });
   } catch (error) {
     logger.error({ err: error }, 'Try-on report error');
     Sentry.captureException(error);
@@ -907,9 +736,16 @@ router.get('/tryon/export', async (req, res) => {
           totals: { attempts: true },
         },
         {
-          name: 'Recent Attempts',
-          columns: [{ header: 'Product', key: 'productName' }, { header: 'Success', key: 'success' }, { header: 'Date', key: 'createdAt' }],
-          rows: data.recentTryOns,
+          name: 'Fit Check Log',
+          columns: [
+            { header: 'Date', key: 'createdAt' },
+            { header: 'Email', key: 'email' },
+            { header: 'Product', key: 'productName' },
+            { header: 'Success', key: 'success' },
+          ],
+          // Full date-range log, not the live table's current page — an
+          // export is meant to be a complete record.
+          rows: data.tryOnLog,
         },
       ],
     });
@@ -920,23 +756,114 @@ router.get('/tryon/export', async (req, res) => {
   }
 });
 
+// ── Fit Check Analytics ─────────────────────────────────────────────────
+// computeFitCheckAnalyticsReport lives in services/reportQueries/fitCheckAnalytics.js
+// — the dedicated workspace superseding the old flat page's Try-On section,
+// with 11 requested metrics (guest/registered/premium split, cost per
+// provider, conversion/revenue attribution, sponsored campaign
+// performance) beyond what /tryon above already covers. /tryon itself is
+// untouched — still used by the Exports picker and its own log/pagination
+// behavior, this is additive, not a replacement.
+
+router.get('/fit-check', async (req, res) => {
+  try {
+    const data = await computeFitCheckAnalyticsReport(req.query);
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
+    const start = (page - 1) * pageSize;
+    const pageRows = data.tryOnLog.slice(start, start + pageSize);
+
+    res.json({
+      success: true,
+      data: { ...data, tryOnLog: pageRows, tryOnLogTotal: data.tryOnLog.length, page, pageSize },
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Fit Check Analytics report error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate Fit Check Analytics report' });
+  }
+});
+
+router.get('/fit-check/export', async (req, res) => {
+  try {
+    const data = await computeFitCheckAnalyticsReport(req.query);
+    await sendReportExport(res, {
+      format: exportFormat(req.query),
+      baseFilename: 'fit-check-analytics-report',
+      ...fitCheckAnalyticsReportToExportShape(data),
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Fit Check Analytics report export error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to export Fit Check Analytics report' });
+  }
+});
+
+// ── Organizations ────────────────────────────────────────────────────────
+// computeOrganizationsReport lives in services/reportQueries/organizations.js.
+// Queries the new Organization/Team FK model exclusively — see that file's
+// header comment.
+
+router.get('/organizations', async (req, res) => {
+  try {
+    res.json({ success: true, data: await computeOrganizationsReport(req.query) });
+  } catch (error) {
+    logger.error({ err: error }, 'Organizations report error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate organizations report' });
+  }
+});
+
+router.get('/organizations/export', async (req, res) => {
+  try {
+    const data = await computeOrganizationsReport(req.query);
+    await sendReportExport(res, {
+      format: exportFormat(req.query),
+      baseFilename: 'organizations-report',
+      ...organizationsReportToExportShape(data),
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Organizations report export error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to export organizations report' });
+  }
+});
+
+// ── Finance ──────────────────────────────────────────────────────────────
+// computeFinanceReport lives in services/reportQueries/finance.js. Fee
+// breakdown is explicitly out of scope (feeBreakdownAvailable: false) —
+// no feeAmount field exists anywhere yet; confirmed decision to ship
+// without it rather than add a migration for it this pass.
+
+router.get('/finance', async (req, res) => {
+  try {
+    res.json({ success: true, data: await computeFinanceReport(req.query) });
+  } catch (error) {
+    logger.error({ err: error }, 'Finance report error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to generate finance report' });
+  }
+});
+
+router.get('/finance/export', async (req, res) => {
+  try {
+    const data = await computeFinanceReport(req.query);
+    await sendReportExport(res, {
+      format: exportFormat(req.query),
+      baseFilename: 'finance-report',
+      ...financeReportToExportShape(data),
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Finance report export error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to export finance report' });
+  }
+});
+
 // ── Shipping ─────────────────────────────────────────────────────────────
-
-async function computeShippingReport(query) {
-  const dateFilter = getDateFilter(query);
-
-  const rawEvents = await shippingEventRepository.find({ where: { ...dateFilter }, orderBy: { createdAt: 'desc' } });
-
-  const methodBreakdown = [...groupBy(rawEvents, (e) => `${e.shippingMethod}::${e.region ?? ''}`).values()]
-    .map((events) => ({
-      _id: { method: events[0].shippingMethod, region: events[0].region },
-      count: events.length,
-      totalRevenue: events.reduce((s, e) => s + e.orderTotal, 0),
-    }))
-    .sort((a, b) => b.count - a.count);
-
-  return { methodBreakdown, rawEvents, totalOrders: rawEvents.length };
-}
+// computeShippingReport now lives in services/reportQueries/shipping.js —
+// the Fulfillment Report (below) composes it without a circular import.
 
 router.get('/shipping', async (req, res) => {
   try {
@@ -951,24 +878,10 @@ router.get('/shipping', async (req, res) => {
 router.get('/shipping/export', async (req, res) => {
   try {
     const data = await computeShippingReport(req.query);
-    const methodRows = data.methodBreakdown.map((m) => ({ method: m._id.method, region: m._id.region, count: m.count, totalRevenue: m.totalRevenue }));
     await sendReportExport(res, {
       format: exportFormat(req.query),
       baseFilename: 'shipping-report',
-      summary: [['Total Orders', data.totalOrders]],
-      sheets: [
-        {
-          name: 'Method Breakdown',
-          columns: [{ header: 'Method', key: 'method' }, { header: 'Region', key: 'region' }, { header: 'Count', key: 'count' }, { header: 'Total Revenue', key: 'totalRevenue' }],
-          rows: methodRows,
-          totals: { count: true, totalRevenue: true },
-        },
-        {
-          name: 'Raw Events',
-          columns: [{ header: 'Order', key: 'orderId' }, { header: 'Method', key: 'shippingMethod' }, { header: 'Region', key: 'region' }, { header: 'Order Total', key: 'orderTotal' }, { header: 'Date', key: 'createdAt' }],
-          rows: data.rawEvents,
-        },
-      ],
+      ...shippingReportToExportShape(data),
     });
   } catch (error) {
     logger.error({ err: error }, 'Shipping report export error');

@@ -26,7 +26,6 @@ const emailService = await import('../emailService.js');
 const {
   generateDailyBusinessReport,
   generateBusinessReportForRange,
-  generateAndSendDailyBusinessReport,
   generateAndSendWeeklyBusinessReport,
   generateAndSendMonthlyBusinessReport,
   generateAndSendQuarterlyBusinessReport,
@@ -247,89 +246,14 @@ describe('generateDailyBusinessReport — Fulfillment', () => {
   });
 });
 
-describe('generateAndSendDailyBusinessReport — recipients', () => {
-  it('sends to active ReportRecipient emails when configured', async () => {
-    orderRepository.find.mockResolvedValueOnce([]);
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce(['finance@test.local', 'ops@test.local']);
-
-    await generateAndSendDailyBusinessReport();
-
-    expect(emailService.sendDailyBusinessReportEmail).toHaveBeenCalledTimes(1);
-    const [recipients] = emailService.sendDailyBusinessReportEmail.mock.calls[0];
-    expect(recipients).toEqual(['finance@test.local', 'ops@test.local']);
-  });
-
-  it('falls back to ADMIN_EMAIL when no ReportRecipient rows exist yet', async () => {
-    process.env.ADMIN_EMAIL = 'legacy-admin@test.local';
-    orderRepository.find.mockResolvedValueOnce([]);
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce([]);
-
-    await generateAndSendDailyBusinessReport();
-
-    const [recipients] = emailService.sendDailyBusinessReportEmail.mock.calls[0];
-    expect(recipients).toEqual(['legacy-admin@test.local']);
-  });
-
-  it('skips sending when there are no recipients and no ADMIN_EMAIL fallback', async () => {
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce([]);
-
-    await generateAndSendDailyBusinessReport();
-
-    expect(emailService.sendDailyBusinessReportEmail).not.toHaveBeenCalled();
-    expect(orderRepository.find).not.toHaveBeenCalled(); // report never generated if nobody will receive it
-  });
-});
-
-describe('generateAndSendDailyBusinessReport — Report Archive', () => {
-  it('archives a successful run with status=sent, the full report snapshot, and the recipient list', async () => {
-    orderRepository.find.mockResolvedValueOnce([]);
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce(['finance@test.local']);
-
-    await generateAndSendDailyBusinessReport();
-
-    expect(reportRunRepository.create).toHaveBeenCalledTimes(1);
-    const [archived] = reportRunRepository.create.mock.calls[0];
-    expect(archived.status).toBe('sent');
-    expect(archived.recipients).toEqual(['finance@test.local']);
-    expect(archived.data).toHaveProperty('sales');
-    expect(archived.reportDate).toBeInstanceOf(Date);
-  });
-
-  it('archives a skipped run with no data and no recipients when nobody is configured', async () => {
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce([]);
-
-    await generateAndSendDailyBusinessReport();
-
-    expect(reportRunRepository.create).toHaveBeenCalledTimes(1);
-    const [archived] = reportRunRepository.create.mock.calls[0];
-    expect(archived.status).toBe('skipped');
-    expect(archived.recipients).toEqual([]);
-    expect(archived.data).toBeUndefined();
-  });
-
-  it('archives a failed run with the error message, then rethrows so the caller still sees the failure', async () => {
-    orderRepository.find.mockResolvedValueOnce([]);
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce(['finance@test.local']);
-    emailService.sendDailyBusinessReportEmail.mockRejectedValueOnce(new Error('SMTP down'));
-
-    await expect(generateAndSendDailyBusinessReport()).rejects.toThrow('SMTP down');
-
-    expect(reportRunRepository.create).toHaveBeenCalledTimes(1);
-    const [archived] = reportRunRepository.create.mock.calls[0];
-    expect(archived.status).toBe('failed');
-    expect(archived.errorMessage).toBe('SMTP down');
-    expect(archived.recipients).toEqual(['finance@test.local']);
-  });
-
-  it('a failure to archive itself never masks the real send outcome', async () => {
-    orderRepository.find.mockResolvedValueOnce([]);
-    reportRecipientRepository.findActiveEmails.mockResolvedValueOnce(['finance@test.local']);
-    reportRunRepository.create.mockRejectedValueOnce(new Error('DB write failed'));
-
-    await expect(generateAndSendDailyBusinessReport()).resolves.toBeUndefined();
-    expect(emailService.sendDailyBusinessReportEmail).toHaveBeenCalledTimes(1);
-  });
-});
+// generateAndSendDailyBusinessReport's own recipients/archiving/skip
+// behavior moved to services/__tests__/scheduledReportSplit.test.js —
+// Reports Module Redesign, Phase 3 rewired it to fan out into six emails
+// (one per report workspace, via sendScheduledReportEmail) instead of the
+// single sendDailyBusinessReportEmail call these tests used to exercise.
+// generateAndSendWeeklyBusinessReport/Monthly/Quarterly below are
+// unaffected — they still go through generateAndSendBusinessReport and
+// sendDailyBusinessReportEmail exactly as before.
 
 describe('dailyBusinessReportToExportShape', () => {
   it('maps a report snapshot into the summary/sheets shape lib/reportExport.js expects', () => {

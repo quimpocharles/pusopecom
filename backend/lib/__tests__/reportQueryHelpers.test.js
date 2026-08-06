@@ -1,12 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('../../middleware/auth.js', () => ({
-  authenticate: (req, res, next) => next(),
-  isAdmin: (req, res, next) => next(),
-  optionalAuth: (req, res, next) => next(),
-}));
-
-const { getDateFilter, getGranularity, dateKey } = await import('../reports.js');
+import { describe, it, expect } from 'vitest';
+import { getDateFilter, getGranularity, dateKey, exportFormat } from '../reportQueryHelpers.js';
 
 describe('getDateFilter', () => {
   it('returns an empty object when no range is given', () => {
@@ -64,5 +57,15 @@ describe('dateKey', () => {
   it('assigns late-December dates to the next ISO year\'s first week when appropriate', () => {
     // 2025-12-29 is a Monday, starting ISO week 1 of 2026.
     expect(dateKey('2025-12-29T12:00:00Z', 'week')).toBe('2026-W01');
+  });
+});
+
+describe('exportFormat', () => {
+  it('recognizes xlsx, pdf, and defaults everything else to csv', () => {
+    expect(exportFormat({ format: 'xlsx' })).toBe('xlsx');
+    expect(exportFormat({ format: 'pdf' })).toBe('pdf');
+    expect(exportFormat({ format: 'csv' })).toBe('csv');
+    expect(exportFormat({})).toBe('csv');
+    expect(exportFormat({ format: 'bogus' })).toBe('csv');
   });
 });

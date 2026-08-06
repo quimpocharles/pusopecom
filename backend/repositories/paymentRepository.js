@@ -28,6 +28,12 @@ export async function findByOrder(orderId, { client = prisma } = {}) {
   return serialize(payments);
 }
 
+/** General-purpose query — Finance report's provider success-rate breakdown scopes by Payment's own createdAt (attempts made in range), not by walking through Order. */
+export async function find({ where, orderBy = { createdAt: 'desc' }, skip, take, client = prisma } = {}) {
+  const payments = await client.payment.findMany({ where, orderBy, skip, take });
+  return serialize(payments);
+}
+
 /**
  * Bulk form of findLatestForOrder — one query for My PUSO's Resume Checkout
  * module (Payment Platform Redesign, Phase 5) instead of N round trips for N
@@ -78,4 +84,4 @@ export async function getWebhookHealth({ client = prisma } = {}) {
   return { processedLast24h, lastWebhookAt: mostRecent?.webhookProcessedAt ?? null };
 }
 
-export default { create, findById, findLatestForOrder, findByOrder, findLatestForOrders, resolve, getWebhookHealth };
+export default { create, findById, findLatestForOrder, findByOrder, find, findLatestForOrders, resolve, getWebhookHealth };

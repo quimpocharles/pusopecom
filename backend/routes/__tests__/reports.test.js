@@ -52,6 +52,11 @@ beforeAll(async () => {
   });
   createdUserIds.push('reports-test-user');
 
+  const premiumUser = await prisma.user.create({
+    data: { email: `${MARKER}-premium@test.local`, firstName: 'Premium', lastName: 'Fan', subscriptionTier: 'premium' },
+  });
+  createdUserIds.push(premiumUser.id);
+
   const shippingAddress = {
     fullName: 'Report Owner', phone: '09170000000', address: '1 Report St',
     city: `${MARKER}City`, province: `${MARKER}Province`, zipCode: '1000',
@@ -120,6 +125,30 @@ beforeAll(async () => {
       success: true, provider: `${MARKER}-providerB`, durationMs: 40000,
     },
   });
+  await prisma.tryOnLog.create({
+    data: {
+      productId: productPlain.id, productName: productPlain.name, productImage: 'x.jpg',
+      success: true, provider: `${MARKER}-providerB`, durationMs: 6000, userId: 'reports-test-user',
+    },
+  });
+
+  // Fit Check Analytics fixtures — a premium attempt with a real, verified
+  // cost, and a guest attempt with no cost (mirrors a real Replicate row,
+  // where no verified pricing exists) — both under a dedicated provider
+  // name so cost-average assertions are immune to the providerA/providerB
+  // rows above.
+  await prisma.tryOnLog.create({
+    data: {
+      productName: `${MARKER} CostTest`, productImage: 'x.jpg',
+      success: true, provider: `${MARKER}-costProvider`, costUsd: 0.08, userId: premiumUser.id,
+    },
+  });
+  await prisma.tryOnLog.create({
+    data: {
+      productName: `${MARKER} CostTest`, productImage: 'x.jpg',
+      success: true, provider: `${MARKER}-costProvider`, costUsd: null, sessionId: 'test-guest-session',
+    },
+  });
 
   await prisma.shippingEvent.create({
     data: { orderId: paidLoggedIn.orderNumber, shippingMethod: `${MARKER}Method`, orderTotal: 1000, region: `${MARKER}Region` },
@@ -150,6 +179,69 @@ describe('GET /reports/sales', () => {
     expect(basketballSport.units).toBeGreaterThanOrEqual(2);
 
     expect(res.body.data.totalRevenue).toBeGreaterThanOrEqual(1300); // 1000 + 300 paid, not the 500 pending or 999 failed
+  }, 15000);
+});
+
+describe('GET /reports/executive', () => {
+  it('composes KPIs from the same totals computeSalesReport itself returns for the identical range', async () => {
+    const [executiveRes, salesRes] = await Promise.all([
+      request(app).get(`/api/reports/executive?${rangeQS}`),
+      request(app).get(`/api/reports/sales?${rangeQS}`),
+    ]);
+    expect(executiveRes.status).toBe(200);
+
+    // Composition correctness: Executive must never recompute its own,
+    // possibly-diverging version of these totals.
+    expect(executiveRes.body.data.kpis.totalRevenue).toBe(salesRes.body.data.totalRevenue);
+    expect(executiveRes.body.data.kpis.totalOrders).toBe(salesRes.body.data.totalOrders);
+    expect(executiveRes.body.data.kpis.averageOrderValue).toBe(salesRes.body.data.averageOrderValue);
+  }, 15000);
+
+  it('computes a period-over-period delta against an equal-length prior window, never NaN', async () => {
+    const res = await request(app).get(`/api/reports/executive?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    const { delta } = res.body.data.kpis;
+    expect(typeof delta.revenue).toBe('number');
+    expect(Number.isNaN(delta.revenue)).toBe(false);
+    // This fixture range has real paid revenue; a same-or-earlier fabricated
+    // range (2020-01-01 back) has none — a strictly earlier window with zero
+    // revenue means the delta is a real percentage increase, not undefined
+    // or negative-infinity from a divide-by-zero.
+    expect(delta.revenue).toBeGreaterThanOrEqual(0);
+  }, 15000);
+
+  it('flags the fixture out-of-stock and low-stock products in the alerts feed', async () => {
+    const res = await request(app).get(`/api/reports/executive?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    const alerts = res.body.data.alerts;
+    expect(alerts.some((a) => a.severity === 'critical' && /out of stock/.test(a.message))).toBe(true);
+    expect(alerts.some((a) => a.severity === 'warning' && /low on stock/.test(a.message))).toBe(true);
+
+    // Critical alerts must sort before every warning, not just be present —
+    // once the list touches a 'warning', nothing after it may be 'critical'.
+    const severities = alerts.map((a) => a.severity);
+    const firstWarningIndex = severities.indexOf('warning');
+    if (firstWarningIndex !== -1) {
+      expect(severities.slice(firstWarningIndex)).not.toContain('critical');
+    }
+  }, 15000);
+
+  it('returns a non-empty, deterministic executive summary referencing the real revenue figure', async () => {
+    const res = await request(app).get(`/api/reports/executive?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    const summary = res.body.data.executiveSummary;
+    expect(Array.isArray(summary)).toBe(true);
+    expect(summary.length).toBeGreaterThan(0);
+    expect(summary[0]).toContain('Revenue was');
+  }, 15000);
+
+  it('exports the same composed data as CSV/Excel via the shared sendReportExport contract', async () => {
+    const res = await request(app).get(`/api/reports/executive/export?${rangeQS}&format=xlsx`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('spreadsheetml');
   }, 15000);
 });
 
@@ -224,9 +316,88 @@ describe('GET /reports/tryon', () => {
     expect(providerA.successRate).toBe(50); // one success, one failure in the fixture
 
     const providerB = res.body.data.byProvider.find((p) => p.provider === `${MARKER}-providerB`);
-    expect(providerB.attempts).toBe(1);
-    expect(providerB.avgDurationMs).toBe(40000);
+    expect(providerB.attempts).toBe(2);
+    expect(providerB.avgDurationMs).toBe(23000); // (40000 + 6000) / 2
     expect(providerB.successRate).toBe(100);
+  }, 15000);
+
+  it('resolves the real email for a logged-in attempt and labels a guest attempt "Guest"', async () => {
+    const res = await request(app).get(`/api/reports/tryon?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    const ownerRow = res.body.data.tryOnLog.find((r) => r.productName === productPlain.name && r.email !== 'Guest');
+    expect(ownerRow.email).toBe(`${MARKER}-owner@test.local`);
+
+    const guestRow = res.body.data.tryOnLog.find((r) => r.productName === `${MARKER} Unresolved`);
+    expect(guestRow.email).toBe('Guest');
+  }, 15000);
+
+  it('paginates the full log without truncating the aggregate totals above it', async () => {
+    const fullPage = await request(app).get(`/api/reports/tryon?${rangeQS}&pageSize=100`);
+    expect(fullPage.body.data.tryOnLogTotal).toBeGreaterThanOrEqual(4); // at least this fixture's 4 rows
+    expect(fullPage.body.data.tryOnLog.length).toBe(fullPage.body.data.tryOnLogTotal);
+
+    const onePerPage = await request(app).get(`/api/reports/tryon?${rangeQS}&page=1&pageSize=1`);
+    expect(onePerPage.body.data.tryOnLog.length).toBe(1);
+    expect(onePerPage.body.data.page).toBe(1);
+    expect(onePerPage.body.data.pageSize).toBe(1);
+    // Pagination narrows the log table only — the totals computed over the
+    // whole date range must stay identical to the unpaginated request.
+    expect(onePerPage.body.data.totalAttempts).toBe(fullPage.body.data.totalAttempts);
+    expect(onePerPage.body.data.tryOnLogTotal).toBe(fullPage.body.data.tryOnLogTotal);
+  }, 15000);
+});
+
+describe('GET /reports/fit-check', () => {
+  it('buckets guest vs registered vs premium usage, including at least the fixture premium/guest rows', async () => {
+    const res = await request(app).get(`/api/reports/fit-check?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.usageBreakdown.premium).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.usageBreakdown.guest).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.usageBreakdown.registered).toBeGreaterThanOrEqual(1);
+  }, 15000);
+
+  it('averages AI cost per provider excluding null (unverified) costs from the denominator, never treating them as $0', async () => {
+    const res = await request(app).get(`/api/reports/fit-check?${rangeQS}`);
+    expect(res.status).toBe(200);
+
+    const costProvider = res.body.data.byProviderCost.find((p) => p.provider === `${MARKER}-costProvider`);
+    expect(costProvider.attempts).toBe(2); // one priced (0.08), one null
+    expect(costProvider.costSampleSize).toBe(1); // only the priced one counts toward the average
+    expect(costProvider.avgCostUsd).toBeCloseTo(0.08); // NOT (0.08 + 0) / 2 = 0.04
+
+    expect(typeof res.body.data.overallAvgCostUsd === 'number' || res.body.data.overallAvgCostUsd === null).toBe(true);
+    expect(Number.isNaN(res.body.data.overallAvgCostUsd)).toBe(false);
+  }, 15000);
+
+  it('computes success and failure rate summing to 100, and an overall avg generation time across all providers', async () => {
+    const res = await request(app).get(`/api/reports/fit-check?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(Math.round((res.body.data.successRate + res.body.data.failureRate) * 100) / 100).toBe(100);
+    // Overall, unlike computeTryOnReport's byProvider-only average — must
+    // be present whenever any row has a non-null durationMs.
+    expect(res.body.data.avgDurationMs).not.toBeNull();
+  }, 15000);
+
+  it('returns conversion/revenue attribution and a campaign performance array (empty is valid, never missing)', async () => {
+    const res = await request(app).get(`/api/reports/fit-check?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.conversion).toHaveProperty('conversionRate');
+    expect(res.body.data.conversion).toHaveProperty('revenue');
+    expect(Array.isArray(res.body.data.campaignPerformance)).toBe(true);
+  }, 15000);
+
+  it('paginates its own full log independently of GET /reports/tryon', async () => {
+    const res = await request(app).get(`/api/reports/fit-check?${rangeQS}&page=1&pageSize=1`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.tryOnLog.length).toBe(1);
+    expect(res.body.data.tryOnLogTotal).toBeGreaterThanOrEqual(6); // 4 original + 2 cost fixtures
+  }, 15000);
+
+  it('exports via the shared CSV/Excel contract', async () => {
+    const res = await request(app).get(`/api/reports/fit-check/export?${rangeQS}&format=xlsx`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('spreadsheetml');
   }, 15000);
 });
 
@@ -583,4 +754,211 @@ describe('Dashboard Widgets config + data', () => {
     expect(Array.isArray(res.body.data.mostTriedOnProducts)).toBe(true);
   }, 15000);
 
+});
+
+// Self-contained fixture set, not the shared top-level one above — the
+// Organizations report queries exclusively the new Organization/Team FK
+// model, an entirely different domain from the legacy league/team strings
+// every other fixture in this file uses.
+describe('GET /reports/organizations', () => {
+  const orgMarker = `OrgReportTest${Date.now()}`;
+  let institution, league, team, orgProduct, orgOrder, followUser;
+
+  beforeAll(async () => {
+    institution = await prisma.organization.create({
+      data: { name: `${orgMarker} Institution`, slug: `${orgMarker}-institution`, kind: 'institution' },
+    });
+    league = await prisma.organization.create({
+      data: { name: `${orgMarker} League`, slug: `${orgMarker}-league`, kind: 'league' },
+    });
+    await prisma.organizationParticipation.create({
+      data: { memberOrganizationId: institution.id, inOrganizationId: league.id },
+    });
+
+    team = await prisma.team.create({
+      data: { organizationId: institution.id, name: `${orgMarker} Team`, slug: `${orgMarker}-team`, sport: 'basketball' },
+    });
+
+    orgProduct = await prisma.product.create({
+      data: {
+        name: `${orgMarker} Product`, slug: `${orgMarker}-product`, description: 'x',
+        price: 700, category: 'jersey', sport: 'basketball', images: [], active: true,
+        organizationId: institution.id, teamId: team.id,
+      },
+    });
+
+    orgOrder = await prisma.order.create({
+      data: {
+        orderNumber: `PS-${orgMarker}`, email: `${orgMarker}@test.local`,
+        shipToFullName: 'Org Test', shipToPhone: '09171234567', shipToAddress: '1 St',
+        shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+        subtotal: 1400, total: 1400, paymentStatus: 'paid', orderStatus: 'delivered',
+        items: { create: [{ productId: orgProduct.id, name: orgProduct.name, price: 700, quantity: 2, size: 'M', image: 'x.jpg' }] },
+      },
+    });
+
+    followUser = await prisma.user.create({
+      data: { email: `${orgMarker}-follower@test.local`, firstName: 'Org', lastName: 'Follower' },
+    });
+    await prisma.follow.create({ data: { userId: followUser.id, organizationId: institution.id } });
+
+    await prisma.tryOnLog.create({
+      data: { productId: orgProduct.id, productName: orgProduct.name, productImage: 'x.jpg', success: true },
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await prisma.tryOnLog.deleteMany({ where: { productId: orgProduct.id } });
+    await prisma.follow.deleteMany({ where: { organizationId: institution.id } });
+    await prisma.user.delete({ where: { id: followUser.id } });
+    await prisma.orderItem.deleteMany({ where: { orderId: orgOrder.id } });
+    await prisma.order.delete({ where: { id: orgOrder.id } });
+    await prisma.product.delete({ where: { id: orgProduct.id } });
+    await prisma.team.delete({ where: { id: team.id } });
+    await prisma.organizationParticipation.deleteMany({ where: { memberOrganizationId: institution.id } });
+    await prisma.organization.delete({ where: { id: institution.id } });
+    await prisma.organization.delete({ where: { id: league.id } });
+  });
+
+  it('computes revenue by organization, correctly labeled by kind', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const row = res.body.data.revenueByOrganization.find((o) => o.organizationId === institution.id);
+    expect(row.revenue).toBe(1400); // 700 * 2
+    expect(row.units).toBe(2);
+    expect(row.kind).toBe('institution');
+
+    expect(res.body.data.topInstitutions.some((o) => o.organizationId === institution.id)).toBe(true);
+  }, 15000);
+
+  it('rolls a member institution\'s revenue up to the league it participates in', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const leagueRow = res.body.data.topLeagues.find((l) => l.organizationId === league.id);
+    expect(leagueRow).toBeDefined();
+    expect(leagueRow.revenue).toBe(1400); // attributed up from the institution's own revenue
+  }, 15000);
+
+  it('groups revenue by the new Team FK, with the owning organization\'s name attached', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const teamRow = res.body.data.topTeams.find((t) => t.teamId === team.id);
+    expect(teamRow.revenue).toBe(1400);
+    expect(teamRow.organizationName).toBe(institution.name);
+  }, 15000);
+
+  it('counts real followers per organization', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const followedRow = res.body.data.topFollowed.find((o) => o.organizationId === institution.id);
+    expect(followedRow.followers).toBe(1);
+  }, 15000);
+
+  it('counts Fit Checks tried on the organization\'s own products', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const engagementRow = res.body.data.fitCheckEngagement.find((o) => o.organizationId === institution.id);
+    expect(engagementRow.attempts).toBe(1);
+  }, 15000);
+
+  it('reports migration progress as real counts, not a guessed percentage', async () => {
+    const res = await request(app).get('/api/reports/organizations?startDate=2020-01-01&endDate=2035-01-01');
+    expect(res.status).toBe(200);
+
+    const { migration } = res.body.data;
+    expect(migration.migratedProductCount).toBeGreaterThanOrEqual(1);
+    expect(migration.totalProductCount).toBeGreaterThanOrEqual(migration.migratedProductCount);
+  }, 15000);
+
+  it('exports via the shared CSV/Excel contract', async () => {
+    const res = await request(app).get('/api/reports/organizations/export?startDate=2020-01-01&endDate=2035-01-01&format=xlsx');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('spreadsheetml');
+  }, 15000);
+});
+
+// Self-contained fixture set — Order/Payment/Refund rows scoped to their
+// own marker, not the shared top-level fixtures above.
+describe('GET /reports/finance', () => {
+  const financeMarker = `FinanceTest${Date.now()}`;
+  let order, payment;
+
+  beforeAll(async () => {
+    order = await prisma.order.create({
+      data: {
+        orderNumber: `${financeMarker}-ORDER`, email: `${financeMarker}@test.local`,
+        shipToFullName: 'Finance Test', shipToPhone: '09170000003', shipToAddress: '1 St',
+        shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+        subtotal: 1000, total: 1000, paymentStatus: 'paid', orderStatus: 'delivered',
+      },
+    });
+
+    payment = await prisma.payment.create({
+      data: { orderId: order.id, provider: `${financeMarker}-provider`, status: 'succeeded', paidAt: new Date() },
+    });
+    await prisma.payment.create({
+      data: { orderId: order.id, provider: `${financeMarker}-provider`, status: 'failed' },
+    });
+
+    // Succeeded refund, resolved 5 hours after it was opened — exercises
+    // both net revenue and the avg-velocity calculation.
+    await prisma.refund.create({
+      data: {
+        orderId: order.id, paymentId: payment.id, amount: 300, status: 'succeeded',
+        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+        processedAt: new Date(),
+      },
+    });
+    // Still open — counts toward the live queue, never toward net revenue.
+    await prisma.refund.create({ data: { orderId: order.id, amount: 100, status: 'pending' } });
+  }, 20000);
+
+  afterAll(async () => {
+    await prisma.refund.deleteMany({ where: { orderId: order.id } });
+    await prisma.payment.deleteMany({ where: { orderId: order.id } });
+    await prisma.order.delete({ where: { id: order.id } });
+  });
+
+  it('computes gross, refunded, and net revenue for the range', async () => {
+    const res = await request(app).get(`/api/reports/finance?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.grossRevenue).toBeGreaterThanOrEqual(1000);
+    expect(res.body.data.refundedAmount).toBeGreaterThanOrEqual(300);
+    expect(res.body.data.netRevenue).toBe(res.body.data.grossRevenue - res.body.data.refundedAmount);
+  }, 15000);
+
+  it('counts the live pending refund queue and computes avg velocity from succeeded refunds only', async () => {
+    const res = await request(app).get(`/api/reports/finance?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.refundQueueCount).toBeGreaterThanOrEqual(1);
+    expect(res.body.data.avgRefundVelocityHours).not.toBeNull();
+    expect(res.body.data.avgRefundVelocityHours).toBeGreaterThan(0);
+  }, 15000);
+
+  it('computes payment-provider success rate from resolved attempts only, scoped to this fixture\'s own marker-prefixed provider', async () => {
+    const res = await request(app).get(`/api/reports/finance?${rangeQS}`);
+    expect(res.status).toBe(200);
+    const provider = res.body.data.providerSuccessRate.find((p) => p.provider === `${financeMarker}-provider`);
+    expect(provider).toBeTruthy();
+    expect(provider.total).toBe(2);
+    expect(provider.succeeded).toBe(1);
+    expect(provider.successRate).toBe(50);
+  }, 15000);
+
+  it('flags fee breakdown as explicitly unavailable, never fabricating a number', async () => {
+    const res = await request(app).get(`/api/reports/finance?${rangeQS}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.feeBreakdownAvailable).toBe(false);
+  }, 15000);
+
+  it('exports via the shared CSV/Excel contract', async () => {
+    const res = await request(app).get(`/api/reports/finance/export?${rangeQS}&format=xlsx`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('spreadsheetml');
+  }, 15000);
 });

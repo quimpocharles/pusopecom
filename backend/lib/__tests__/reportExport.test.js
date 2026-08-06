@@ -1,6 +1,33 @@
 import { describe, it, expect, vi } from 'vitest';
+import zlib from 'node:zlib';
 import ExcelJS from 'exceljs';
-import { toCSV, sendCSV, sendXLSX, sendReportExport } from '../reportExport.js';
+import { toCSV, sendCSV, sendXLSX, sendPDF, buildPDFBuffer, buildReportAttachments, sendReportExport } from '../reportExport.js';
+
+// pdfkit FlateDecode-compresses content streams by default AND renders text
+// as hex glyph strings (`<556e69...>` in Tj/TJ operators, not literal
+// `(text)`) even for the standard WinAnsiEncoding fonts used here — so
+// asserting on rendered text means inflating each stream, then hex-decoding
+// every `<...>` token, rather than pattern-matching the raw buffer.
+function extractPdfText(buffer) {
+  const str = buffer.toString('latin1');
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let match;
+  let combined = '';
+  while ((match = streamRegex.exec(str))) {
+    let inflated;
+    try {
+      inflated = zlib.inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1');
+    } catch {
+      inflated = match[1];
+    }
+    combined += inflated;
+    const hexTokens = inflated.match(/<[0-9a-fA-F]+>/g) || [];
+    for (const token of hexTokens) {
+      combined += Buffer.from(token.slice(1, -1), 'hex').toString('latin1');
+    }
+  }
+  return combined;
+}
 
 function mockRes() {
   const chunks = [];
@@ -79,7 +106,98 @@ describe('sendXLSX', () => {
   });
 });
 
+describe('sendPDF / buildPDFBuffer', () => {
+  it('produces a non-empty application/pdf buffer with a Summary table and one table per sheet', async () => {
+    const res = mockRes();
+    await sendPDF(res, 'report.pdf', {
+      summary: [['Total Revenue', 1500]],
+      sheets: [{ name: 'By Product', columns, rows, totals: { revenue: true } }],
+    });
+    expect(res.headers['Content-Type']).toBe('application/pdf');
+    expect(res.headers['Content-Disposition']).toBe('attachment; filename="report.pdf"');
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(100);
+    expect(res.body.slice(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it('derives a human title from the filename when none is given', async () => {
+    const res = mockRes();
+    await sendPDF(res, 'organizations-report.pdf', { sheets: [{ name: 'Sheet', columns, rows }] });
+    expect(extractPdfText(res.body)).toContain('Organizations Report');
+  });
+
+  it('paginates a large rows array — addPage() fires rather than throwing or silently truncating', async () => {
+    const bigRows = Array.from({ length: 80 }, (_, i) => ({ name: `Row ${i}`, revenue: i }));
+    const buffer = await buildPDFBuffer({
+      title: 'Pagination Test',
+      summary: null,
+      sheets: [{ name: 'Big Sheet', columns, rows: bigRows }],
+    });
+    const text = buffer.toString('latin1');
+    const pageObjectCount = (text.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    expect(pageObjectCount).toBeGreaterThan(1);
+  });
+
+  it('does not silently drop rows when paginating — page count scales with the number of rows, not capped at one page', async () => {
+    const pageCountFor = async (n) => {
+      const rowsN = Array.from({ length: n }, (_, i) => ({ name: `Row ${i}`, revenue: i }));
+      const buffer = await buildPDFBuffer({ title: 'Scale Test', summary: null, sheets: [{ name: 'Sheet', columns, rows: rowsN }] });
+      const text = buffer.toString('latin1');
+      return (text.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    };
+    const smallPageCount = await pageCountFor(20);
+    const largePageCount = await pageCountFor(120);
+    expect(largePageCount).toBeGreaterThan(smallPageCount);
+  });
+
+  it('renders a row far past the first page break, proving overflow rows land on later pages rather than being dropped', async () => {
+    const rows120 = Array.from({ length: 120 }, (_, i) => ({ name: `UniqueRowMarker${i}`, revenue: i }));
+    const buffer = await buildPDFBuffer({ title: 'Overflow Test', summary: null, sheets: [{ name: 'Sheet', columns, rows: rows120 }] });
+    const text = extractPdfText(buffer);
+    expect(text).toContain('UniqueRowMarker0');
+    expect(text).toContain('UniqueRowMarker119');
+  });
+});
+
+describe('buildReportAttachments', () => {
+  it('returns xlsx, csv, and pdf attachments with correct filenames and content types', async () => {
+    const attachments = await buildReportAttachments({
+      summary: [['Total', 1500]],
+      sheets: [{ name: 'Primary', columns, rows }],
+      baseFilename: 'sales-report',
+    });
+
+    expect(attachments).toHaveLength(3);
+    const byExt = Object.fromEntries(attachments.map((a) => [a.filename.split('.').pop(), a]));
+
+    expect(byExt.xlsx.filename).toBe('sales-report.xlsx');
+    expect(byExt.xlsx.contentType).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(Buffer.isBuffer(byExt.xlsx.content)).toBe(true);
+
+    expect(byExt.csv.filename).toBe('sales-report.csv');
+    expect(byExt.csv.contentType).toBe('text/csv');
+    expect(byExt.csv.content.toString()).toContain('Jersey,1000');
+
+    expect(byExt.pdf.filename).toBe('sales-report.pdf');
+    expect(byExt.pdf.contentType).toBe('application/pdf');
+    expect(byExt.pdf.content.slice(0, 5).toString()).toBe('%PDF-');
+  });
+});
+
 describe('sendReportExport', () => {
+  it('sends a PDF when format is pdf', async () => {
+    const res = mockRes();
+    await sendReportExport(res, {
+      format: 'pdf',
+      baseFilename: 'sales-report',
+      summary: [['Total', 1500]],
+      sheets: [{ name: 'Primary', columns, rows }],
+    });
+    expect(res.headers['Content-Type']).toBe('application/pdf');
+    expect(res.headers['Content-Disposition']).toBe('attachment; filename="sales-report.pdf"');
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+  });
+
   it('sends CSV of the first sheet only when format is csv (or omitted)', async () => {
     const res = mockRes();
     await sendReportExport(res, {
