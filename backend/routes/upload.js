@@ -5,6 +5,12 @@ import multer from 'multer';
 import cloudinary from '../config/cloudinary.js';
 import { authenticate, isAdmin } from '../middleware/auth.js';
 
+// Deliberately left at isAdmin-only, not a specific requirePermission —
+// this generic media endpoint is shared across products, homepage CMS,
+// campaigns, etc., each backed by a different permission, and nothing in
+// the request tells this route which resource the upload is actually for.
+// Every caller-side route (products.js, faq.js, campaigns.js, ...) already
+// enforces its own permission before ever reaching a page that uploads.
 const router = express.Router();
 
 const upload = multer({

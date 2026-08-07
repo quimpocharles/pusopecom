@@ -10,6 +10,8 @@ vi.mock('../../middleware/auth.js', () => ({
   },
   isAdmin: (req, res, next) => next(),
   optionalAuth: (req, res, next) => next(),
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 const { default: productsRouter } = await import('../products.js');

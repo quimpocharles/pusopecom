@@ -3,10 +3,11 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as userRepository from '../repositories/userRepository.js';
 import * as staffProfileRepository from '../repositories/staffProfileRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS, ALL_PERMISSIONS, DEPARTMENT_DEFAULTS } from '../lib/permissions.js';
 
 const router = express.Router();
-router.use(authenticate, isAdmin);
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_SECURITY_MANAGE));
 
 const VALID_DEPARTMENTS = new Set(['warehouse', 'support', 'finance', 'operations', 'marketing', 'executive']);
 
@@ -17,6 +18,13 @@ const VALID_DEPARTMENTS = new Set(['warehouse', 'support', 'finance', 'operation
  * admin-role User is listed here even if they have no StaffProfile yet —
  * that's the "unassigned" state a Roles page needs to show, not an error.
  */
+// The vocabulary itself — served from lib/permissions.js so the Security
+// settings page never hardcodes its own copy that could drift from what
+// requirePermission() actually enforces.
+router.get('/permissions', (req, res) => {
+  res.json({ success: true, data: { permissions: ALL_PERMISSIONS, departmentDefaults: DEPARTMENT_DEFAULTS } });
+});
+
 router.get('/', async (req, res) => {
   try {
     const admins = await userRepository.find({ where: { role: 'admin' }, orderBy: { firstName: 'asc' } });
@@ -49,8 +57,14 @@ router.patch('/:userId', async (req, res) => {
     if (!department || !VALID_DEPARTMENTS.has(department)) {
       return res.status(400).json({ success: false, message: `department is required and must be one of: ${[...VALID_DEPARTMENTS].join(', ')}` });
     }
-    if (permissions !== undefined && !Array.isArray(permissions)) {
-      return res.status(400).json({ success: false, message: 'permissions must be an array of strings' });
+    if (permissions !== undefined) {
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ success: false, message: 'permissions must be an array of strings' });
+      }
+      const unknown = permissions.filter((p) => !ALL_PERMISSIONS.includes(p));
+      if (unknown.length > 0) {
+        return res.status(400).json({ success: false, message: `Unknown permission(s): ${unknown.join(', ')}` });
+      }
     }
 
     const targetUser = await userRepository.findById(req.params.userId);

@@ -69,6 +69,11 @@ const DesignSystemDemo = lazy(() => import('./pages/_dev/DesignSystemDemo'));
 
 import AdminRoute from './components/admin/AdminRoute';
 import AdminLayout from './components/admin/AdminLayout';
+import PermissionRoute from './components/admin/PermissionRoute';
+import { PERMISSIONS } from './utils/permissions';
+
+const REPORTS_ANY_VIEW = Object.values(PERMISSIONS).filter((p) => p.startsWith('reports.') && p.endsWith('.view'));
+const SETTINGS_ANY_MANAGE = Object.values(PERMISSIONS).filter((p) => p.startsWith('settings.') && p.endsWith('.manage'));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -117,45 +122,45 @@ function App() {
 
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<AdminDashboard />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="products/new" element={<AdminProductForm />} />
-            <Route path="products/:id/edit" element={<AdminProductForm />} />
-            <Route path="leagues" element={<AdminLeagues />} />
-            <Route path="campaigns" element={<AdminCampaigns />} />
-            <Route path="fit-check-campaigns" element={<AdminFitCheckCampaigns />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="orders/:orderNumber" element={<AdminOrderDetail />} />
-            <Route path="shipments" element={<AdminShipments />} />
-            <Route path="returns" element={<AdminReturns />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="reports" element={<ReportsLayout />}>
-              <Route index element={<ExecutiveDashboard />} />
-              <Route path="sales" element={<SalesReportPage />} />
-              <Route path="products" element={<ProductsReportPage />} />
-              <Route path="customers" element={<CustomersReportPage />} />
-              <Route path="operations" element={<OperationsReportPage />} />
-              <Route path="fit-check" element={<FitCheckAnalyticsPage />} />
-              <Route path="organizations" element={<OrganizationsReportPage />} />
-              <Route path="finance" element={<FinanceReportPage />} />
-              <Route path="exports" element={<ExportsWorkspace />} />
+            <Route path="products" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_VIEW}><AdminProducts /></PermissionRoute>} />
+            <Route path="products/new" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_MANAGE}><AdminProductForm /></PermissionRoute>} />
+            <Route path="products/:id/edit" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_MANAGE}><AdminProductForm /></PermissionRoute>} />
+            <Route path="leagues" element={<PermissionRoute permission={PERMISSIONS.LEAGUES_MANAGE}><AdminLeagues /></PermissionRoute>} />
+            <Route path="campaigns" element={<PermissionRoute permission={PERMISSIONS.CAMPAIGNS_MANAGE}><AdminCampaigns /></PermissionRoute>} />
+            <Route path="fit-check-campaigns" element={<PermissionRoute permission={PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE}><AdminFitCheckCampaigns /></PermissionRoute>} />
+            <Route path="orders" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrders /></PermissionRoute>} />
+            <Route path="orders/:orderNumber" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrderDetail /></PermissionRoute>} />
+            <Route path="shipments" element={<PermissionRoute permission={PERMISSIONS.FULFILLMENT_MANAGE}><AdminShipments /></PermissionRoute>} />
+            <Route path="returns" element={<PermissionRoute permission={PERMISSIONS.RETURNS_VIEW}><AdminReturns /></PermissionRoute>} />
+            <Route path="users" element={<PermissionRoute permission={PERMISSIONS.USERS_VIEW}><AdminUsers /></PermissionRoute>} />
+            <Route path="reports" element={<PermissionRoute anyOf={REPORTS_ANY_VIEW}><ReportsLayout /></PermissionRoute>}>
+              <Route index element={<PermissionRoute permission={PERMISSIONS.REPORTS_EXECUTIVE_VIEW}><ExecutiveDashboard /></PermissionRoute>} />
+              <Route path="sales" element={<PermissionRoute permission={PERMISSIONS.REPORTS_SALES_VIEW}><SalesReportPage /></PermissionRoute>} />
+              <Route path="products" element={<PermissionRoute permission={PERMISSIONS.REPORTS_PRODUCTS_VIEW}><ProductsReportPage /></PermissionRoute>} />
+              <Route path="customers" element={<PermissionRoute permission={PERMISSIONS.REPORTS_CUSTOMERS_VIEW}><CustomersReportPage /></PermissionRoute>} />
+              <Route path="operations" element={<PermissionRoute permission={PERMISSIONS.REPORTS_OPERATIONS_VIEW}><OperationsReportPage /></PermissionRoute>} />
+              <Route path="fit-check" element={<PermissionRoute permission={PERMISSIONS.REPORTS_FITCHECK_VIEW}><FitCheckAnalyticsPage /></PermissionRoute>} />
+              <Route path="organizations" element={<PermissionRoute permission={PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW}><OrganizationsReportPage /></PermissionRoute>} />
+              <Route path="finance" element={<PermissionRoute permission={PERMISSIONS.REPORTS_FINANCE_VIEW}><FinanceReportPage /></PermissionRoute>} />
+              <Route path="exports" element={<PermissionRoute anyOf={REPORTS_ANY_VIEW}><ExportsWorkspace /></PermissionRoute>} />
             </Route>
-            <Route path="settings" element={<SettingsLayout />}>
+            <Route path="settings" element={<PermissionRoute anyOf={SETTINGS_ANY_MANAGE}><SettingsLayout /></PermissionRoute>}>
               <Route index element={<SettingsOverview />} />
-              <Route path="fit-check" element={<FitCheckSettings />} />
-              <Route path="commerce" element={<CommerceSettings />} />
-              <Route path="notifications" element={<NotificationSettings />} />
-              <Route path="security" element={<SecuritySettings />} />
-              <Route path="integrations" element={<IntegrationsSettings />} />
-              <Route path="advanced" element={<AdvancedSettings />} />
+              <Route path="fit-check" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_FITCHECK_MANAGE}><FitCheckSettings /></PermissionRoute>} />
+              <Route path="commerce" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_COMMERCE_MANAGE}><CommerceSettings /></PermissionRoute>} />
+              <Route path="notifications" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_NOTIFICATIONS_MANAGE}><NotificationSettings /></PermissionRoute>} />
+              <Route path="security" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_SECURITY_MANAGE}><SecuritySettings /></PermissionRoute>} />
+              <Route path="integrations" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_INTEGRATIONS_MANAGE}><IntegrationsSettings /></PermissionRoute>} />
+              <Route path="advanced" element={<PermissionRoute permission={PERMISSIONS.SETTINGS_ADVANCED_MANAGE}><AdvancedSettings /></PermissionRoute>} />
             </Route>
-            <Route path="homepage/faq" element={<AdminFAQ />} />
-            <Route path="homepage/announcements" element={<AdminPromoMessages />} />
-            <Route path="homepage/sections" element={<AdminHomepageSections />} />
-            <Route path="homepage/featured-team" element={<AdminFeaturedTeam />} />
-            <Route path="homepage/partners" element={<AdminPartnerLogos />} />
-            <Route path="homepage/navigation" element={<AdminNavigation />} />
-            <Route path="homepage/footer" element={<AdminFooter />} />
-            <Route path="homepage" element={<AdminHomepageBuilder />} />
+            <Route path="homepage/faq" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminFAQ /></PermissionRoute>} />
+            <Route path="homepage/announcements" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminPromoMessages /></PermissionRoute>} />
+            <Route path="homepage/sections" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminHomepageSections /></PermissionRoute>} />
+            <Route path="homepage/featured-team" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminFeaturedTeam /></PermissionRoute>} />
+            <Route path="homepage/partners" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminPartnerLogos /></PermissionRoute>} />
+            <Route path="homepage/navigation" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminNavigation /></PermissionRoute>} />
+            <Route path="homepage/footer" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminFooter /></PermissionRoute>} />
+            <Route path="homepage" element={<PermissionRoute permission={PERMISSIONS.HOMEPAGE_MANAGE}><AdminHomepageBuilder /></PermissionRoute>} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

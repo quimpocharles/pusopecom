@@ -1,32 +1,60 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import staffService from '../../../services/staffService';
 import LoadingSpinner from '../../../components/common/LoadingSpinner';
 import PlaceholderSection from '../../../components/admin/settings/PlaceholderSection';
+import Modal from '../../../components/ui/Modal';
 import Toast from '../../../components/admin/settings/Toast';
 import useToast from '../../../components/admin/settings/useToast';
 
 const DEPARTMENTS = ['warehouse', 'support', 'finance', 'operations', 'marketing', 'executive'];
 
-// The first real UI ever built for StaffProfile — the model and its
-// repository existed since the Enterprise Fulfillment Blueprint, but no
-// route or page ever reached it. Each admin's row saves independently
-// (not a single form-wide save/cancel) — the same "self-contained per
-// item" pattern ReportRecipients already uses, since these are genuinely
-// separate records, not one settings object.
+// Presentation-only grouping — the permission strings themselves come from
+// the backend (staffService.getPermissionVocabulary, backed by
+// lib/permissions.js) so this page can never drift from what
+// requirePermission() actually enforces. This just decides how to lay them
+// out in the picker.
+const GROUP_FOR = (permission) => {
+  if (permission.startsWith('reports.')) return 'Reports';
+  if (permission.startsWith('settings.')) return 'Settings';
+  if (['orders.', 'fulfillment.', 'returns.'].some((p) => permission.startsWith(p))) return 'Commerce & Fulfillment';
+  if (permission.startsWith('users.')) return 'People';
+  return 'Catalog & Content';
+};
+
+const GROUP_ORDER = ['Catalog & Content', 'Commerce & Fulfillment', 'People', 'Reports', 'Settings'];
+
+// Roles module, Phase 1 — StaffProfile (department + permissions) existed
+// since the Enterprise Fulfillment Blueprint but nothing ever enforced it;
+// every admin-role account had identical access. This page is now the real
+// editor for what requirePermission() checks. `department` sets a default
+// permission bundle; `permissions` on top of it is additive — an admin can
+// hold more than their department's defaults, never fewer, without a
+// department change. The picker below always shows the union (defaults +
+// overrides) and saves back only what's *not* already implied by the
+// department default, so the stored `permissions` array stays a true
+// "extra, on top of" list rather than a duplicate of the defaults.
 const SecuritySettings = () => {
   const { toast, showToast, dismissToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
+  const [allPermissions, setAllPermissions] = useState([]);
+  const [departmentDefaults, setDepartmentDefaults] = useState({});
   const [savingUserId, setSavingUserId] = useState(null);
+  const [editing, setEditing] = useState(null); // the row currently open in the permission picker
 
   const load = useCallback(async () => {
     try {
-      const res = await staffService.getStaff();
-      setRows(res.data.map((s) => ({
+      const [staffRes, vocabRes] = await Promise.all([
+        staffService.getStaff(),
+        staffService.getPermissionVocabulary(),
+      ]);
+      setRows(staffRes.data.map((s) => ({
         ...s,
         department: s.staffProfile?.department || '',
-        permissions: (s.staffProfile?.permissions || []).join(', '),
+        permissions: s.staffProfile?.permissions || [],
       })));
+      setAllPermissions(vocabRes.data.permissions);
+      setDepartmentDefaults(vocabRes.data.departmentDefaults);
     } catch (error) {
       console.error('Failed to load staff:', error);
       showToast('error', 'Failed to load staff list');
@@ -37,8 +65,13 @@ const SecuritySettings = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const updateRow = (userId, field, value) =>
-    setRows((prev) => prev.map((r) => (r.userId === userId ? { ...r, [field]: value } : r)));
+  const defaultsFor = useCallback(
+    (department) => new Set(departmentDefaults[department] || []),
+    [departmentDefaults]
+  );
+
+  const updateDepartment = (userId, department) =>
+    setRows((prev) => prev.map((r) => (r.userId === userId ? { ...r, department } : r)));
 
   const handleSaveRow = async (row) => {
     if (!row.department) {
@@ -47,8 +80,7 @@ const SecuritySettings = () => {
     }
     setSavingUserId(row.userId);
     try {
-      const permissions = row.permissions.split(',').map((p) => p.trim()).filter(Boolean);
-      await staffService.updateStaff(row.userId, { department: row.department, permissions });
+      await staffService.updateStaff(row.userId, { department: row.department, permissions: row.permissions });
       showToast('success', `Updated ${row.firstName} ${row.lastName}`);
       await load();
     } catch (error) {
@@ -69,7 +101,11 @@ const SecuritySettings = () => {
       <div className="space-y-8">
         <section>
           <h3 className="text-sm font-semibold text-gray-900 mb-1">Roles & Permissions</h3>
-          <p className="text-xs text-gray-500 mb-4">Every admin-role account, scoped by department and an explicit permission list. Unassigned accounts still have admin access — assigning a department here doesn't change that.</p>
+          <p className="text-xs text-gray-500 mb-4">
+            Department sets a default set of permissions; an account can hold more than its department's
+            defaults, never fewer, without changing department. An account with no department is treated
+            as executive (full access) — assign a department to narrow it.
+          </p>
 
           {rows.length === 0 ? (
             <p className="text-sm text-gray-400">No admin accounts found.</p>
@@ -86,40 +122,49 @@ const SecuritySettings = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {rows.map((row) => (
-                    <tr key={row.userId}>
-                      <td className="px-4 py-2.5 whitespace-nowrap">{row.firstName} {row.lastName}</td>
-                      <td className="px-4 py-2.5 text-gray-500">{row.email}</td>
-                      <td className="px-4 py-2.5">
-                        <select
-                          value={row.department}
-                          onChange={(e) => updateRow(row.userId, 'department', e.target.value)}
-                          className="input-field py-1.5 text-sm"
-                        >
-                          <option value="">Unassigned</option>
-                          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <input
-                          type="text"
-                          value={row.permissions}
-                          onChange={(e) => updateRow(row.userId, 'permissions', e.target.value)}
-                          placeholder="can_assign, can_refund"
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <button
-                          onClick={() => handleSaveRow(row)}
-                          disabled={savingUserId === row.userId}
-                          className="px-3 py-1.5 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap"
-                        >
-                          {savingUserId === row.userId ? 'Saving…' : 'Save'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {rows.map((row) => {
+                    const effective = new Set([...defaultsFor(row.department), ...row.permissions]);
+                    const isExecutive = row.department === 'executive';
+                    return (
+                      <tr key={row.userId}>
+                        <td className="px-4 py-2.5 whitespace-nowrap">{row.firstName} {row.lastName}</td>
+                        <td className="px-4 py-2.5 text-gray-500">{row.email}</td>
+                        <td className="px-4 py-2.5">
+                          <select
+                            value={row.department}
+                            onChange={(e) => updateDepartment(row.userId, e.target.value)}
+                            className="input-field py-1.5 text-sm"
+                          >
+                            <option value="">Unassigned (full access)</option>
+                            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {isExecutive ? (
+                            <span className="text-xs text-gray-400">Everything — executive</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(row)}
+                              disabled={!row.department}
+                              className="text-xs font-medium text-primary-600 hover:text-primary-700 disabled:text-gray-300 disabled:cursor-not-allowed"
+                            >
+                              {effective.size} permission{effective.size === 1 ? '' : 's'} — edit
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <button
+                            onClick={() => handleSaveRow(row)}
+                            disabled={savingUserId === row.userId}
+                            className="px-3 py-1.5 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {savingUserId === row.userId ? 'Saving…' : 'Save'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -135,8 +180,101 @@ const SecuritySettings = () => {
         </section>
       </div>
 
+      <PermissionPickerModal
+        row={editing}
+        allPermissions={allPermissions}
+        departmentDefault={editing ? defaultsFor(editing.department) : new Set()}
+        onClose={() => setEditing(null)}
+        onChange={(permissions) => {
+          setRows((prev) => prev.map((r) => (r.userId === editing.userId ? { ...r, permissions } : r)));
+          setEditing(null);
+        }}
+      />
+
       <Toast toast={toast} onDismiss={dismissToast} />
     </div>
+  );
+};
+
+const PermissionPickerModal = ({ row, allPermissions, departmentDefault, onClose, onChange }) => {
+  const [selected, setSelected] = useState(new Set());
+
+  useEffect(() => {
+    if (row) setSelected(new Set([...departmentDefault, ...row.permissions]));
+  }, [row, departmentDefault]);
+
+  const grouped = useMemo(() => {
+    const groups = {};
+    for (const p of allPermissions) {
+      const g = GROUP_FOR(p);
+      (groups[g] ||= []).push(p);
+    }
+    return groups;
+  }, [allPermissions]);
+
+  if (!row) return null;
+
+  const toggle = (permission) => {
+    if (departmentDefault.has(permission)) return; // department defaults aren't individually removable here — change department instead
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(permission)) next.delete(permission);
+      else next.add(permission);
+      return next;
+    });
+  };
+
+  const handleSave = () => {
+    // Only store what's genuinely additive — permissions already implied
+    // by the department default don't need to be duplicated in the row.
+    const additive = [...selected].filter((p) => !departmentDefault.has(p));
+    onChange(additive);
+  };
+
+  return (
+    <Modal open={!!row} onClose={onClose} title={`Permissions — ${row.firstName} ${row.lastName}`} size="lg">
+      <div className="p-4">
+        <p className="text-xs text-gray-500 mb-4">
+          Greyed-out, checked permissions come from the <strong>{row.department}</strong> department default and can't
+          be removed here — change department to change those. Anything else is an individual addition.
+        </p>
+        <div className="space-y-5 max-h-96 overflow-y-auto pr-1">
+          {GROUP_ORDER.filter((g) => grouped[g]?.length).map((group) => (
+            <div key={group}>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">{group}</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {grouped[group].map((permission) => {
+                  const fromDepartment = departmentDefault.has(permission);
+                  return (
+                    <label
+                      key={permission}
+                      className={`flex items-center gap-2 text-sm px-2 py-1 rounded ${fromDepartment ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-50 cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(permission)}
+                        disabled={fromDepartment}
+                        onChange={() => toggle(permission)}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="font-mono text-xs">{permission}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-gray-100">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-primary-600 text-white rounded text-xs font-medium hover:bg-primary-700">
+            Apply
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

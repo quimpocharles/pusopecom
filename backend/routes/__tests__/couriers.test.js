@@ -6,6 +6,8 @@ import prisma from '../../lib/prisma.js';
 vi.mock('../../middleware/auth.js', () => ({
   authenticate: (req, res, next) => { req.user = { _id: 'test-admin', role: 'admin' }; next(); },
   isAdmin: (req, res, next) => next(),
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 const { default: couriersRouter } = await import('../couriers.js');

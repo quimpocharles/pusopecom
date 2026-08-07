@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as partnerLogoRepository from '../repositories/partnerLogoRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
 });
 
 // All logos including inactive (admin)
-router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const logos = await partnerLogoRepository.find({ orderBy: [{ priority: 'desc' }, { displayOrder: 'asc' }] });
     res.json({ success: true, data: logos });
@@ -30,7 +31,7 @@ router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const logo = await partnerLogoRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Partner logo created successfully', data: logo });
@@ -41,7 +42,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const logo = await partnerLogoRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Partner logo updated successfully', data: logo });
@@ -55,7 +56,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await partnerLogoRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Partner logo deleted successfully' });

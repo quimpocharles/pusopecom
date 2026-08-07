@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as homepageSectionRepository from '../repositories/homepageSectionRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
 });
 
 // Bulk reorder / bulk visibility update (admin) — body: [{ key, displayOrder, active? }, ...]
-router.put('/', authenticate, isAdmin, async (req, res) => {
+router.put('/', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const sections = Array.isArray(req.body?.sections) ? req.body.sections : req.body;
     if (!Array.isArray(sections)) {
@@ -35,7 +36,7 @@ router.put('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Toggle a single section's visibility (admin)
-router.patch('/:key', authenticate, isAdmin, async (req, res) => {
+router.patch('/:key', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const { active } = req.body;
     const section = await homepageSectionRepository.setActive(req.params.key, active);

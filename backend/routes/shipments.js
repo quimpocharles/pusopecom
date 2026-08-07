@@ -14,7 +14,8 @@ import * as notificationRepository from '../repositories/notificationRepository.
 import * as courierAccountRepository from '../repositories/courierAccountRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import { sendOrderStatusEmail } from '../services/emailService.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ const router = express.Router();
 // staff-facing Shipment queue. Nothing customer-facing is served from this
 // file (compare routes/orders.js, which mixes customer + admin routes
 // because Order itself is customer-facing) — Shipment never is.
-router.use(authenticate, isAdmin);
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.FULFILLMENT_MANAGE));
 
 // A subset of shipmentRepository.SHIPMENT_TRANSITIONS reachable through
 // this generic transition endpoint. 'cancelled' is deliberately excluded

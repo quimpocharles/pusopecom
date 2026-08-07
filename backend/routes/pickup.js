@@ -2,12 +2,13 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
 // All routes in this file require admin auth
-router.use(authenticate, isAdmin);
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_COMMERCE_MANAGE));
 
 // GET /api/admin/pickup
 router.get('/', async (req, res) => {

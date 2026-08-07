@@ -3,7 +3,8 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import { body, validationResult } from 'express-validator';
 import * as productRepository from '../repositories/productRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -70,6 +71,7 @@ router.get('/', async (req, res) => {
 router.get('/admin/export',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   async (req, res) => {
     try {
       const products = await productRepository.find({ where: {}, orderBy: { name: 'asc' } });
@@ -125,6 +127,7 @@ router.get('/admin/export',
 router.get('/admin/all',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   async (req, res) => {
     try {
       const {
@@ -177,6 +180,7 @@ router.get('/admin/all',
 router.get('/admin/:id',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   async (req, res) => {
     try {
       const product = await productRepository.findById(req.params.id);
@@ -377,6 +381,7 @@ router.get('/:slug', async (req, res) => {
 router.post('/',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   [
     body('name').trim().notEmpty(),
     body('description').trim().notEmpty(),
@@ -424,6 +429,7 @@ router.post('/',
 router.put('/:id',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   async (req, res) => {
     try {
       const product = await productRepository.updateById(req.params.id, req.body);
@@ -454,6 +460,7 @@ router.put('/:id',
 router.delete('/:id/permanent',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   async (req, res) => {
     if (req.user.email !== 'quimpo.charles@gmail.com') {
       return res.status(403).json({
@@ -489,6 +496,7 @@ router.delete('/:id/permanent',
 router.delete('/:id',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_MANAGE),
   async (req, res) => {
     try {
       await productRepository.updateById(req.params.id, { active: false });
@@ -518,6 +526,7 @@ router.delete('/:id',
 router.get('/admin/stats',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.PRODUCTS_VIEW),
   async (req, res) => {
     try {
       const stats = await productRepository.getAdminStats();

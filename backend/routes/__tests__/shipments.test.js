@@ -9,6 +9,8 @@ vi.mock('../../middleware/auth.js', () => ({
     next();
   },
   isAdmin: (req, res, next) => next(),
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 vi.mock('../../services/emailService.js', () => ({

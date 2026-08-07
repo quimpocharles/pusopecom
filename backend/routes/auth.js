@@ -8,7 +8,8 @@ import * as userRepository from '../repositories/userRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, AUTH_INCLUDE, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -33,7 +34,8 @@ const generateAuthResponse = (user) => {
       role: user.role,
       emailVerified: user.emailVerified,
       avatar: user.avatar,
-      authProvider: user.authProvider
+      authProvider: user.authProvider,
+      staffProfile: user.staffProfile
     }
   };
 };
@@ -171,7 +173,7 @@ router.post('/login',
 
       const { email, password } = req.body;
 
-      let user = await userRepository.findByEmail(email);
+      let user = await userRepository.findByEmail(email, { include: AUTH_INCLUDE });
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -201,7 +203,7 @@ router.post('/login',
       }
 
       if (user.failedLoginAttempts > 0) {
-        user = await userRepository.updateById(user._id, { failedLoginAttempts: 0 });
+        user = await userRepository.updateById(user._id, { failedLoginAttempts: 0 }, { include: AUTH_INCLUDE });
       }
 
       if (!user.emailVerified) {
@@ -479,7 +481,7 @@ router.post('/google', async (req, res) => {
     const { sub: googleId, email, given_name, family_name, picture } = payload;
 
     // Find existing user by googleId or email
-    let user = await userRepository.findByGoogleIdOrEmail(googleId, email);
+    let user = await userRepository.findByGoogleIdOrEmail(googleId, email, { include: AUTH_INCLUDE });
 
     if (user) {
       // Update Google info on each login
@@ -488,7 +490,7 @@ router.post('/google', async (req, res) => {
       // Always update avatar from Google if available
       if (picture) updates.avatar = picture;
       if (Object.keys(updates).length > 0) {
-        user = await userRepository.updateById(user._id, updates);
+        user = await userRepository.updateById(user._id, updates, { include: AUTH_INCLUDE });
       }
     } else {
       // Create new user
@@ -657,6 +659,7 @@ router.delete('/addresses/:addressId', authenticate, async (req, res) => {
 router.get('/admin/users',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.USERS_VIEW),
   async (req, res) => {
     try {
       const {

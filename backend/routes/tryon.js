@@ -13,7 +13,8 @@ import * as fitCheckQuota from '../lib/fitCheckQuota.js';
 import * as bonusFitCheckGrantRepository from '../repositories/bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepository from '../repositories/fitCheckCampaignRepository.js';
 import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
-import { optionalAuth, authenticate, isAdmin } from '../middleware/auth.js';
+import { optionalAuth, authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -329,7 +330,7 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
 // Check ledger + current balance, backing the admin grant panel (Phase 2:
 // "configurable from the Admin Dashboard" implies inspectable/reportable,
 // not just a bigger number — see BonusFitCheckGrant's schema comment).
-router.get('/admin/bonus-grants/:userId', authenticate, isAdmin, async (req, res) => {
+router.get('/admin/bonus-grants/:userId', authenticate, isAdmin, requirePermission(PERMISSIONS.USERS_MANAGE), async (req, res) => {
   try {
     const [grants, balance] = await Promise.all([
       bonusFitCheckGrantRepository.findByUser(req.params.userId),
@@ -347,7 +348,7 @@ router.get('/admin/bonus-grants/:userId', authenticate, isAdmin, async (req, res
 // Fit Checks to one user (reason: admin_grant). Always creates a new row —
 // unlike the event-triggered reasons, an admin can grant to the same user
 // more than once on purpose, so there's no idempotency guard here.
-router.post('/admin/bonus-grant', authenticate, isAdmin, async (req, res) => {
+router.post('/admin/bonus-grant', authenticate, isAdmin, requirePermission(PERMISSIONS.USERS_MANAGE), async (req, res) => {
   try {
     const { userId, amount, note } = req.body;
     const parsedAmount = Number(amount);

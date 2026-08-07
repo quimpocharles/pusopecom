@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as campaignRepository from '../repositories/campaignRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get('/active', async (req, res) => {
 });
 
 // List all campaigns (admin)
-router.get('/', authenticate, isAdmin, async (req, res) => {
+router.get('/', authenticate, isAdmin, requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaigns = await campaignRepository.find({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: campaigns });
@@ -40,7 +41,7 @@ router.get('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Get single campaign (admin)
-router.get('/:id', authenticate, isAdmin, async (req, res) => {
+router.get('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await campaignRepository.findById(req.params.id);
     if (!campaign) {
@@ -55,7 +56,7 @@ router.get('/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // Create campaign (admin)
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await campaignRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Campaign created successfully', data: campaign });
@@ -67,7 +68,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Update campaign (admin)
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await campaignRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Campaign updated successfully', data: campaign });
@@ -82,7 +83,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // Soft-delete campaign (admin)
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     await campaignRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Campaign deleted successfully' });

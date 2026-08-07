@@ -2,12 +2,13 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as fitCheckCampaignRepository from '../repositories/fitCheckCampaignRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
 // List all Fit Check campaigns (admin)
-router.get('/', authenticate, isAdmin, async (req, res) => {
+router.get('/', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaigns = await fitCheckCampaignRepository.find({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: campaigns });
@@ -19,7 +20,7 @@ router.get('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Get single Fit Check campaign (admin)
-router.get('/:id', authenticate, isAdmin, async (req, res) => {
+router.get('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await fitCheckCampaignRepository.findById(req.params.id);
     if (!campaign) {
@@ -37,7 +38,7 @@ router.get('/:id', authenticate, isAdmin, async (req, res) => {
 // separate from the plain GET /:id above so the ordinary list/edit reads
 // stay cheap; this one runs several aggregate queries and a live
 // purchase-correlation join.
-router.get('/:id/analytics', authenticate, isAdmin, async (req, res) => {
+router.get('/:id/analytics', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await fitCheckCampaignRepository.findById(req.params.id);
     if (!campaign) {
@@ -67,7 +68,7 @@ router.post('/:id/view', async (req, res) => {
 });
 
 // Create Fit Check campaign (admin)
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await fitCheckCampaignRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Fit Check campaign created successfully', data: campaign });
@@ -79,7 +80,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Update Fit Check campaign (admin)
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     const campaign = await fitCheckCampaignRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Fit Check campaign updated successfully', data: campaign });
@@ -94,7 +95,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // Soft-delete Fit Check campaign (admin)
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE), async (req, res) => {
   try {
     await fitCheckCampaignRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Fit Check campaign deleted successfully' });

@@ -3,10 +3,11 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as courierAccountRepository from '../repositories/courierAccountRepository.js';
 import * as courierService from '../services/courierService.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
-router.use(authenticate, isAdmin);
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.FULFILLMENT_MANAGE));
 
 /**
  * Enterprise Fulfillment Blueprint §6/Phase 3 — the account-registry CRUD

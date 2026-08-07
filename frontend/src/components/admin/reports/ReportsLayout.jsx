@@ -10,6 +10,10 @@ import {
   BanknotesIcon,
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
+import useAuthStore from '../../../store/authStore';
+import { PERMISSIONS, hasPermission, hasAnyPermission } from '../../../utils/permissions';
+
+export const REPORTS_ANY_VIEW = Object.values(PERMISSIONS).filter((p) => p.startsWith('reports.') && p.endsWith('.view'));
 
 // The Reports IA — one focused workspace per business question, replacing
 // the old single flat AdminReports.jsx page (six report sections stacked
@@ -23,15 +27,17 @@ import {
 // into data, the same relationship Stripe's account Home or Shopify
 // Analytics has to their own landing view.
 export const REPORT_CATEGORIES = [
-  { to: '/admin/reports', end: true, icon: HomeIcon, label: 'Executive Dashboard', description: 'Revenue, health, and what needs attention today' },
-  { to: '/admin/reports/sales', icon: CurrencyDollarIcon, label: 'Sales', description: 'Revenue, orders, by category & sport' },
-  { to: '/admin/reports/products', icon: CubeIcon, label: 'Products', description: 'Best/worst sellers, stock levels' },
-  { to: '/admin/reports/customers', icon: UsersIcon, label: 'Customers', description: 'Top spenders, geography, growth' },
-  { to: '/admin/reports/operations', icon: TruckIcon, label: 'Operations', description: 'Fulfillment, shipping, checkout recovery, webhook health' },
-  { to: '/admin/reports/fit-check', icon: SparklesIcon, label: 'Fit Check Analytics', description: 'Usage, success, cost, conversion, campaigns' },
-  { to: '/admin/reports/organizations', icon: TrophyIcon, label: 'Organizations', description: 'Revenue by org, league, team; followers' },
-  { to: '/admin/reports/finance', icon: BanknotesIcon, label: 'Finance', description: 'Net revenue, refunds, payment reconciliation' },
-  { to: '/admin/reports/exports', icon: ArrowDownTrayIcon, label: 'Exports', description: 'Every report — Excel, CSV, PDF' },
+  { to: '/admin/reports', end: true, icon: HomeIcon, label: 'Executive Dashboard', description: 'Revenue, health, and what needs attention today', permission: PERMISSIONS.REPORTS_EXECUTIVE_VIEW },
+  { to: '/admin/reports/sales', icon: CurrencyDollarIcon, label: 'Sales', description: 'Revenue, orders, by category & sport', permission: PERMISSIONS.REPORTS_SALES_VIEW },
+  { to: '/admin/reports/products', icon: CubeIcon, label: 'Products', description: 'Best/worst sellers, stock levels', permission: PERMISSIONS.REPORTS_PRODUCTS_VIEW },
+  { to: '/admin/reports/customers', icon: UsersIcon, label: 'Customers', description: 'Top spenders, geography, growth', permission: PERMISSIONS.REPORTS_CUSTOMERS_VIEW },
+  { to: '/admin/reports/operations', icon: TruckIcon, label: 'Operations', description: 'Fulfillment, shipping, checkout recovery, webhook health', permission: PERMISSIONS.REPORTS_OPERATIONS_VIEW },
+  { to: '/admin/reports/fit-check', icon: SparklesIcon, label: 'Fit Check Analytics', description: 'Usage, success, cost, conversion, campaigns', permission: PERMISSIONS.REPORTS_FITCHECK_VIEW },
+  { to: '/admin/reports/organizations', icon: TrophyIcon, label: 'Organizations', description: 'Revenue by org, league, team; followers', permission: PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW },
+  { to: '/admin/reports/finance', icon: BanknotesIcon, label: 'Finance', description: 'Net revenue, refunds, payment reconciliation', permission: PERMISSIONS.REPORTS_FINANCE_VIEW },
+  // Visible if any single workspace is reachable — matches the backend's
+  // /reports/archive gate (requireAnyPermission across every reports.*.view).
+  { to: '/admin/reports/exports', icon: ArrowDownTrayIcon, label: 'Exports', description: 'Every report — Excel, CSV, PDF', anyOf: REPORTS_ANY_VIEW },
 ];
 
 function ReportNavLink({ category }) {

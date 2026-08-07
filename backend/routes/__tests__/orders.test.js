@@ -15,6 +15,8 @@ vi.mock('../../middleware/auth.js', () => ({
     }
     next();
   },
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 vi.mock('../../services/paymentService.js', () => ({

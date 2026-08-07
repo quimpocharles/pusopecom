@@ -36,6 +36,8 @@ vi.mock('../../middleware/auth.js', () => ({
   optionalAuth: (req, res, next) => next(),
   authenticate: (req, res, next) => { req.user = { _id: 'test-admin', role: 'admin' }; next(); },
   isAdmin: (req, res, next) => next(),
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 vi.mock('../../repositories/bonusFitCheckGrantRepository.js', () => ({

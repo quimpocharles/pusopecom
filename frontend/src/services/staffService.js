@@ -13,6 +13,14 @@ const staffService = {
     const response = await api.patch(`/admin/staff/${userId}`, data);
     return response.data;
   },
+
+  // The permission vocabulary + department defaults, served from
+  // backend/lib/permissions.js — never hardcoded here, so this page can't
+  // drift from what requirePermission() actually enforces.
+  getPermissionVocabulary: async () => {
+    const response = await api.get('/admin/staff/permissions');
+    return response.data;
+  },
 };
 
 export default staffService;

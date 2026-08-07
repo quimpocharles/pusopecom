@@ -10,7 +10,8 @@ import * as productRepository from '../repositories/productRepository.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
-import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
+import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js';
 import * as paymentService from '../services/paymentService.js';
 import {
@@ -540,6 +541,7 @@ router.post('/',
 router.get('/admin/stats',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.ORDERS_VIEW),
   async (req, res) => {
     try {
       const [revenueStats, topSellingProducts, ordersByStatus, lowStockProducts] = await Promise.all([
@@ -580,6 +582,7 @@ router.get('/admin/stats',
 router.get('/admin/export',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.ORDERS_VIEW),
   async (req, res) => {
     try {
       const { period = 'all' } = req.query;
@@ -917,7 +920,7 @@ router.post('/webhooks/maya', mayaWebhookIpAllowlist, async (req, res) => {
 });
 
 // Get an order's audit trail (Admin only) — backs the Admin Order Timeline.
-router.get('/:orderNumber/events', authenticate, isAdmin, async (req, res) => {
+router.get('/:orderNumber/events', authenticate, isAdmin, requirePermission(PERMISSIONS.ORDERS_VIEW), async (req, res) => {
   try {
     const order = await orderRepository.findByOrderNumber(req.params.orderNumber);
     if (!order) {
@@ -937,6 +940,7 @@ router.get('/:orderNumber/events', authenticate, isAdmin, async (req, res) => {
 router.patch('/:id/status',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.ORDERS_MANAGE),
   async (req, res) => {
     try {
       // Enterprise Fulfillment Blueprint, Phase 1 — courier/trackingNumber
@@ -1016,6 +1020,7 @@ router.patch('/:id/status',
 router.get('/admin/all',
   authenticate,
   isAdmin,
+  requirePermission(PERMISSIONS.ORDERS_VIEW),
   async (req, res) => {
     try {
       const {

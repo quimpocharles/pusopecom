@@ -5,7 +5,8 @@ import * as footerSettingsRepository from '../repositories/footerSettingsReposit
 import * as footerLinkRepository from '../repositories/footerLinkRepository.js';
 import * as socialLinkRepository from '../repositories/socialLinkRepository.js';
 import * as paymentIconRepository from '../repositories/paymentIconRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── Settings (company description / copyright) ─────────────────────────
-router.get('/settings', authenticate, isAdmin, async (req, res) => {
+router.get('/settings', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const settings = await footerSettingsRepository.get();
     res.json({ success: true, data: settings });
@@ -38,7 +39,7 @@ router.get('/settings', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/settings', authenticate, isAdmin, async (req, res) => {
+router.put('/settings', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const settings = await footerSettingsRepository.update(req.body);
     res.json({ success: true, message: 'Footer settings updated successfully', data: settings });
@@ -50,7 +51,7 @@ router.put('/settings', authenticate, isAdmin, async (req, res) => {
 });
 
 // ── Footer links (grouped by groupLabel, e.g. "Shop" / "Legal") ────────
-router.get('/links/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/links/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const links = await footerLinkRepository.find({ orderBy: [{ groupLabel: 'asc' }, { displayOrder: 'asc' }] });
     res.json({ success: true, data: links });
@@ -61,7 +62,7 @@ router.get('/links/admin/all', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/links', authenticate, isAdmin, async (req, res) => {
+router.post('/links', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await footerLinkRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Footer link created successfully', data: link });
@@ -72,7 +73,7 @@ router.post('/links', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/links/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/links/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await footerLinkRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Footer link updated successfully', data: link });
@@ -84,7 +85,7 @@ router.put('/links/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/links/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/links/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await footerLinkRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Footer link deleted successfully' });
@@ -97,7 +98,7 @@ router.delete('/links/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // ── Social links ─────────────────────────────────────────────────────
-router.get('/social/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/social/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const links = await socialLinkRepository.find({ orderBy: { displayOrder: 'asc' } });
     res.json({ success: true, data: links });
@@ -108,7 +109,7 @@ router.get('/social/admin/all', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/social', authenticate, isAdmin, async (req, res) => {
+router.post('/social', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await socialLinkRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Social link created successfully', data: link });
@@ -119,7 +120,7 @@ router.post('/social', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/social/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/social/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await socialLinkRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Social link updated successfully', data: link });
@@ -131,7 +132,7 @@ router.put('/social/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/social/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/social/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await socialLinkRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Social link deleted successfully' });
@@ -144,7 +145,7 @@ router.delete('/social/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // ── Payment icons ────────────────────────────────────────────────────
-router.get('/payment-icons/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/payment-icons/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const icons = await paymentIconRepository.find({ orderBy: { displayOrder: 'asc' } });
     res.json({ success: true, data: icons });
@@ -155,7 +156,7 @@ router.get('/payment-icons/admin/all', authenticate, isAdmin, async (req, res) =
   }
 });
 
-router.post('/payment-icons', authenticate, isAdmin, async (req, res) => {
+router.post('/payment-icons', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const icon = await paymentIconRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Payment icon created successfully', data: icon });
@@ -166,7 +167,7 @@ router.post('/payment-icons', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/payment-icons/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/payment-icons/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const icon = await paymentIconRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Payment icon updated successfully', data: icon });
@@ -178,7 +179,7 @@ router.put('/payment-icons/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/payment-icons/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/payment-icons/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await paymentIconRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Payment icon deleted successfully' });

@@ -1,10 +1,11 @@
 import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
-router.use(authenticate, isAdmin);
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_INTEGRATIONS_MANAGE));
 
 /**
  * Settings IA redesign — a read-only status page for what's genuinely

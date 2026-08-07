@@ -3,10 +3,19 @@ import request from 'supertest';
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 
-vi.mock('../../middleware/auth.js', () => ({
-  authenticate: (req, res, next) => { req.user = { _id: 'test-staff-admin', role: 'admin' }; next(); },
-  isAdmin: (req, res, next) => next(),
-}));
+// requirePermission is the real implementation (via importActual), not a
+// stub — the mocked actor below has no staffProfile, so the bootstrap rule
+// (no StaffProfile = executive) is what actually lets these requests
+// through settings.security.manage, the same way it would in production
+// for an admin nobody has assigned a department to yet.
+vi.mock('../../middleware/auth.js', async () => {
+  const actual = await vi.importActual('../../middleware/auth.js');
+  return {
+    ...actual,
+    authenticate: (req, res, next) => { req.user = { _id: 'test-staff-admin', role: 'admin' }; next(); },
+    isAdmin: (req, res, next) => next(),
+  };
+});
 
 const { default: staffRouter } = await import('../staff.js');
 
@@ -69,16 +78,34 @@ describe('PATCH /admin/staff/:userId', () => {
 
   it('upserts department + permissions, and records who made the change', async () => {
     const res = await request(app).patch(`/api/admin/staff/${targetAdmin.id}`).send({
-      department: 'support', title: 'Support Lead', permissions: ['can_refund', 'can_view_finance'],
+      department: 'support', title: 'Support Lead', permissions: ['returns.approve', 'reports.finance.view'],
     });
     expect(res.status).toBe(200);
     expect(res.body.data.department).toBe('support');
-    expect(res.body.data.permissions).toEqual(['can_refund', 'can_view_finance']);
+    expect(res.body.data.permissions).toEqual(['returns.approve', 'reports.finance.view']);
     expect(res.body.data.updatedByUserId).toBe('test-staff-admin');
 
     // GET reflects it now
     const list = await request(app).get('/api/admin/staff');
     const row = list.body.data.find((s) => s.userId === targetAdmin.id);
     expect(row.staffProfile.department).toBe('support');
+  });
+
+  it('rejects a permission string outside the defined vocabulary', async () => {
+    const res = await request(app).patch(`/api/admin/staff/${targetAdmin.id}`).send({
+      department: 'support', permissions: ['can_assign_totally_made_up'],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('can_assign_totally_made_up');
+  });
+});
+
+describe('GET /admin/staff/permissions', () => {
+  it('serves the same vocabulary lib/permissions.js enforces, plus department defaults', async () => {
+    const res = await request(app).get('/api/admin/staff/permissions');
+    expect(res.status).toBe(200);
+    expect(res.body.data.permissions).toContain('reports.finance.view');
+    expect(res.body.data.departmentDefaults.warehouse).toContain('products.view');
+    expect(res.body.data.departmentDefaults.executive).toEqual(['*']);
   });
 });

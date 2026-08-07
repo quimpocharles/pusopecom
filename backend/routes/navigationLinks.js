@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as navigationLinkRepository from '../repositories/navigationLinkRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
 });
 
 // All links including inactive (admin)
-router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const links = await navigationLinkRepository.find({ orderBy: { displayOrder: 'asc' } });
     res.json({ success: true, data: links });
@@ -30,7 +31,7 @@ router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await navigationLinkRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Navigation link created successfully', data: link });
@@ -41,7 +42,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const link = await navigationLinkRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Navigation link updated successfully', data: link });
@@ -55,7 +56,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await navigationLinkRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Navigation link deleted successfully' });

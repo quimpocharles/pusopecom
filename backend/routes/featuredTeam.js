@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as featuredTeamRepository from '../repositories/featuredTeamRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -19,7 +20,7 @@ router.get('/active', async (req, res) => {
 });
 
 // List all (admin)
-router.get('/', authenticate, isAdmin, async (req, res) => {
+router.get('/', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const teams = await featuredTeamRepository.find({ orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: teams });
@@ -30,7 +31,7 @@ router.get('/', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, isAdmin, async (req, res) => {
+router.get('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const team = await featuredTeamRepository.findById(req.params.id);
     if (!team) return res.status(404).json({ success: false, message: 'Featured team not found' });
@@ -42,7 +43,7 @@ router.get('/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const team = await featuredTeamRepository.create(req.body);
     res.status(201).json({ success: true, message: 'Featured team created successfully', data: team });
@@ -53,7 +54,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     const team = await featuredTeamRepository.updateById(req.params.id, req.body);
     res.json({ success: true, message: 'Featured team updated successfully', data: team });
@@ -67,7 +68,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.HOMEPAGE_MANAGE), async (req, res) => {
   try {
     await featuredTeamRepository.deleteById(req.params.id);
     res.json({ success: true, message: 'Featured team deleted successfully' });

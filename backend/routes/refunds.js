@@ -7,7 +7,8 @@ import * as paymentRepository from '../repositories/paymentRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as paymentService from '../services/paymentService.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 router.use(authenticate, isAdmin);
@@ -20,7 +21,7 @@ router.use(authenticate, isAdmin);
  * either path converges to actually move money.
  */
 
-router.get('/', async (req, res) => {
+router.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const where = status ? { status } : undefined;
@@ -37,7 +38,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
     const refund = await refundRepository.findById(req.params.id);
     if (!refund) return res.status(404).json({ success: false, message: 'Refund not found' });
@@ -52,7 +53,7 @@ router.get('/:id', async (req, res) => {
 // POST /:id/process — pending -> processing -> succeeded|failed, atomically
 // against Maya's real refund API. status=succeeded is the first real writer
 // Order.paymentStatus='refunded' has ever had (Blueprint §7/§2).
-router.post('/:id/process', async (req, res) => {
+router.post('/:id/process', requirePermission(PERMISSIONS.RETURNS_APPROVE), async (req, res) => {
   try {
     const refund = await refundRepository.findById(req.params.id);
     if (!refund) return res.status(404).json({ success: false, message: 'Refund not found' });

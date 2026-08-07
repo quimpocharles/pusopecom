@@ -1,5 +1,17 @@
 import jwt from 'jsonwebtoken';
 import * as userRepository from '../repositories/userRepository.js';
+import { hasPermission, hasAnyPermission } from '../lib/permissions.js';
+
+// staffProfile is included on every authenticated request, not just admin
+// ones — the alternative (a second query once role is known to be admin)
+// would mean the include depends on data from the same query that hasn't
+// resolved yet. StaffProfile is a tiny 1:1 table; the extra join is
+// negligible next to the User lookup every authenticated request already does.
+// Exported so routes/auth.js's login/Google handlers can fetch the same
+// shape — generateAuthResponse() needs staffProfile present immediately at
+// login, not just on the next /me refetch, or a non-executive admin would
+// briefly see full nav access until the page reloads.
+export const AUTH_INCLUDE = { addresses: true, staffProfile: true };
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -13,7 +25,7 @@ export const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await userRepository.findById(decoded.userId);
+    const user = await userRepository.findById(decoded.userId, { include: AUTH_INCLUDE });
 
     if (!user) {
       return res.status(401).json({
@@ -70,7 +82,7 @@ export const optionalAuth = async (req, res, next) => {
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await userRepository.findById(decoded.userId);
+      const user = await userRepository.findById(decoded.userId, { include: AUTH_INCLUDE });
       if (user) {
         req.user = userRepository.sanitize(user);
       }
@@ -79,4 +91,26 @@ export const optionalAuth = async (req, res, next) => {
   } catch (error) {
     next();
   }
+};
+
+/** Requires authenticate+isAdmin to have already run — checks a single permission string against req.user's StaffProfile. */
+export const requirePermission = (permission) => (req, res, next) => {
+  if (!hasPermission(req.user, permission)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. You do not have permission to perform this action.'
+    });
+  }
+  next();
+};
+
+/** Like requirePermission, but passes if the user holds any one of several permissions — for endpoints two departments legitimately share. */
+export const requireAnyPermission = (...permissions) => (req, res, next) => {
+  if (!hasAnyPermission(req.user, permissions)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. You do not have permission to perform this action.'
+    });
+  }
+  next();
 };

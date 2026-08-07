@@ -7,6 +7,8 @@ vi.mock('../../middleware/auth.js', () => ({
   authenticate: (req, res, next) => { req.user = { _id: 'test-admin', role: 'admin' }; next(); },
   isAdmin: (req, res, next) => next(),
   optionalAuth: (req, res, next) => next(),
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 const { default: footerRouter } = await import('../footer.js');

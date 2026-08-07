@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import { SETTINGS_CATEGORIES } from '../../../components/admin/settings/SettingsLayout';
+import useAuthStore from '../../../store/authStore';
+import { hasPermission } from '../../../utils/permissions';
 
 // The Settings landing page. Deliberately not a "General" category with
 // invented Site Name/Branding fields — no such settings exist anywhere in
@@ -9,7 +11,10 @@ import { SETTINGS_CATEGORIES } from '../../../components/admin/settings/Settings
 // page is a map, same pattern AdminHomepageBuilder.jsx already uses for
 // its own hub: cards in, cards out, nothing owned here twice.
 const SettingsOverview = () => {
-  const categories = SETTINGS_CATEGORIES.filter((c) => c.to !== '/admin/settings');
+  const user = useAuthStore((state) => state.user);
+  const categories = SETTINGS_CATEGORIES.filter(
+    (c) => c.to !== '/admin/settings' && (!c.permission || hasPermission(user, c.permission))
+  );
 
   return (
     <div>

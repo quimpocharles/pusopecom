@@ -11,7 +11,8 @@ import * as shipmentRepository from '../repositories/shipmentRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import { uploadToCloudinary } from './upload.js';
-import { authenticate, isAdmin, optionalAuth } from '../middleware/auth.js';
+import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -151,7 +152,7 @@ adminRouter.use(authenticate, isAdmin);
 
 const GENERIC_TRANSITIONS = new Set(['under_review', 'approved', 'rejected', 'return_shipped', 'received']);
 
-adminRouter.get('/', async (req, res) => {
+adminRouter.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const where = status ? { status } : undefined;
@@ -168,7 +169,7 @@ adminRouter.get('/', async (req, res) => {
   }
 });
 
-adminRouter.get('/:id', async (req, res) => {
+adminRouter.get('/:id', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
     const returnRequest = await returnRequestRepository.findById(req.params.id);
     if (!returnRequest) return res.status(404).json({ success: false, message: 'Return request not found' });
@@ -185,7 +186,7 @@ adminRouter.get('/:id', async (req, res) => {
 // only ever happen through POST /:id/inspect below, atomically together,
 // the same "no bare status write with real consequences" discipline
 // Phase 1's Shipment /cancel route already established.
-adminRouter.patch('/:id/status', async (req, res) => {
+adminRouter.patch('/:id/status', requirePermission(PERMISSIONS.RETURNS_APPROVE), async (req, res) => {
   try {
     const { status, resolutionNotes } = req.body;
     if (!status || !GENERIC_TRANSITIONS.has(status)) {
@@ -249,7 +250,7 @@ adminRouter.patch('/:id/status', async (req, res) => {
  * full returned value — mirrors Phase 1's Shipment /cancel route exactly.
  * Body: { items: [{ returnItemId, condition }] }
  */
-adminRouter.post('/:id/inspect', async (req, res) => {
+adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE), async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {

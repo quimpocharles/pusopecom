@@ -10,6 +10,8 @@ vi.mock('../../middleware/auth.js', () => ({
   },
   isAdmin: (req, res, next) => next(),
   optionalAuth: (req, res, next) => next(), // guest by default — no req.user
+  requirePermission: () => (req, res, next) => next(),
+  requireAnyPermission: () => (req, res, next) => next(),
 }));
 
 const { router: returnsRouter, adminRouter: adminReturnsRouter } = await import('../returns.js');

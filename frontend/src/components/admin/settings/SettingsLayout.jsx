@@ -10,18 +10,23 @@ import {
   BeakerIcon,
 } from '@heroicons/react/24/outline';
 import SettingsDirtyContext, { useSettingsDirty } from './SettingsDirtyContext';
+import useAuthStore from '../../../store/authStore';
+import { PERMISSIONS, hasPermission } from '../../../utils/permissions';
 
 // The full Settings IA — one entry per category, each fitting within its
 // own focused page rather than one long scroll. Descriptions render
-// beneath each label per the request.
+// beneath each label per the request. Overview has no `permission` — it's
+// a pure link directory (SettingsOverview.jsx), not privileged content of
+// its own, so it stays visible; it filters its own card list by the same
+// permissions below.
 export const SETTINGS_CATEGORIES = [
   { to: '/admin/settings', end: true, icon: Squares2X2Icon, label: 'Overview', description: 'A map of everything below' },
-  { to: '/admin/settings/fit-check', icon: SparklesIcon, label: 'Fit Check', description: 'Daily limits, rewards, sponsored experience, AI' },
-  { to: '/admin/settings/commerce', icon: ShoppingBagIcon, label: 'Commerce', description: 'Order expiration, venue pickup, and what\'s next' },
-  { to: '/admin/settings/notifications', icon: BellIcon, label: 'Notifications', description: 'Scheduled reports, email templates' },
-  { to: '/admin/settings/security', icon: ShieldCheckIcon, label: 'Security', description: 'Roles & permissions, session, API keys' },
-  { to: '/admin/settings/integrations', icon: BoltIcon, label: 'Integrations', description: 'Connection status for external services' },
-  { to: '/admin/settings/advanced', icon: BeakerIcon, label: 'Advanced', description: 'Feature flags, maintenance, experiments' },
+  { to: '/admin/settings/fit-check', icon: SparklesIcon, label: 'Fit Check', description: 'Daily limits, rewards, sponsored experience, AI', permission: PERMISSIONS.SETTINGS_FITCHECK_MANAGE },
+  { to: '/admin/settings/commerce', icon: ShoppingBagIcon, label: 'Commerce', description: 'Order expiration, venue pickup, and what\'s next', permission: PERMISSIONS.SETTINGS_COMMERCE_MANAGE },
+  { to: '/admin/settings/notifications', icon: BellIcon, label: 'Notifications', description: 'Scheduled reports, email templates', permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_MANAGE },
+  { to: '/admin/settings/security', icon: ShieldCheckIcon, label: 'Security', description: 'Roles & permissions, session, API keys', permission: PERMISSIONS.SETTINGS_SECURITY_MANAGE },
+  { to: '/admin/settings/integrations', icon: BoltIcon, label: 'Integrations', description: 'Connection status for external services', permission: PERMISSIONS.SETTINGS_INTEGRATIONS_MANAGE },
+  { to: '/admin/settings/advanced', icon: BeakerIcon, label: 'Advanced', description: 'Feature flags, maintenance, experiments', permission: PERMISSIONS.SETTINGS_ADVANCED_MANAGE },
 ];
 
 function GuardedNavLink({ category }) {
@@ -74,6 +79,8 @@ function BeforeUnloadGuard() {
 const SettingsLayout = () => {
   const [isDirty, setIsDirty] = useState(false);
   const location = useLocation();
+  const user = useAuthStore((state) => state.user);
+  const visibleCategories = SETTINGS_CATEGORIES.filter((c) => !c.permission || hasPermission(user, c.permission));
 
   // A page navigated to programmatically (e.g. via the guard above, or a
   // fresh mount) starts clean — never carry a prior page's dirty flag
@@ -87,7 +94,7 @@ const SettingsLayout = () => {
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <nav className="w-full lg:w-72 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-2">
-            {SETTINGS_CATEGORIES.map((category) => (
+            {visibleCategories.map((category) => (
               <GuardedNavLink key={category.to} category={category} />
             ))}
           </nav>

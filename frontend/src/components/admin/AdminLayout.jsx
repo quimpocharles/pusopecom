@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   HomeIcon,
@@ -17,28 +17,49 @@ import {
   ClipboardDocumentListIcon,
   ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
+import useAuthStore from '../../store/authStore';
+import { PERMISSIONS, hasPermission, hasAnyPermission } from '../../utils/permissions';
 
+const REPORTS_ANY = Object.values(PERMISSIONS).filter((p) => p.startsWith('reports.') && p.endsWith('.view'));
+const SETTINGS_ANY = Object.values(PERMISSIONS).filter((p) => p.startsWith('settings.') && p.endsWith('.manage'));
+
+// `permission`/`anyOf` decide visibility — no field at all means always
+// visible (Dashboard, and "Back to Shop" below). This only hides links a
+// backend requirePermission() call would 403 anyway; it's not itself the
+// enforcement.
 const navItems = [
   { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
-  { label: 'Products', to: '/admin/products', icon: CubeIcon },
-  { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon },
-  { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon },
-  { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon },
-  { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon },
-  { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon },
-  { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon },
-  { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon },
-  { label: 'Users', to: '/admin/users', icon: UsersIcon },
+  { label: 'Products', to: '/admin/products', icon: CubeIcon, permission: PERMISSIONS.PRODUCTS_VIEW },
+  { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon, permission: PERMISSIONS.LEAGUES_MANAGE },
+  { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon, permission: PERMISSIONS.HOMEPAGE_MANAGE },
+  { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon, permission: PERMISSIONS.CAMPAIGNS_MANAGE },
+  { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon, permission: PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE },
+  { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon, permission: PERMISSIONS.ORDERS_VIEW },
+  { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon, permission: PERMISSIONS.FULFILLMENT_MANAGE },
+  { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon, permission: PERMISSIONS.RETURNS_VIEW },
+  { label: 'Users', to: '/admin/users', icon: UsersIcon, permission: PERMISSIONS.USERS_VIEW },
   // Single entry for the whole Reports module — 9 workspaces (Executive
   // Dashboard, Sales, Products, Customers, Operations, Fit Check
   // Analytics, Organizations, Finance, Exports) live inside ReportsLayout's
-  // own sub-nav, same pattern as Settings' single sidebar entry.
-  { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon },
-  { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon },
+  // own sub-nav, same pattern as Settings' single sidebar entry. Visible if
+  // any single workspace is reachable — ReportsLayout's own sub-nav hides
+  // the rest.
+  { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon, anyOf: REPORTS_ANY },
+  { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon, anyOf: SETTINGS_ANY },
 ];
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const user = useAuthStore((state) => state.user);
+
+  const visibleNavItems = useMemo(
+    () => navItems.filter((item) => {
+      if (item.permission) return hasPermission(user, item.permission);
+      if (item.anyOf) return hasAnyPermission(user, item.anyOf);
+      return true;
+    }),
+    [user]
+  );
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -48,7 +69,7 @@ const AdminLayout = () => {
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

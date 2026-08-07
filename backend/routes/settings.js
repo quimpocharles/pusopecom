@@ -3,7 +3,8 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requireAnyPermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -19,8 +20,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/settings — admin only
-router.put('/', authenticate, isAdmin, async (req, res) => {
+// PUT /api/settings — covers { tryOnAd, fitCheck, payment } in one merged
+// object, so it's gated by "any of" rather than one specific permission —
+// both Marketing (Fit Check tab) and Operations (Commerce tab) legitimately
+// hit this same endpoint for their own slice of it.
+router.put('/', authenticate, isAdmin, requireAnyPermission(PERMISSIONS.SETTINGS_FITCHECK_MANAGE, PERMISSIONS.SETTINGS_COMMERCE_MANAGE), async (req, res) => {
   try {
     // siteSettingsRepository.update() accepts the same { tryOnAd, fitCheck,
     // payment } shape the request body already has, and does the

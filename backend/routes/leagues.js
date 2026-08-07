@@ -2,7 +2,8 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as leagueRepository from '../repositories/leagueRepository.js';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
+import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get all leagues including inactive (admin)
-router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
+router.get('/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.LEAGUES_MANAGE), async (req, res) => {
   try {
     const leagues = await leagueRepository.find({ orderBy: { name: 'asc' } });
 
@@ -51,7 +52,7 @@ router.get('/admin/all', authenticate, isAdmin, async (req, res) => {
 });
 
 // Create league (admin)
-router.post('/', authenticate, isAdmin, async (req, res) => {
+router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.LEAGUES_MANAGE), async (req, res) => {
   try {
     const { name, sports, teams } = req.body;
 
@@ -79,7 +80,7 @@ router.post('/', authenticate, isAdmin, async (req, res) => {
 });
 
 // Update league (admin)
-router.put('/:id', authenticate, isAdmin, async (req, res) => {
+router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.LEAGUES_MANAGE), async (req, res) => {
   try {
     const league = await leagueRepository.updateById(req.params.id, req.body);
 
@@ -114,7 +115,7 @@ router.put('/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // Soft-delete league (admin)
-router.delete('/:id', authenticate, isAdmin, async (req, res) => {
+router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.LEAGUES_MANAGE), async (req, res) => {
   try {
     await leagueRepository.updateById(req.params.id, { active: false });
 

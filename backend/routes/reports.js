@@ -28,12 +28,41 @@ import {
   dailyBusinessReportToExportShape,
 } from '../services/dailyBusinessReportService.js';
 import { body, validationResult } from 'express-validator';
-import { authenticate, isAdmin } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission, requireAnyPermission } from '../middleware/auth.js';
+import { PERMISSIONS, ALL_PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
 // All routes require admin auth
 router.use(authenticate, isAdmin);
+
+// Every per-workspace report-view permission — Exports/Archive isn't its
+// own workspace with its own permission (per the roles design), so seeing
+// it at all just requires being able to view at least one report.
+const ANY_REPORT_VIEW = ALL_PERMISSIONS.filter((p) => p.startsWith('reports.') && p.endsWith('.view'));
+
+// router.use(path, middleware) applies to every HTTP method under that
+// prefix — one line gates a whole workspace (base route + /export) instead
+// of touching each handler. dashboard-widgets/* stays ungated on purpose:
+// it backs the plain AdminDashboard landing page, not a Reports workspace,
+// visible to every admin regardless of department.
+router.use('/recipients', requirePermission(PERMISSIONS.SETTINGS_NOTIFICATIONS_MANAGE));
+router.use('/schedules', requirePermission(PERMISSIONS.SETTINGS_NOTIFICATIONS_MANAGE));
+router.use('/archive', requireAnyPermission(...ANY_REPORT_VIEW));
+router.use('/executive', requirePermission(PERMISSIONS.REPORTS_EXECUTIVE_VIEW));
+router.use('/sales', requirePermission(PERMISSIONS.REPORTS_SALES_VIEW));
+router.use('/products', requirePermission(PERMISSIONS.REPORTS_PRODUCTS_VIEW));
+router.use('/customers', requirePermission(PERMISSIONS.REPORTS_CUSTOMERS_VIEW));
+router.use('/tryon', requirePermission(PERMISSIONS.REPORTS_FITCHECK_VIEW));
+router.use('/fit-check', requirePermission(PERMISSIONS.REPORTS_FITCHECK_VIEW));
+router.use('/organizations', requirePermission(PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW));
+router.use('/finance', requirePermission(PERMISSIONS.REPORTS_FINANCE_VIEW));
+// Operations workspace spans four separate top-level paths — orders, shipping,
+// checkout recovery, and webhook health — all under one permission.
+router.use('/orders', requirePermission(PERMISSIONS.REPORTS_OPERATIONS_VIEW));
+router.use('/shipping', requirePermission(PERMISSIONS.REPORTS_OPERATIONS_VIEW));
+router.use('/checkout-recovery', requirePermission(PERMISSIONS.REPORTS_OPERATIONS_VIEW));
+router.use('/webhook-health', requirePermission(PERMISSIONS.REPORTS_OPERATIONS_VIEW));
 
 // Who the Daily Business Report (and future scheduled reports) get emailed
 // to — configured here rather than a single ADMIN_EMAIL env var.
