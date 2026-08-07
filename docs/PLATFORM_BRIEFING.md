@@ -307,7 +307,7 @@ Nothing in a later stage is built against the old data model to save time — it
 - **Database** — PostgreSQL on Railway via Prisma — real transactions for every atomic commerce operation.
 - **Cache & Queue** — Redis — rate limiting, session cache, async AI/notification jobs. Never used for inventory.
 - **Media** — Cloudinary — real image transformation, not full-res assets shipped everywhere.
-- **External services** — Maya (payments), WaveSpeed/Replicate (AI generation) — both behind gateway-agnostic interfaces.
+- **External services** — Maya (payments), WaveSpeed/Replicate (AI generation), multiple courier providers (fulfillment) — all behind gateway-agnostic interfaces, so no single vendor is a hard dependency.
 
 One deployed service, not microservices — that's a scale problem this platform doesn't have yet.
 
@@ -421,14 +421,12 @@ Headlines, images, CTAs, nav labels, FAQ, footer copy — all live in the databa
 
 ### Measurement
 
-**The business gets a report before anyone has to ask.**
+**The business gets a report before anyone has to ask — and can dig in whenever they want.**
 
-- **Daily** — 5:00 AM Philippine time, every day
-- **Weekly** — Every Monday
-- **Monthly** — 1st of the month
-- **Quarterly** — Jan / Apr / Jul / Oct
+- **Daily** — six focused reports at 5:00 AM Philippine time, not one composite email — Executive, Sales, Inventory, Fulfillment, Fit Check Analytics, and Organization Performance, each independently archived so one failing send never blocks the rest
+- **Weekly / Monthly / Quarterly** — a composite business digest, every Monday / 1st of the month / Jan-Apr-Jul-Oct
 
-Sales, products, organizations, customers, payments, shipping, Fit Check conversion, and fulfillment queue health — one email, no one has to build a dashboard query to find out how the business is doing.
+Beyond the inbox, Admin → Reports is a full BI workspace, not one long scrolling page — Executive Dashboard, Sales, Products, Customers, Operations, Fit Check Analytics, Organizations, and Finance each get their own focused view, and every one of them exports to PDF, Excel, or CSV on demand.
 
 ---
 
@@ -440,6 +438,7 @@ Sales, products, organizations, customers, payments, shipping, Fit Check convers
 2. **Payment is its own entity** — One-to-many with Order — a full attempt history, not one overwritten field.
 3. **Fulfillment is its own entity, the same way** — Shipment carries granular staff-facing status; Order stays the simple customer-facing read.
 4. **No webhook is ever trusted at face value** — Every delivery is independently re-verified against the provider's own API before anything is acted on.
+5. **AI generation fails over automatically** — Replicate is the primary Fit Check provider; WaveSpeed steps in without a fan ever noticing if Replicate is unavailable or a generation errors out. No single AI vendor's downtime takes Fit Check offline.
 
 ---
 
@@ -454,6 +453,7 @@ Sales, products, organizations, customers, payments, shipping, Fit Check convers
 | Update homepage content | Admin Dashboard → Homepage | No deploy needed — content lives in the DB |
 | Track a stuck shipment | Admin → Fulfillment | SLA sweep auto-flags anything stuck past threshold |
 | Grant a bonus Fit Check | Admin → Fit Check | Manual grant, or automatic on profile/verification/purchase |
+| Assign staff access | Admin → Settings → Security | Department sets a default permission set; individual permissions can be added on top |
 
 ---
 
