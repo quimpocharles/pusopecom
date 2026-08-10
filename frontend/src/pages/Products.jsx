@@ -216,6 +216,11 @@ const Products = () => {
     const newParams = new URLSearchParams(searchParams);
     if (searchTerm.trim()) {
       activityService.trackSearch(searchTerm.trim());
+      // A submitted search is a fresh catalog-wide query, not a refinement of
+      // whatever league/team/sport the user arrived from — otherwise e.g.
+      // searching "ateneo" while on the NCAA nav link stays ANDed with
+      // league=NCAA and returns nothing, even though Ateneo is UAAP.
+      ['gender', 'sport', 'league', 'team', 'category', 'sale'].forEach((key) => newParams.delete(key));
       newParams.set('search', searchTerm.trim());
     } else {
       newParams.delete('search');
