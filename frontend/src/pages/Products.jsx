@@ -353,7 +353,7 @@ const Products = () => {
                 onClick={() => { setShowSort(!showSort); setShowFilters(false); closeSearchBox(); }}
                 className="inline-flex items-center justify-between gap-8 px-5 py-2.5 border-2 border-ink-900 bg-white text-ink-900 text-editorial-label font-bold uppercase tracking-wide transition-colors duration-150"
               >
-                Sort By
+                Sort
                 <ChevronDownIcon className={`w-4 h-4 transition-transform duration-150 ${showSort ? 'rotate-180' : ''}`} />
               </button>
               {showSort && (
