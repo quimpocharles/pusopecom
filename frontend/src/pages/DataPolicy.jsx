@@ -11,7 +11,7 @@ const PrivacyPolicy = () => {
           <p className="text-sm text-gray-500 mb-8">Last updated: February 2026</p>
 
           <p>
-            Puso Pilipinas ("we", "our", or "us") operates the Puso Pilipinas online store. This Privacy Policy
+            SKYROOTS SPORTS MANAGEMENT SERVICES ("we", "our", or "us") operates the Puso Pilipinas online store. This Privacy Policy
             explains how we collect, use, disclose, and safeguard your personal information when you visit our
             website and make purchases. This policy is in accordance with the
             {' '}<strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong> of the Philippines.
@@ -56,7 +56,7 @@ const PrivacyPolicy = () => {
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">4. Data Storage and Security</h2>
           <ul className="list-disc pl-6 space-y-1 text-gray-700">
-            <li>Your data is stored in a secure MongoDB database</li>
+            <li>Your data is stored in a secure PostgreSQL database</li>
             <li>Passwords are hashed using bcrypt and are never stored in plain text</li>
             <li>API communication is protected with HTTPS</li>
             <li>Authentication uses JSON Web Tokens (JWT) with expiration</li>
@@ -96,6 +96,10 @@ const PrivacyPolicy = () => {
             <a href="mailto:support@pusopilipinas.com" className="text-primary-600 hover:text-primary-700">
               support@pusopilipinas.com
             </a>
+          </p>
+          <p className="mt-2">
+            SKYROOTS SPORTS MANAGEMENT SERVICES<br />
+            V. Mapa Street, Brgy. 596, Santa Mesa, Manila, Philippines
           </p>
         </div>
       </div>

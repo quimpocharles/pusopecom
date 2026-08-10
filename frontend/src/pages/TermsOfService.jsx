@@ -18,7 +18,8 @@ const TermsOfService = () => {
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">1. General</h2>
           <p>
-            Puso Pilipinas is an online store specializing in Philippine sports merchandise.
+            Puso Pilipinas is an online store specializing in Philippine sports merchandise, operated by{' '}
+            <strong>SKYROOTS SPORTS MANAGEMENT SERVICES</strong> ("we", "our", or "us").
             These terms govern your use of our website and the purchase of products from our store.
             We reserve the right to update these terms at any time, with changes effective upon posting.
           </p>
@@ -84,14 +85,14 @@ const TermsOfService = () => {
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">9. Intellectual Property</h2>
           <p>
             All content on this website — including product images, text, logos, and design — is the property
-            of Puso Pilipinas or its licensors. You may not reproduce, distribute, or use any content from
+            of SKYROOTS SPORTS MANAGEMENT SERVICES or its licensors. You may not reproduce, distribute, or use any content from
             this website without prior written consent. Team names, logos, and league trademarks belong to
             their respective owners.
           </p>
 
           <h2 className="text-xl font-bold text-gray-900 mt-8 mb-3">10. Limitation of Liability</h2>
           <p>
-            To the maximum extent permitted by Philippine law, Puso Pilipinas shall not be liable for any
+            To the maximum extent permitted by Philippine law, SKYROOTS SPORTS MANAGEMENT SERVICES shall not be liable for any
             indirect, incidental, special, or consequential damages arising from your use of our website
             or purchase of products. Our total liability shall not exceed the amount paid for the specific
             product or order giving rise to the claim.
@@ -117,6 +118,10 @@ const TermsOfService = () => {
             <a href="mailto:support@pusopilipinas.com" className="text-primary-600 hover:text-primary-700">
               support@pusopilipinas.com
             </a>
+          </p>
+          <p className="mt-2">
+            SKYROOTS SPORTS MANAGEMENT SERVICES<br />
+            V. Mapa Street, Brgy. 596, Santa Mesa, Manila, Philippines
           </p>
         </div>
       </div>
