@@ -235,7 +235,14 @@ const Products = () => {
     if (value.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await productService.getSearchSuggestions(value.trim());
+        const res = await productService.getSearchSuggestions(value.trim(), {
+          ...(sport && { sport }),
+          ...(league && { league }),
+          ...(team && { team }),
+          ...(category && { category }),
+          ...(gender && { gender }),
+          ...(sale && { sale }),
+        });
         setSuggestions(res.data);
         setShowSuggestions(res.data.length > 0);
       } catch {
