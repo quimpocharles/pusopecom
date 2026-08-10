@@ -16,8 +16,8 @@ export const productService = {
     return response.data;
   },
 
-  getSearchSuggestions: async (q, filters = {}) => {
-    const response = await api.get('/products/search/suggestions', { params: { q, ...filters } });
+  getSearchSuggestions: async (q) => {
+    const response = await api.get('/products/search/suggestions', { params: { q } });
     return response.data;
   },
 

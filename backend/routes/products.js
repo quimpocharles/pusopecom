@@ -322,20 +322,15 @@ router.get('/recommendations/cart', async (req, res) => {
 // Search suggestions (autocomplete)
 router.get('/search/suggestions', async (req, res) => {
   try {
-    const { q, sport, team, league, category, gender, sale } = req.query;
+    const { q } = req.query;
     if (!q || q.trim().length < 2) {
       return res.json({ success: true, data: [] });
     }
 
-    // Same filters as the listing endpoint, so a suggestion never points at
-    // a product the current filtered results page would then hide.
-    const where = productRepository.buildListingWhere({ active: true, sport, team, league, category, gender, sale });
     // Prisma's `contains` is a plain string match, not a regex — unlike the
     // old Mongo $regex path, there's no need to escape user input here.
-    where.name = { contains: q, mode: 'insensitive' };
-
     const products = await productRepository.find({
-      where,
+      where: { active: true, name: { contains: q, mode: 'insensitive' } },
       take: 6,
     });
 
