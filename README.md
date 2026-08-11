@@ -525,6 +525,11 @@ The application sends HTML-formatted, mobile-responsive emails for:
 
 Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and frontend test suites on every push to `main`, and Railway's **Wait for CI** setting holds the deploy until that check passes — a failing/pending run blocks the deploy, it doesn't just get logged.
 
+### Domains
+
+- `pusostore.com` — the public storefront.
+- `mail.pusostore.com` — employee login, pointed at the Admin Dashboard (`/admin`). Linked from the admin sidebar (see `AdminLayout.jsx`). If this ever needs to call the API from its own origin rather than just reaching the same frontend deployment, it has to be added alongside `FRONTEND_URL` wherever CORS is enforced (see Security) — CORS here only allows a single origin today.
+
 ### Backend Deployment (Railway)
 
 1. Set all environment variables in the hosting platform, including `DATABASE_URL` (Postgres) — as a **secret**, not a plain-text **variable** (Railway UI has both; a secret is encrypted, a variable is shown in cleartext)
