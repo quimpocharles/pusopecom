@@ -949,8 +949,13 @@ model Pass {
   // showing what was actually paid, not today's tier price.
   price Float
 
-  status  PassStatus @default(issued)
-  qrToken String     @unique @default(uuid())
+  status    PassStatus @default(issued)
+  qrToken   String     @unique @default(uuid())
+  // Lazily generated — not set at issuance, since Cloudinary upload is
+  // I/O-bound and has no business holding the order-creation transaction
+  // open. Populated the first time it's actually needed (the confirmation
+  // email), null for any Pass never emailed.
+  qrCodeUrl String?
 
   checkedInAt DateTime?
 

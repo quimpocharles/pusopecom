@@ -260,6 +260,7 @@ describe('dailyBusinessReportToExportShape', () => {
     const data = {
       sales: { grossRevenue: 1000, netRevenue: 900, orders: 2, avgOrderValue: 500, shippingRevenue: 100, refundedAmount: 100 },
       products: { topSelling: [{ name: 'Jersey', quantity: 3, revenue: 1000 }] },
+      passes: { ticketsSold: 2, revenue: 600, checkedIn: 1, topSelling: [{ name: 'UAAP Finals', quantity: 2, revenue: 600 }] },
       organizations: { byOrganization: [{ name: 'FEU', revenue: 500 }], byLeague: [{ name: 'UAAP', revenue: 500 }] },
       customers: { newCustomers: 1, returningCustomers: 1 },
       payments: { successful: 2, failed: 0, pending: 0, refunded: 1, byMethod: [{ method: 'maya', count: 2 }] },
@@ -274,11 +275,15 @@ describe('dailyBusinessReportToExportShape', () => {
     const shape = dailyBusinessReportToExportShape(data);
 
     expect(shape.summary).toContainEqual(['Gross Revenue', 1000]);
+    expect(shape.summary).toContainEqual(['Passes Sold', 2]);
+    expect(shape.summary).toContainEqual(['Pass Revenue', 600]);
     const sheetNames = shape.sheets.map((s) => s.name);
     expect(sheetNames).toEqual([
-      'Top Selling Products', 'Sales by Organization', 'Sales by League',
+      'Top Selling Products', 'Top Selling Events', 'Sales by Organization', 'Sales by League',
       'Payments', 'Payment Methods', 'Shipping', 'Most Tried-On', 'Fulfillment',
     ]);
+    const eventsSheet = shape.sheets.find((s) => s.name === 'Top Selling Events');
+    expect(eventsSheet.rows).toContainEqual({ name: 'UAAP Finals', quantity: 2, revenue: 600 });
     const paymentsSheet = shape.sheets.find((s) => s.name === 'Payments');
     expect(paymentsSheet.rows).toContainEqual({ status: 'Refunded', count: 1 });
   });

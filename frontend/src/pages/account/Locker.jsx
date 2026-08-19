@@ -297,10 +297,6 @@ const PASS_STATUS_LABELS = {
   refunded: 'Refunded',
 };
 
-// The QR code image itself is a Stage 4 (check-in tool) concern — this
-// shows the same qrToken as a plain, copyable code for now, same
-// information, no new dependency added before the scanning side that
-// would actually need one exists.
 const LockerPasses = () => {
   const [passes, setPasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -352,23 +348,19 @@ const LockerPasses = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-            <div>
-              <p className="text-gray-600">Tier</p>
-              <p className="font-semibold">{pass.passTier?.name}</p>
-            </div>
-            {pass.passEventSeat?.seat && (
-              <div>
-                <p className="text-gray-600">Seat</p>
-                <p className="font-semibold">{pass.passEventSeat.seat.label}</p>
-              </div>
-            )}
+          <div className="mb-4 text-sm">
+            <p className="text-gray-600">Tier</p>
+            <p className="font-semibold">{pass.passTier?.name}</p>
           </div>
 
           {pass.status === 'issued' && (
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-1">Show this code at the gate</p>
-              <p className="font-mono text-sm bg-paper border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
+              <p className="text-xs text-gray-500 mb-2">Show this code at the gate</p>
+              {pass.qrCodeUrl ? (
+                <img src={pass.qrCodeUrl} alt="Pass QR code" className="w-32 h-32 border border-ink-200" />
+              ) : (
+                <p className="font-mono text-sm bg-paper border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
+              )}
             </div>
           )}
         </Panel>

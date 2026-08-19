@@ -130,6 +130,35 @@ async function buildProductsSection(paidOrders) {
 }
 
 /**
+ * Order.passes rides invisibly inside Order.total/grossRevenue above (it's
+ * already part of the same field) — this section is what actually makes it
+ * visible, mirroring buildProductsSection's shape for Merchandise. "Already
+ * checked in" is a plain snapshot fact, not a rate the window's timeframe
+ * can really support — a Pass sold in this window may not have its event
+ * happen (or get scanned) until well after the window closes.
+ */
+function buildPassesSection(paidOrders) {
+  const allPasses = paidOrders.flatMap((o) => o.passes || []);
+
+  const eventMap = groupBy(allPasses, (pass) => pass.passEventId);
+  const topSelling = [...eventMap.values()]
+    .map((passes) => ({
+      name: passes[0].passEvent?.name ?? 'Unknown Event',
+      quantity: passes.length,
+      revenue: passes.reduce((s, pass) => s + pass.price, 0),
+    }))
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 5);
+
+  return {
+    ticketsSold: allPasses.length,
+    revenue: allPasses.reduce((s, pass) => s + pass.price, 0),
+    checkedIn: allPasses.filter((pass) => pass.status === 'checked_in').length,
+    topSelling,
+  };
+}
+
+/**
  * Sales by League/Team use the legacy flat strings (Product.league/team),
  * the same fields every other existing report (routes/reports.js) already
  * groups by — every product has these populated, only the pilot
@@ -272,13 +301,14 @@ export const generateBusinessReportForRange = async (start, end) => {
 
   const allOrders = await orderRepository.find({
     where: dateFilter,
-    include: { items: { include: { product: true } } },
+    include: { items: { include: { product: true } }, passes: { include: { passEvent: true } } },
   });
   const paidOrders = allOrders.filter((o) => o.paymentStatus === 'paid');
 
-  const [sales, products, organizations, customers, tryOn, fulfillment] = await Promise.all([
+  const [sales, products, passes, organizations, customers, tryOn, fulfillment] = await Promise.all([
     buildSalesSection(allOrders, paidOrders),
     buildProductsSection(paidOrders),
+    buildPassesSection(paidOrders),
     buildOrganizationsSection(paidOrders),
     buildCustomersSection(paidOrders),
     buildTryOnSection(start, end),
@@ -291,6 +321,7 @@ export const generateBusinessReportForRange = async (start, end) => {
     periodEnd: end,
     sales,
     products,
+    passes,
     organizations,
     customers,
     payments: buildPaymentsSection(allOrders),
@@ -341,6 +372,10 @@ export function dailyBusinessReportToExportShape(data) {
   // written by today's version of this function.
   const conversion = data.tryOn.conversion || { conversionRate: 0, revenue: 0 };
   const fulfillment = data.fulfillment || { pendingFulfillment: 0, exceptions: 0, returnsAwaitingApproval: 0, refundQueue: 0 };
+  // A ReportRun archived before Pass ticketing's revenue section shipped
+  // has no `passes` key in its frozen snapshot — same degrade-gracefully
+  // rule as tryOn.conversion/fulfillment above.
+  const passes = data.passes || { ticketsSold: 0, revenue: 0, checkedIn: 0, topSelling: [] };
 
   return {
     summary: [
@@ -350,6 +385,8 @@ export function dailyBusinessReportToExportShape(data) {
       ['Avg Order Value', data.sales.avgOrderValue],
       ['Shipping Revenue', data.sales.shippingRevenue],
       ['Refunded', data.sales.refundedAmount],
+      ['Passes Sold', passes.ticketsSold],
+      ['Pass Revenue', passes.revenue],
       ['New Customers', data.customers.newCustomers],
       ['Returning Customers', data.customers.returningCustomers],
       ['Try-On Sessions', data.tryOn.sessions],
@@ -364,6 +401,12 @@ export function dailyBusinessReportToExportShape(data) {
         name: 'Top Selling Products',
         columns: [{ header: 'Product', key: 'name' }, { header: 'Qty', key: 'quantity' }, { header: 'Revenue', key: 'revenue' }],
         rows: data.products.topSelling,
+        totals: { quantity: true, revenue: true },
+      },
+      {
+        name: 'Top Selling Events',
+        columns: [{ header: 'Event', key: 'name' }, { header: 'Passes Sold', key: 'quantity' }, { header: 'Revenue', key: 'revenue' }],
+        rows: passes.topSelling,
         totals: { quantity: true, revenue: true },
       },
       {

@@ -10,6 +10,7 @@ import * as productRepository from '../repositories/productRepository.js';
 import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
 import * as passEventRepository from '../repositories/passEventRepository.js';
 import * as passRepository from '../repositories/passRepository.js';
+import { ensurePassQrCode } from '../lib/passQrCode.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
@@ -198,7 +199,21 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
         });
 
       try {
-        await sendOrderConfirmationEmail(order.email, order);
+        // Passes need their event/tier/venue names and a real QR image for
+        // the email — order.passes (DEFAULT_INCLUDE) only carries scalars,
+        // so re-fetch enriched rows here rather than widening that shared
+        // include for every other caller. QR generation is lazy and
+        // idempotent (ensurePassQrCode no-ops if qrCodeUrl is already set)
+        // and deliberately happens here, not inside the order-creation
+        // transaction — Cloudinary upload is I/O-bound and has no business
+        // holding a DB transaction open.
+        let passesForEmail = [];
+        if (order.passes?.length) {
+          passesForEmail = await passRepository.findByOrderId(order._id);
+          const qrCodeUrls = await Promise.all(passesForEmail.map((pass) => ensurePassQrCode(pass)));
+          passesForEmail = passesForEmail.map((pass, i) => ({ ...pass, qrCodeUrl: qrCodeUrls[i] }));
+        }
+        await sendOrderConfirmationEmail(order.email, { ...order, passes: passesForEmail });
         logger.info(logContext, 'Confirmation email sent');
       } catch (emailError) {
         logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');

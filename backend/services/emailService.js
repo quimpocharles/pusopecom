@@ -215,6 +215,44 @@ const orderShippingLabel = (order) => order.shippingMethod === 'venue_pickup'
       ? '<span style="color:#34d399;">FREE</span>'
       : `&#8369;${order.shippingFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
 
+// One card per Pass — event/tier/venue/date plus the QR (pass.qrCodeUrl,
+// generated lazily right before this email sends — see
+// backend/lib/passQrCode.js). qrCodeUrl can be absent (generation failed,
+// or this order predates it existing) — the card still shows the plain
+// qrToken text as a fallback, same discipline My PUSO Locker's own
+// LockerPasses component already follows.
+const passCards = (order) => (order.passes || []).map((pass) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="margin-bottom:12px;border:1px solid ${BORDER};border-radius:8px;overflow:hidden;">
+    <tr>
+      <td style="padding:16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align:top;">
+              <p style="margin:0 0 2px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.35);">
+                ${pass.passTier?.name || 'Pass'}
+              </p>
+              <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:${WHITE};">${pass.passEvent?.name || 'Event'}</p>
+              ${pass.passEvent?.startsAt ? `
+              <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.55);">
+                ${new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+              </p>` : ''}
+              ${pass.passEvent?.venue?.name ? `
+              <p style="margin:2px 0 0;font-size:13px;color:rgba(255,255,255,0.55);">${pass.passEvent.venue.name}</p>` : ''}
+              <p style="margin:10px 0 0;font-size:11px;font-family:monospace;letter-spacing:0.04em;color:rgba(255,255,255,0.30);">${pass.qrToken}</p>
+            </td>
+            <td style="width:104px;vertical-align:top;text-align:right;">
+              ${pass.qrCodeUrl
+                ? `<img src="${pass.qrCodeUrl}" alt="Pass QR code" width="96" height="96" style="display:inline-block;border-radius:6px;" />`
+                : ''}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+`).join('');
+
 // ── Order confirmation email ───────────────────────────────────────────────────
 export const sendOrderConfirmationEmail = async (email, order) => {
   const orderUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
@@ -222,6 +260,11 @@ export const sendOrderConfirmationEmail = async (email, order) => {
   const addressBlock = orderAddressBlock(order);
   const shippingLabel = orderShippingLabel(order);
   const isPickup = order.shippingMethod === 'venue_pickup';
+  const passesSection = order.passes?.length ? `
+    ${divider()}
+    ${label(`Your Pass${order.passes.length === 1 ? '' : 'es'}`)}
+    ${passCards(order)}
+  ` : '';
 
   const content = `
     ${h2('Order Confirmed!')}
@@ -269,6 +312,8 @@ export const sendOrderConfirmationEmail = async (email, order) => {
         </td>
       </tr>
     </table>
+
+    ${passesSection}
 
     ${divider()}
 
@@ -531,6 +576,14 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
       ['Low Stock', report.products.lowStock],
       ['Out of Stock', report.products.outOfStock],
     ], 'Metric', 'Count')}
+
+    ${sectionLabel('Passes')}
+    ${breakdownTable([
+      ['Passes Sold', report.passes.ticketsSold],
+      ['Pass Revenue', money(report.passes.revenue)],
+      ['Already Checked In', report.passes.checkedIn],
+    ], 'Metric', 'Value')}
+    ${breakdownTable(report.passes.topSelling.map((x) => [`${x.name} &times;${x.quantity}`, money(x.revenue)]), 'Event', 'Revenue')}
 
     ${sectionLabel('Sales by Organization')}
     ${breakdownTable(report.organizations.byOrganization.map((x) => [x.name, money(x.revenue)]), 'Organization', 'Revenue')}

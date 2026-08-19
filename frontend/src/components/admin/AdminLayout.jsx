@@ -19,7 +19,8 @@ import {
   EnvelopeIcon,
   TicketIcon,
   MapIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  QrCodeIcon
 } from '@heroicons/react/24/outline';
 import useAuthStore from '../../store/authStore';
 import { PERMISSIONS, hasPermission, hasAnyPermission } from '../../utils/permissions';
@@ -40,6 +41,7 @@ const navItems = [
   { label: 'Promo Codes', to: '/admin/promo-codes', icon: TicketIcon, permission: PERMISSIONS.PROMOTIONS_MANAGE },
   { label: 'Venues', to: '/admin/venues', icon: MapIcon, permission: PERMISSIONS.PASSES_MANAGE },
   { label: 'Pass Events', to: '/admin/pass-events', icon: CalendarDaysIcon, permission: PERMISSIONS.PASSES_MANAGE },
+  { label: 'Pass Check-In', to: '/admin/pass-checkin', icon: QrCodeIcon, permission: PERMISSIONS.PASSES_CHECKIN },
   { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon, permission: PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE },
   { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon, permission: PERMISSIONS.ORDERS_VIEW },
   { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon, permission: PERMISSIONS.FULFILLMENT_MANAGE },

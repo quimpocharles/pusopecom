@@ -40,6 +40,7 @@ const AdminVenues = lazy(() => import('./pages/admin/AdminVenues'));
 const AdminVenueDetail = lazy(() => import('./pages/admin/AdminVenueDetail'));
 const AdminPassEvents = lazy(() => import('./pages/admin/AdminPassEvents'));
 const AdminPassEventDetail = lazy(() => import('./pages/admin/AdminPassEventDetail'));
+const AdminPassCheckin = lazy(() => import('./pages/admin/AdminPassCheckin'));
 const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
@@ -141,6 +142,7 @@ function App() {
             <Route path="venues/:id" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminVenueDetail /></PermissionRoute>} />
             <Route path="pass-events" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminPassEvents /></PermissionRoute>} />
             <Route path="pass-events/:id" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminPassEventDetail /></PermissionRoute>} />
+            <Route path="pass-checkin" element={<PermissionRoute permission={PERMISSIONS.PASSES_CHECKIN}><AdminPassCheckin /></PermissionRoute>} />
             <Route path="fit-check-campaigns" element={<PermissionRoute permission={PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE}><AdminFitCheckCampaigns /></PermissionRoute>} />
             <Route path="orders" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrders /></PermissionRoute>} />
             <Route path="orders/:orderNumber" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrderDetail /></PermissionRoute>} />

@@ -73,6 +73,11 @@ export async function findByUserId(userId, { include = DEFAULT_INCLUDE, client =
   return serialize(passes);
 }
 
+export async function updateById(id, data, { client = prisma } = {}) {
+  const pass = await client.pass.update({ where: { id }, data });
+  return serialize(pass);
+}
+
 /**
  * Creates the Pass row and its opening PassLog entry — must run inside the
  * order-creation transaction, alongside decrementTierCapacity. Issued
@@ -157,6 +162,7 @@ export default {
   findByQrToken,
   findByOrderId,
   findByUserId,
+  updateById,
   issuePass,
   transition,
   PASS_TRANSITIONS,
