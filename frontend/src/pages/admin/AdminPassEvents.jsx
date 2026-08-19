@@ -8,7 +8,7 @@ import leagueService from '../../services/leagueService';
 import ImageField from '../../components/admin/ImageField';
 
 const emptyForm = {
-  name: '', slug: '', description: '', organizationId: '', leagueId: '', teamId: '', venueId: '',
+  name: '', slug: '', description: '', organizationId: '', leagueId: '', teamNames: [], venueId: '',
   startsAt: '', endsAt: '', salesStartAt: '', salesEndAt: '', active: true, image: '',
 };
 
@@ -59,19 +59,25 @@ const AdminPassEvents = () => {
     leagueService.getLeagues().then((res) => setLeagues(res.data)).catch((err) => console.error('Failed to load leagues:', err));
   }, [fetchEvents]);
 
-  // A picked League only has real Teams to offer if it's already been
-  // bridged to an Organization (League.organizationId) — a freshly-picked,
-  // not-yet-bridged League has none yet, same as any brand new Organization.
   const selectedLeague = leagues.find((l) => l._id === form.leagueId);
-  const effectiveOrganizationId = form.organizationId || selectedLeague?.organizationId || '';
 
+  // Institution/Athlete-sourced events pick from real Team rows. League-
+  // sourced ones use league.teams directly (see handleOrgPickerChange's own
+  // comment) — this fetch only ever matters for the former.
   useEffect(() => {
-    if (!effectiveOrganizationId) {
+    if (!form.organizationId) {
       setTeams([]);
       return;
     }
-    organizationService.getTeams(effectiveOrganizationId).then((res) => setTeams(res.data)).catch(() => setTeams([]));
-  }, [effectiveOrganizationId]);
+    organizationService.getTeams(form.organizationId).then((res) => setTeams(res.data)).catch(() => setTeams([]));
+  }, [form.organizationId]);
+
+  // League-sourced options are the flat League.teams roster (the same data
+  // AdminLeagues.jsx already manages — not re-entered here); Organization-
+  // sourced options are real Team.name values. Either way, a Pass Event just
+  // records which display names were picked (teamNames), not a Team
+  // relation — see the schema comment on PassEvent.teamNames for why.
+  const teamNameOptions = form.leagueId ? (selectedLeague?.teams || []) : teams.map((t) => t.name);
 
   const orgPickerValue = form.leagueId ? `league:${form.leagueId}` : form.organizationId ? `org:${form.organizationId}` : '';
 
@@ -81,8 +87,17 @@ const AdminPassEvents = () => {
       ...form,
       leagueId: kind === 'league' ? id : '',
       organizationId: kind === 'org' ? id : '',
-      teamId: '',
+      teamNames: [],
     });
+  };
+
+  const toggleTeamName = (name) => {
+    setForm((prev) => ({
+      ...prev,
+      teamNames: prev.teamNames.includes(name)
+        ? prev.teamNames.filter((n) => n !== name)
+        : [...prev.teamNames, name],
+    }));
   };
 
   const openAdd = () => {
@@ -108,7 +123,7 @@ const AdminPassEvents = () => {
       description: event.description || '',
       organizationId: matchedLeague ? '' : (event.organizationId || event.organization?._id || ''),
       leagueId: matchedLeague?._id || '',
-      teamId: event.teamId || event.team?._id || '',
+      teamNames: event.teamNames || [],
       venueId: event.venueId || event.venue?._id || '',
       startsAt: toDateTimeLocal(event.startsAt),
       endsAt: toDateTimeLocal(event.endsAt),
@@ -134,7 +149,6 @@ const AdminPassEvents = () => {
       const { image, ...rest } = form;
       const payload = {
         ...rest,
-        teamId: form.teamId || null,
         salesStartAt: form.salesStartAt || null,
         salesEndAt: form.salesEndAt || null,
         images: image ? [image] : [],
@@ -329,18 +343,26 @@ const AdminPassEvents = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Team (optional)</label>
-                  <select
-                    value={form.teamId}
-                    onChange={(e) => setForm({ ...form, teamId: e.target.value })}
-                    disabled={!orgPickerValue}
-                    className="input-field text-sm bg-white disabled:bg-gray-50"
-                  >
-                    <option value="">None</option>
-                    {teams.map((team) => (
-                      <option key={team._id} value={team._id}>{team.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Teams (optional)</label>
+                  {teamNameOptions.length === 0 ? (
+                    <p className="text-xs text-gray-400 border border-ink-200 px-3 py-2">
+                      {orgPickerValue ? 'No teams available' : 'Select an organization first'}
+                    </p>
+                  ) : (
+                    <div className="border border-ink-200 max-h-32 overflow-y-auto px-3 py-2 space-y-1.5">
+                      {teamNameOptions.map((name) => (
+                        <label key={name} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={form.teamNames.includes(name)}
+                            onChange={() => toggleTeamName(name)}
+                            className="border-gray-300 text-ink-900 focus:ring-ink-700 flex-shrink-0"
+                          />
+                          {name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

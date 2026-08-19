@@ -864,8 +864,16 @@ model PassEvent {
   // table), PassEvent is new code with no legacy rows to be lenient toward.
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  teamId         String?
-  team           Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  // Display names only, not a Team relation — a League-sourced event's
+  // "teams" (e.g. Pinoyliga's roster) only exist as League.teams flat
+  // strings for almost every real league (only the one-off FEU pilot has
+  // real Team rows), and nothing downstream (customer pages, checkout,
+  // Locker) reads PassEvent's team data today — it's purely descriptive.
+  // Institution/Athlete-sourced events still pick from real Team.name
+  // values; both cases just land here as plain strings, one shape either
+  // way rather than a second storage path per Organization kind.
+  teamNames String[]
 
   venueId String
   venue   Venue  @relation(fields: [venueId], references: [id])
@@ -1389,8 +1397,7 @@ model Team {
   logoUrl        String?
   active         Boolean      @default(true)
 
-  products   Product[]
-  passEvents PassEvent[]
+  products Product[]
 
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt

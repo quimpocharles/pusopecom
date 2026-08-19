@@ -7,7 +7,6 @@ const DATE_FIELDS = ['startsAt', 'endsAt', 'salesStartAt', 'salesEndAt'];
 const DEFAULT_INCLUDE = {
   venue: true,
   organization: { select: { id: true, name: true, slug: true, logoUrl: true } },
-  team: { select: { id: true, name: true, slug: true } },
   tiers: { include: { venueSection: true } },
 };
 
