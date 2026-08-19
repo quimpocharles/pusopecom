@@ -93,6 +93,11 @@ async function fillRequiredFields(container) {
   fireEvent.change(field(container, 'barangay'), { target: { value: 'Barangay 1' } });
   fireEvent.change(field(container, 'zipCode'), { target: { value: '1100' } });
   fireEvent.change(field(container, 'address'), { target: { value: '123 Rizal St' } });
+
+  // The submit button stays disabled until a payment channel is picked
+  // (Xendit, ADR-010) — every caller of this helper needs one selected
+  // before "Proceed to Payment" is clickable at all.
+  fireEvent.click(screen.getByRole('button', { name: /GCash/ }));
 }
 
 describe('Checkout — save address for next time', () => {
