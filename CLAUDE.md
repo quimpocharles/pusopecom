@@ -53,10 +53,12 @@ Full detail: `docs/DOMAIN_MODEL.md`. 28 concepts across 5 layers. Four were adde
 | Layer | Concepts |
 |---|---|
 | Institutions | Organization, Team, Athlete, Partner, Trust & Verification |
-| Commerce | Commerce Item, Merchandise, Product Variant, Collection, Drop, Promotion, Membership *(extension point, not built)* |
+| Commerce | Commerce Item, Merchandise, Pass *(event admission — schema/backend live, ADR-011)*, Product Variant, Collection, Drop, Promotion, Membership *(extension point, not built)* |
 | The Fan | Customer, Wishlist, Favorite, Review, AI Confidence |
 | Transaction & Fulfillment | Order, Payment, Shipment, Fulfillment, Inventory |
 | Presence & Story | Storefront, Discovery Hub, Story, Media, Season, Campaign |
+
+> **Event admission shipped as "Pass," not "Ticket," and ahead of Membership's planned sequencing.** The source docs (`docs/DOMAIN_MODEL.md`, ADR-003) call this category "Ticket" — that naming is superseded, not wrong at the time it was written. `docs/EXECUTION_PLAN.md` sequenced Membership as the first new category to build, not this one; ADR-011 documents the deliberate decision to go out of that order. See ADR-011 for the full reasoning, including why seat/capacity holds reuse this codebase's existing Postgres atomic-reservation pattern rather than Redis.
 
 Key structural facts, easy to get wrong:
 - A **League** (UAAP, PBA, PVL) is itself an **Organization** — related to member schools/clubs through *participation*, not *ownership*. Ownership is reserved for Organization→Team.
@@ -162,7 +164,7 @@ Full detail: `docs/MY_PUSO_MANIFESTO.md`. My PUSO is the customer portal's real 
 | Concept | Is | Is not |
 |---|---|---|
 | **Home** | A living feed of what changed since the fan's last visit | A dashboard of statistics about them |
-| **Locker** | A fan's growing personal collection — Merchandise today, Tickets/Memberships/Digital Collectibles/Rewards later, same shape | "Purchases" or order history |
+| **Locker** | A fan's growing personal collection — Merchandise and Passes *(backend live, ADR-011; Locker UI surfacing not yet built)* today, Memberships/Digital Collectibles/Rewards later, same shape | "Purchases" or order history |
 | **Fit Check** | The AI Try-On feature, treated as identity and self-expression | A utility tool buried in account settings |
 | **Following** | The mechanism (built on the existing `Favorite` domain concept) that makes fandom, not shopping, a reason to return | "Organizations," a management page |
 
@@ -182,11 +184,14 @@ Use these words exactly as defined. If a term isn't here, check `docs/DOMAIN_MOD
 | **Team** | A specific squad within an Organization. Conditional — only exists where an Organization fields more than one. |
 | **Athlete** | An individual competitor, modeled as its own lightweight Organization plus affiliation links to Teams represented. |
 | **Partner** | A non-institutional commercial collaborator (co-brand, licensing, logistics). No Storefront, not publicly trust-badged. |
-| **Commerce Item** | The category-agnostic abstract listing. Merchandise is its only concrete category today. |
+| **Commerce Item** | The category-agnostic abstract listing. Merchandise and Pass are its concrete categories today. |
 | **Merchandise** | The concrete, physical-goods Commerce Item category sold today. |
+| **Pass** | The concrete, event-admission Commerce Item category (ADR-011) — not "Ticket," see the Decision Log for why. Grants access to a time-boxed **PassEvent** at a **Venue**; fulfillment is the `Pass` credential itself (scannable, one per admitted person), not a Shipment. |
+| **PassTier** | The Product-Variant equivalent for Pass — a specific admission tier (e.g. GA, VIP, a numbered section) tied to one VenueSection. What Pass Inventory (seat/capacity availability) tracks. |
+| **Venue** | A physical location a PassEvent is held at. Owns VenueSections (RESERVED_SEAT or GENERAL_ADMISSION) and, for reserved sections, individual Seats — reused across every event held there. |
 | **Product Variant** | The actual purchasable unit — a specific size/color combination. What Inventory tracks. |
 | **Collection** | A curated, usually persistent grouping of Commerce Items. Not a pricing mechanism. |
-| **Drop** | A time-boxed, scarcity-driven release. Governs timing/availability, not price. |
+| **Drop** | A time-boxed, scarcity-driven release. Governs timing/availability, not price. PassEvent already carries this shape natively — no separate Drop entity was built for it. |
 | **Promotion / Discount / Bundle** | Promotion = eligibility/timing rule. Discount = single-item price cut. Bundle = multi-item combined pricing. |
 | **Membership** | Extension point, not built. A durational Customer-to-Organization relationship. |
 | **Customer** | The fan. Holds identity, history, Favorites, Wishlist. |
@@ -226,8 +231,8 @@ These are hard boundaries from `docs/AI_CAPABILITY.md` and `docs/PLATFORM_STRATE
 
 Where new work should attach without redesigning the foundation. Full detail: `docs/DOMAIN_MODEL.md` §Future extension points, `docs/COMMERCE_ENGINE.md` Stage 9.
 
-- **Commerce Item** is the category-agnostic anchor. Tickets, Experiences, Equipment, and Membership are new concrete categories beneath it — Pricing, Promotions, Checkout, and Orders need no changes.
-- **Fulfillment** needs a new concrete sibling per category: an access grant (Tickets), a booking confirmation (Experiences). Shipment stays specific to Merchandise/Equipment.
+- **Commerce Item** is the category-agnostic anchor. Pass *(live, ADR-011)*, Experiences, Equipment, and Membership are new concrete categories beneath it — Pricing, Promotions, Checkout, and Orders need no changes.
+- **Fulfillment** needs a new concrete sibling per category: an access grant (Pass — the `Pass` entity itself, ADR-011), a booking confirmation (Experiences). Shipment stays specific to Merchandise/Equipment.
 - **Payments** needs exactly one new capability for Membership: recurring capture. Everything else already generalizes.
 - **Athlete-as-Organization** and **League-as-Organization** are already-proven patterns — any new institutional type should follow the same shape rather than inventing a new one.
 - **Discovery Hub** automatically becomes a cross-category surface as new categories launch — no rebuild required.

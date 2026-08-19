@@ -229,6 +229,7 @@ model User {
   // customer-role User; only admin-role Users have one.
   assignedShipments      Shipment[]
   shipmentEvents         ShipmentEvent[]
+  passLogs               PassLog[]
   stockAdjustments       StockAdjustment[]
   refundsInitiated       Refund[]
   staffProfile           StaffProfile?
@@ -419,7 +420,8 @@ model Order {
   user        User?   @relation(fields: [userId], references: [id])
   email       String
 
-  items OrderItem[]
+  items  OrderItem[]
+  passes Pass[]
 
   // Was the single embedded `shippingAddress` object. Flattened to columns
   // (prefixed shipTo*, not shipping*, to avoid colliding with the
@@ -794,6 +796,270 @@ model ShipmentEvent {
   @@map("shipment_events")
 }
 
+// ---------------------------------------------------------------------------
+// Pass — event admission as a Commerce Item category (ADR-011). "Pass," not
+// "Ticket": the Domain Model already used this term for the category's
+// Fulfillment shape ("an access grant... a scannable pass"), so it became
+// the name for the whole category. Mirrors two patterns already proven
+// elsewhere in this schema: Product/ProductSize (a lockable-capacity
+// variant needs its own row) and Shipment/ShipmentEvent (atomic
+// state-machine + typed event log). Seat holds use the same Postgres
+// atomic-CAS pattern as stock reservation (decrementStock) rather than
+// introducing Redis locking — see ADR-011 for the full reasoning.
+// ---------------------------------------------------------------------------
+
+model Venue {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  address     String
+  city        String
+  capacity    Int? // informational total; real sellable capacity is the sum of its VenueSections
+  mapImageUrl String? // background the admin seat-map builder overlays sections/seats onto
+  active      Boolean @default(true)
+
+  sections VenueSection[]
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  PassEvent PassEvent[]
+
+  @@map("venues")
+}
+
+enum SeatingType {
+  RESERVED_SEAT
+  GENERAL_ADMISSION
+}
+
+model VenueSection {
+  id          String      @id @default(uuid())
+  venueId     String
+  venue       Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name        String // e.g. "Lower Box A", "Patron", "GA"
+  seatingType SeatingType
+
+  // Grid-based MVP seat-map builder (ADR-011) — a regular rows x
+  // seatsPerRow layout, not freeform venue cartography. Only meaningful for
+  // RESERVED_SEAT; null for GENERAL_ADMISSION, which is capacity-counted
+  // (PassTier.capacity) instead of individually seated.
+  rows        Int?
+  seatsPerRow Int?
+
+  seats     Seat[]
+  passTiers PassTier[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([venueId])
+  @@map("venue_sections")
+}
+
+// Physical, venue-scoped, reused across every event at that Venue — a seat
+// doesn't change between events, only its per-event availability does
+// (PassEventSeat, below). Only exists for RESERVED_SEAT sections.
+model Seat {
+  id             String       @id @default(uuid())
+  venueSectionId String
+  venueSection   VenueSection @relation(fields: [venueSectionId], references: [id], onDelete: Cascade)
+  row            String
+  seatNumber     String
+  label          String // precomputed display label, e.g. "Row A, Seat 12"
+
+  eventSeats PassEventSeat[]
+
+  @@unique([venueSectionId, row, seatNumber])
+  @@map("seats")
+}
+
+// The Commerce Item for this category — mirrors Product. Time-boxed by
+// design (startsAt/endsAt), which is also literally the Drop pattern
+// (time-boxed release + fixed capacity) applied here — no separate Drop
+// model needed, since nothing else needs one yet (no abstraction before the
+// second real use case).
+model PassEvent {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  images      String[]
+
+  // Organization-first anchor (ADR-001) — required, not optional: unlike
+  // Product.organizationId (a pilot-migration artifact on a pre-existing
+  // table), PassEvent is new code with no legacy rows to be lenient toward.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  teamId         String?
+  team           Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id])
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  // The on-sale window — distinct from startsAt/endsAt (when the event
+  // itself happens). Null on either side means no bound, same convention
+  // Campaign/PromoMessage/PromoCode already use for their own schedule
+  // windows.
+  salesStartAt DateTime?
+  salesEndAt   DateTime?
+
+  active Boolean @default(true)
+
+  tiers  PassTier[]
+  passes Pass[]
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  PassEventSeat PassEventSeat[]
+
+  @@index([organizationId, active])
+  @@index([venueId])
+  @@index([startsAt])
+  @@map("pass_events")
+}
+
+// The Product-Variant equivalent — mirrors ProductSize. For a
+// GENERAL_ADMISSION VenueSection: capacity/sold counters, decremented
+// atomically exactly like ProductSize.stock. For a RESERVED_SEAT section,
+// capacity is derived from counting available Seats for this event
+// (PassEventSeat) — capacity/sold are left null and unused here, not kept
+// as a second, potentially-drifting source of truth.
+model PassTier {
+  id             String       @id @default(uuid())
+  passEventId    String
+  passEvent      PassEvent    @relation(fields: [passEventId], references: [id], onDelete: Cascade)
+  venueSectionId String
+  venueSection   VenueSection @relation(fields: [venueSectionId], references: [id])
+
+  name  String // e.g. "GA", "VIP", "Lower Box A"
+  price Float // canonical price for this tier — same single-source-of-truth rule as Product.price
+
+  // GENERAL_ADMISSION only — null/unused for RESERVED_SEAT tiers (see above).
+  capacity Int?
+  sold     Int? @default(0)
+
+  passes Pass[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([passEventId])
+  @@map("pass_tiers")
+}
+
+enum PassEventSeatStatus {
+  available
+  held
+  sold
+}
+
+// Per-(PassEvent, Seat) join — this is where "is this specific seat
+// available for this specific event" actually lives, since a Seat row is
+// reused across every event at its Venue. holdToken is opaque and owned by
+// whoever placed the hold, checked on release so a lapsed hold's owner can
+// never clobber a different holder's subsequent hold on the same seat — the
+// classic distributed-lock bug this design avoids by construction (ADR-011).
+model PassEventSeat {
+  id          String    @id @default(uuid())
+  passEventId String
+  passEvent   PassEvent @relation(fields: [passEventId], references: [id], onDelete: Cascade)
+  seatId      String
+  seat        Seat      @relation(fields: [seatId], references: [id])
+
+  status    PassEventSeatStatus @default(available)
+  heldUntil DateTime?
+  holdToken String?
+
+  passes Pass[]
+
+  @@unique([passEventId, seatId])
+  @@index([status, heldUntil])
+  @@map("pass_event_seats")
+}
+
+enum PassStatus {
+  issued
+  checked_in
+  cancelled
+  refunded
+}
+
+// The individual, scannable admission credential — one row per admitted
+// person, not one row per line item. Deliberately not split into an
+// OrderItem-equivalent plus a Shipment-equivalent the way Merchandise is: a
+// Merchandise OrderItem of quantity 3 ships as one Shipment (one package),
+// but three admission Passes need three independently scannable
+// credentials (and, for reserved seating, three different Seats) — "what
+// was purchased" and "the fulfillment unit" are naturally 1:1 here, so one
+// entity serves both roles (ADR-011).
+model Pass {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  passEventId String
+  passEvent   PassEvent @relation(fields: [passEventId], references: [id])
+  passTierId  String
+  passTier    PassTier  @relation(fields: [passTierId], references: [id])
+
+  // Only set for a Pass on a RESERVED_SEAT tier.
+  passEventSeatId String?
+  passEventSeat   PassEventSeat? @relation(fields: [passEventSeatId], references: [id])
+
+  // Snapshot, same reasoning as OrderItem.price — order history keeps
+  // showing what was actually paid, not today's tier price.
+  price Float
+
+  status  PassStatus @default(issued)
+  qrToken String     @unique @default(uuid())
+
+  checkedInAt DateTime?
+
+  logs PassLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([passEventId])
+  @@index([qrToken])
+  @@map("passes")
+}
+
+enum PassLogType {
+  created
+  status_changed
+}
+
+// The ShipmentEvent-equivalent typed audit row for a Pass's own status
+// changes — named PassLog, not PassEvent, to avoid colliding with the
+// PassEvent model above (the ticketed happening itself).
+model PassLog {
+  id     String @id @default(uuid())
+  passId String
+  pass   Pass   @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  type  PassLogType
+  actor OrderEventActor // reused, same as ShipmentEvent — see that model's own comment
+
+  actorUserId String?
+  actorUser   User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  fromStatus PassStatus?
+  toStatus   PassStatus?
+
+  message  String
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([passId, createdAt])
+  @@map("pass_logs")
+}
+
 // The missing inventory audit trail the Fulfillment Audit flagged directly:
 // stock reservation/release today happens silently inside a transaction,
 // with no row anywhere saying why a count changed. Every adjustment here
@@ -1136,9 +1402,10 @@ model Organization {
   verifiedBy              User?              @relation(fields: [verifiedByUserId], references: [id], onDelete: SetNull)
   verificationNote        String?
 
-  teams    Team[]
-  products Product[]
-  league   League? // the bridge back to the legacy League row, when kind = league
+  teams      Team[]
+  products   Product[]
+  passEvents PassEvent[]
+  league     League? // the bridge back to the legacy League row, when kind = league
 
   // Participation is a second relationship kind, distinct from the
   // ownership Organization already has over Team below — a school
@@ -1181,7 +1448,8 @@ model Team {
   logoUrl        String?
   active         Boolean      @default(true)
 
-  products Product[]
+  products   Product[]
+  passEvents PassEvent[]
 
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt

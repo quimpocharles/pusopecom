@@ -5,20 +5,28 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ProductCard from '../../components/products/ProductCard';
 import { Panel, Pagination, EmptyState, ErrorState } from '../../components/ui';
 import accountService from '../../services/accountService';
+import passEventService from '../../services/passEventService';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FILTER_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
 
 // docs/MY_PUSO_MANIFESTO.md: Locker is one destination — what's mine, plus
 // a lighter Saved section for what a fan is thinking about adding — not a
-// second top-level concept. Only the active section fetches; switching
-// sections is a URL param, not a route, so both stay bookmarkable.
+// second top-level concept. Passes is a peer of My Gear, not folded into
+// it: an Order-centric list and a Pass-credential-centric list (each with
+// its own scannable status) are genuinely different shapes to browse, the
+// same way Pass itself isn't forced into OrderItem/Shipment's shape on the
+// backend (see the schema comment on the Pass model, ADR-011). Only the
+// active section fetches; switching sections is a URL param, not a route,
+// so all three stay bookmarkable.
 const SECTIONS = [
   { key: 'mine', label: 'My Gear' },
+  { key: 'passes', label: 'Passes' },
   { key: 'saved', label: 'Saved' },
 ];
 
 const Locker = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const section = searchParams.get('section') === 'saved' ? 'saved' : 'mine';
+  const rawSection = searchParams.get('section');
+  const section = SECTIONS.some((s) => s.key === rawSection) ? rawSection : 'mine';
 
   const setSection = (key) => {
     const next = new URLSearchParams(searchParams);
@@ -30,13 +38,15 @@ const Locker = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2">
+      <div className="flex items-center gap-6 border-b-2 border-ink-200">
         {SECTIONS.map((s) => (
           <button
             key={s.key}
             onClick={() => setSection(s.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              section === s.key ? 'bg-ink-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`pb-3 text-editorial-label font-semibold uppercase tracking-wide whitespace-nowrap transition-colors duration-150 border-b-2 -mb-0.5 ${
+              section === s.key
+                ? 'text-ink-900 border-ink-900'
+                : 'text-ink-500 border-transparent hover:text-ink-900'
             }`}
           >
             {s.label}
@@ -44,7 +54,7 @@ const Locker = () => {
         ))}
       </div>
 
-      {section === 'mine' ? <LockerMine /> : <LockerSaved />}
+      {section === 'mine' ? <LockerMine /> : section === 'passes' ? <LockerPasses /> : <LockerSaved />}
     </div>
   );
 };
@@ -123,11 +133,11 @@ const LockerMine = () => {
                     key={i}
                     src={item.image}
                     alt=""
-                    className="w-14 h-14 rounded-lg object-cover bg-gray-100"
+                    className="w-14 h-14 object-cover bg-ink-200 border border-ink-200"
                   />
                 ))}
                 {order.items.length > 4 && (
-                  <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-500">
+                  <div className="w-14 h-14 bg-paper border border-ink-200 flex items-center justify-center text-xs font-medium text-ink-500">
                     +{order.items.length - 4}
                   </div>
                 )}
@@ -158,7 +168,7 @@ const LockerMine = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total</p>
-                <p className="font-bold text-primary-600">₱{order.total?.toFixed(2)}</p>
+                <p className="font-bold text-ink-900">₱{order.total?.toFixed(2)}</p>
               </div>
             </div>
 
@@ -269,6 +279,100 @@ const LockerSaved = () => {
         }}
         className="mt-8"
       />
+    </div>
+  );
+};
+
+const PASS_STATUS_STYLES = {
+  issued: 'text-green-600',
+  checked_in: 'text-blue-600',
+  cancelled: 'text-gray-400',
+  refunded: 'text-gray-400',
+};
+
+const PASS_STATUS_LABELS = {
+  issued: 'Ready',
+  checked_in: 'Checked In',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+};
+
+// The QR code image itself is a Stage 4 (check-in tool) concern — this
+// shows the same qrToken as a plain, copyable code for now, same
+// information, no new dependency added before the scanning side that
+// would actually need one exists.
+const LockerPasses = () => {
+  const [passes, setPasses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await passEventService.getMyPasses();
+      setPasses(res.data);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState description="Failed to load your Passes." onRetry={load} />;
+  if (passes.length === 0) {
+    return (
+      <EmptyState
+        title="No Passes yet"
+        description="Buy a Pass to a game or event to see it here."
+        actionLabel="Browse Events"
+        onAction={() => (window.location.href = '/events')}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {passes.map((pass) => (
+        <Panel key={pass._id}>
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <p className="font-bold text-lg">{pass.passEvent?.name}</p>
+              <p className="text-sm text-gray-600">
+                {pass.passEvent?.venue?.name} · {pass.passEvent?.startsAt && new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+              </p>
+            </div>
+            <span className={`font-semibold text-sm ${PASS_STATUS_STYLES[pass.status] || 'text-gray-500'}`}>
+              {PASS_STATUS_LABELS[pass.status] || pass.status}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+            <div>
+              <p className="text-gray-600">Tier</p>
+              <p className="font-semibold">{pass.passTier?.name}</p>
+            </div>
+            {pass.passEventSeat?.seat && (
+              <div>
+                <p className="text-gray-600">Seat</p>
+                <p className="font-semibold">{pass.passEventSeat.seat.label}</p>
+              </div>
+            )}
+          </div>
+
+          {pass.status === 'issued' && (
+            <div className="pt-4 border-t">
+              <p className="text-xs text-gray-500 mb-1">Show this code at the gate</p>
+              <p className="font-mono text-sm bg-paper border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
+            </div>
+          )}
+        </Panel>
+      ))}
     </div>
   );
 };

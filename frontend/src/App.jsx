@@ -6,6 +6,8 @@ import Products from './pages/Products';
 import ProductDetail from './pages/ProductDetail';
 import NotFound from './pages/NotFound';
 const Checkout = lazy(() => import('./pages/Checkout'));
+const PassEvents = lazy(() => import('./pages/PassEvents'));
+const PassEventDetail = lazy(() => import('./pages/PassEventDetail'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -34,6 +36,10 @@ const AdminProductForm = lazy(() => import('./pages/admin/AdminProductForm'));
 const AdminLeagues = lazy(() => import('./pages/admin/AdminLeagues'));
 const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
 const AdminPromoCodes = lazy(() => import('./pages/admin/AdminPromoCodes'));
+const AdminVenues = lazy(() => import('./pages/admin/AdminVenues'));
+const AdminVenueDetail = lazy(() => import('./pages/admin/AdminVenueDetail'));
+const AdminPassEvents = lazy(() => import('./pages/admin/AdminPassEvents'));
+const AdminPassEventDetail = lazy(() => import('./pages/admin/AdminPassEventDetail'));
 const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
@@ -93,6 +99,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:slug" element={<ProductDetail />} />
+          <Route path="/events" element={<PassEvents />} />
+          <Route path="/events/:slug" element={<PassEventDetail />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -129,6 +137,10 @@ function App() {
             <Route path="leagues" element={<PermissionRoute permission={PERMISSIONS.LEAGUES_MANAGE}><AdminLeagues /></PermissionRoute>} />
             <Route path="campaigns" element={<PermissionRoute permission={PERMISSIONS.CAMPAIGNS_MANAGE}><AdminCampaigns /></PermissionRoute>} />
             <Route path="promo-codes" element={<PermissionRoute permission={PERMISSIONS.PROMOTIONS_MANAGE}><AdminPromoCodes /></PermissionRoute>} />
+            <Route path="venues" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminVenues /></PermissionRoute>} />
+            <Route path="venues/:id" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminVenueDetail /></PermissionRoute>} />
+            <Route path="pass-events" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminPassEvents /></PermissionRoute>} />
+            <Route path="pass-events/:id" element={<PermissionRoute permission={PERMISSIONS.PASSES_MANAGE}><AdminPassEventDetail /></PermissionRoute>} />
             <Route path="fit-check-campaigns" element={<PermissionRoute permission={PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE}><AdminFitCheckCampaigns /></PermissionRoute>} />
             <Route path="orders" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrders /></PermissionRoute>} />
             <Route path="orders/:orderNumber" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrderDetail /></PermissionRoute>} />

@@ -9,6 +9,7 @@ import {
 import Layout from '../components/layout/Layout';
 import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
+import usePassCartStore from '../store/passCartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
 import promoCodeService from '../services/promoCodeService';
@@ -73,6 +74,11 @@ const Checkout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { items, getCartTotal, openCart } = useCartStore();
+  const passEvent = usePassCartStore((s) => s.event);
+  const gaSelections = usePassCartStore((s) => s.gaSelections);
+  const seatSelections = usePassCartStore((s) => s.seatSelections);
+  const getPassTotal = usePassCartStore((s) => s.getPassTotal);
+  const toOrderPasses = usePassCartStore((s) => s.toOrderPasses);
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -109,7 +115,9 @@ const Checkout = () => {
 
   const country = watch('country') || 'Philippines';
   const region  = watch('region')  || '';
-  const subtotal = getCartTotal(); // hoisted above effects so it can be a dependency
+  const passTotal = getPassTotal();
+  const passCount = gaSelections.reduce((sum, s) => sum + s.quantity, 0) + seatSelections.length;
+  const subtotal = getCartTotal() + passTotal; // hoisted above effects so it can be a dependency
 
   // Fetch shipping options from the server whenever country, region, or cart total changes.
   // Server auto-disables venue pickup if the pickup date has passed.
@@ -136,7 +144,7 @@ const Checkout = () => {
 
   const paymentCancelled = searchParams.get('payment') === 'cancelled';
 
-  if (items.length === 0 && !paymentCancelled && !redirectingRef.current) {
+  if (items.length === 0 && passCount === 0 && !paymentCancelled && !redirectingRef.current) {
     navigate('/products', { replace: true });
     return null;
   }
@@ -266,6 +274,7 @@ const Checkout = () => {
           size: item.size,
           ...(item.color && { color: item.color })
         })),
+        passes: toOrderPasses(),
         shippingAddress,
         shippingFee: shippingFee ?? 0,
         promoCode: appliedPromo?.code || undefined,
@@ -602,6 +611,28 @@ const Checkout = () => {
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">₱{(item.price * item.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                ))}
+                {gaSelections.map((s) => (
+                  <div key={s.tierId} className="flex gap-3 pb-3 border-b">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{passEvent?.name}</p>
+                      <p className="text-xs text-gray-600">{s.tierName} × {s.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">₱{(s.price * s.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                ))}
+                {seatSelections.map((s) => (
+                  <div key={s.seatId} className="flex gap-3 pb-3 border-b">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{passEvent?.name}</p>
+                      <p className="text-xs text-gray-600">{s.tierName} — {s.seatLabel}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">₱{s.price.toFixed(2)}</p>
                     </div>
                   </div>
                 ))}

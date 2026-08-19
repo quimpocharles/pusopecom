@@ -301,6 +301,200 @@ describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
   });
 });
 
+describe('POST /orders — Pass (event admission) checkout, mixed with Merchandise (ADR-011)', () => {
+  const createdOrgIds = [];
+  const createdVenueIds = [];
+  const createdEventIds = [];
+
+  async function makeGaFixture() {
+    const org = await prisma.organization.create({ data: { name: `${MARKER} Org`, slug: `${MARKER.toLowerCase()}-org-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'institution' } });
+    const venue = await prisma.venue.create({ data: { name: `${MARKER} Arena`, slug: `${MARKER.toLowerCase()}-arena-${Date.now()}-${Math.random().toString(36).slice(2)}`, address: '1 St', city: 'Pasay' } });
+    const section = await prisma.venueSection.create({ data: { venueId: venue.id, name: 'GA', seatingType: 'GENERAL_ADMISSION' } });
+    const event = await prisma.passEvent.create({
+      data: { name: `${MARKER} Game`, slug: `${MARKER.toLowerCase()}-game-${Date.now()}-${Math.random().toString(36).slice(2)}`, organizationId: org.id, venueId: venue.id, startsAt: new Date(Date.now() + 86400000), endsAt: new Date(Date.now() + 90000000) },
+    });
+    const tier = await prisma.passTier.create({ data: { passEventId: event.id, venueSectionId: section.id, name: 'GA', price: 300, capacity: 5, sold: 0 } });
+    createdOrgIds.push(org.id); createdVenueIds.push(venue.id); createdEventIds.push(event.id);
+    return { org, venue, section, event, tier };
+  }
+
+  async function makeSeatFixture() {
+    const org = await prisma.organization.create({ data: { name: `${MARKER} Org2`, slug: `${MARKER.toLowerCase()}-org2-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'institution' } });
+    const venue = await prisma.venue.create({ data: { name: `${MARKER} Coliseum`, slug: `${MARKER.toLowerCase()}-coliseum-${Date.now()}-${Math.random().toString(36).slice(2)}`, address: '1 St', city: 'Quezon City' } });
+    const section = await prisma.venueSection.create({ data: { venueId: venue.id, name: 'Lower Box', seatingType: 'RESERVED_SEAT' } });
+    const seat = await prisma.seat.create({ data: { venueSectionId: section.id, row: 'A', seatNumber: '1', label: 'Row A, Seat 1' } });
+    const event = await prisma.passEvent.create({
+      data: { name: `${MARKER} Fight`, slug: `${MARKER.toLowerCase()}-fight-${Date.now()}-${Math.random().toString(36).slice(2)}`, organizationId: org.id, venueId: venue.id, startsAt: new Date(Date.now() + 86400000), endsAt: new Date(Date.now() + 90000000) },
+    });
+    const tier = await prisma.passTier.create({ data: { passEventId: event.id, venueSectionId: section.id, name: 'Lower Box', price: 2000 } });
+    const eventSeat = await prisma.passEventSeat.create({ data: { passEventId: event.id, seatId: seat.id } });
+    createdOrgIds.push(org.id); createdVenueIds.push(venue.id); createdEventIds.push(event.id);
+    return { org, venue, section, seat, event, tier, eventSeat };
+  }
+
+  afterAll(async () => {
+    await prisma.passLog.deleteMany({ where: { pass: { passEventId: { in: createdEventIds } } } });
+    await prisma.pass.deleteMany({ where: { passEventId: { in: createdEventIds } } });
+    await prisma.passEventSeat.deleteMany({ where: { passEventId: { in: createdEventIds } } });
+    await prisma.passTier.deleteMany({ where: { passEventId: { in: createdEventIds } } });
+    await prisma.passEvent.deleteMany({ where: { id: { in: createdEventIds } } });
+    await prisma.seat.deleteMany({ where: { venueSection: { venueId: { in: createdVenueIds } } } });
+    await prisma.venueSection.deleteMany({ where: { venueId: { in: createdVenueIds } } });
+    await prisma.venue.deleteMany({ where: { id: { in: createdVenueIds } } });
+    await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
+  });
+
+  it('a GENERAL_ADMISSION pass folds into subtotal alongside Merchandise, one Order, one atomic transaction', async () => {
+    const product = await makeProduct({ name: 'MixedOrderProduct' });
+    const { tier } = await makeGaFixture();
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_mixed', redirectUrl: 'https://pay.example/chk_mixed' });
+
+    const payload = { ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 2 }] };
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    // 500 (product) + 300*2 (2 GA passes) = 1100 base; + NCR shipping 99 + GCash 2% fee
+    const expectedFee = Math.round((1100 + 99) * 0.02 * 100) / 100;
+    expect(order.subtotal).toBe(1100);
+    expect(order.total).toBe(1100 + 99 + expectedFee);
+
+    const passes = await prisma.pass.findMany({ where: { orderId: order.id } });
+    expect(passes).toHaveLength(2);
+    expect(passes.every((p) => p.status === 'issued' && p.price === 300)).toBe(true);
+
+    const updatedTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
+    expect(updatedTier.sold).toBe(2);
+  }, 25000);
+
+  it('a RESERVED_SEAT pass requires a live holdToken and redeems the specific seat atomically with the order', async () => {
+    const { event, seat, tier } = await makeSeatFixture();
+    const holdToken = 'test-hold-token-1';
+    await prisma.passEventSeat.updateMany({ where: { passEventId: event.id, seatId: seat.id }, data: { status: 'held', heldUntil: new Date(Date.now() + 600000), holdToken } });
+
+    const product = await makeProduct({ name: 'SeatOrderProduct' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_seat', redirectUrl: 'https://pay.example/chk_seat' });
+
+    const payload = { ...validOrderPayload(product), passes: [{ passTierId: tier.id, seatId: seat.id, holdToken }] };
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.subtotal).toBe(500 + 2000);
+
+    const pass = await prisma.pass.findFirst({ where: { orderId: order.id } });
+    expect(pass.passEventSeatId).not.toBeNull();
+    expect(pass.price).toBe(2000);
+
+    const eventSeat = await prisma.passEventSeat.findUnique({ where: { passEventId_seatId: { passEventId: event.id, seatId: seat.id } } });
+    expect(eventSeat.status).toBe('sold');
+  }, 25000);
+
+  it('409s when the seat\'s hold has expired or was never placed — never silently sells an unheld seat', async () => {
+    const { seat, tier } = await makeSeatFixture();
+    const product = await makeProduct({ name: 'NoHoldProduct' });
+
+    const res = await request(app).post('/api/orders').send({
+      ...validOrderPayload(product),
+      passes: [{ passTierId: tier.id, seatId: seat.id, holdToken: 'never-actually-held' }],
+    });
+    expect(res.status).toBe(409);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('accepts a Pass-only order with no Merchandise items at all', async () => {
+    const { tier } = await makeGaFixture();
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_passonly', redirectUrl: 'https://pay.example/chk_passonly' });
+
+    const res = await request(app).post('/api/orders').send({
+      email: 'buyer@test.local',
+      items: [],
+      passes: [{ passTierId: tier.id, quantity: 1 }],
+      shippingRegion: '13',
+      paymentChannel: 'GCASH',
+      shippingAddress: { fullName: 'Juan Dela Cruz', phone: '09171234567', address: '123 Rizal St', city: 'Quezon City', province: 'Metro Manila', zipCode: '1100' },
+    });
+    expect(res.status).toBe(201);
+  }, 15000);
+
+  it('400s an order with neither items nor passes', async () => {
+    const res = await request(app).post('/api/orders').send({
+      email: 'buyer@test.local',
+      items: [],
+      shippingRegion: '13',
+      paymentChannel: 'GCASH',
+      shippingAddress: { fullName: 'Juan Dela Cruz', phone: '09171234567', address: '123 Rizal St', city: 'Quezon City', province: 'Metro Manila', zipCode: '1100' },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('releasing a failed order\'s payment restores GA capacity and cancels the Pass, same trigger as stock release', async () => {
+    const { tier } = await makeGaFixture();
+    const product = await makeProduct({ name: 'ReleaseGaProduct' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_release_ga', redirectUrl: 'https://pay.example/chk_release_ga' });
+
+    const createRes = await request(app).post('/api/orders').send({ ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 1 }] });
+    const { orderNumber } = createRes.body.data;
+
+    const soldTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
+    expect(soldTier.sold).toBe(1);
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'failed' });
+    await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_FAILED' });
+
+    const releasedTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
+    expect(releasedTier.sold).toBe(0);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    const pass = await prisma.pass.findFirst({ where: { orderId: order.id } });
+    expect(pass.status).toBe('cancelled');
+  }, 25000);
+
+  it('releasing a failed order\'s payment returns a reserved seat to available', async () => {
+    const { event, seat, tier } = await makeSeatFixture();
+    const holdToken = 'test-hold-token-release';
+    await prisma.passEventSeat.updateMany({ where: { passEventId: event.id, seatId: seat.id }, data: { status: 'held', heldUntil: new Date(Date.now() + 600000), holdToken } });
+
+    const product = await makeProduct({ name: 'ReleaseSeatProduct' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_release_seat', redirectUrl: 'https://pay.example/chk_release_seat' });
+
+    const createRes = await request(app).post('/api/orders').send({ ...validOrderPayload(product), passes: [{ passTierId: tier.id, seatId: seat.id, holdToken }] });
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'expired' });
+    await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_FAILED' });
+
+    const eventSeat = await prisma.passEventSeat.findUnique({ where: { passEventId_seatId: { passEventId: event.id, seatId: seat.id } } });
+    expect(eventSeat.status).toBe('available');
+  }, 25000);
+
+  // Regression test: orderRepository.create()'s own returned object is
+  // fetched (include: { passes: true }) BEFORE the Pass rows exist — they're
+  // issued via separate queries afterward, unlike Merchandise's OrderItems
+  // which nest inside the same .create() call. This meant the immediate
+  // gateway-failure path (releaseStock(order) called on the SAME `order`
+  // object returned from the transaction, no re-fetch) saw a permanently
+  // stale-empty order.passes and silently released nothing — found live via
+  // manual verification against a real (unmocked) gateway failure, since
+  // every other release test above exercises the webhook path instead,
+  // which already re-fetches the order fresh and was never affected.
+  it('releases a Pass reservation when gateway checkout session creation fails immediately — same request, no webhook involved', async () => {
+    const { tier } = await makeGaFixture();
+    const product = await makeProduct({ name: 'PassGatewayFailure' });
+    paymentService.createCheckoutSession.mockRejectedValueOnce(new Error('Xendit is down'));
+
+    const res = await request(app).post('/api/orders').send({ ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 1 }] });
+    expect(res.status).toBe(500);
+
+    const releasedTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
+    expect(releasedTier.sold).toBe(0); // released, not left permanently decremented
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.orderNumber } });
+    const pass = await prisma.pass.findFirst({ where: { orderId: order.id } });
+    expect(pass.status).toBe('cancelled');
+  }, 25000);
+});
+
 describe('Webhook signature/authenticity — the platform audit\'s critical fix', () => {
   it('a forged webhook body claiming PAYMENT_SUCCESS does NOT mark the order paid unless Maya\'s own API confirms it', async () => {
     const product = await makeProduct({ name: 'ForgedWebhook' });

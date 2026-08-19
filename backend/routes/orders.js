@@ -8,6 +8,8 @@ import * as orderEventRepository from '../repositories/orderEventRepository.js';
 import * as paymentRepository from '../repositories/paymentRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
+import * as passEventRepository from '../repositories/passEventRepository.js';
+import * as passRepository from '../repositories/passRepository.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
@@ -71,6 +73,22 @@ async function releaseStock(order) {
     // below, applyPaymentResolution's failed/expired branch, and
     // transitively the stale-order sweep) gets this for free.
     if (order.promoCodeId) await promoCodeRepository.releaseRedemption(order.promoCodeId, { client: tx });
+
+    // A Pass is claimed at Order placement exactly like stock and a promo
+    // redemption, so it releases on the same trigger. Every releaseStock
+    // caller gets this for free, same as the two releases above.
+    for (const pass of order.passes ?? []) {
+      if (pass.passEventSeatId) {
+        await passRepository.releaseSoldSeat(pass.passEventSeatId, { client: tx });
+      } else {
+        await passRepository.restoreTierCapacity({ passTierId: pass.passTierId, quantity: 1 }, { client: tx });
+      }
+      await passRepository.transition(pass._id, 'cancelled', {
+        actor: 'system',
+        message: 'Payment failed — pass reservation released',
+        client: tx,
+      });
+    }
     // Multiple round trips per item; Prisma's 5s default interactive-
     // transaction timeout has been observed to be too tight under this
     // deployment's real network latency (see the matching timeout on the
@@ -283,7 +301,15 @@ router.post('/',
   optionalAuth,
   [
     body('email').isEmail().normalizeEmail(),
-    body('items').isArray({ min: 1 }),
+    // Merchandise (items) and Pass admission (passes) are independently
+    // optional — a Pass-only order (no shipping to speak of) or a
+    // Merchandise-only order are both valid, only an order with neither is
+    // rejected (see the custom check below). Commerce Engine Stage 9: "a
+    // mixed-category Order already works today."
+    body('items').isArray(),
+    body('passes').optional().isArray(),
+    body().custom((value) => (value.items?.length ?? 0) + (value.passes?.length ?? 0) > 0)
+      .withMessage('An order must contain at least one item or pass'),
     body('shippingAddress').isObject(),
     body('shippingAddress.fullName').trim().notEmpty(),
     body('shippingAddress.phone').trim().notEmpty(),
@@ -312,7 +338,7 @@ router.post('/',
         });
       }
 
-      const { email, items, shippingAddress, notes, shippingMethod, shippingRegion, slotId, promoCode, paymentChannel } = req.body;
+      const { email, items, passes, shippingAddress, notes, shippingMethod, shippingRegion, slotId, promoCode, paymentChannel } = req.body;
 
       // Pass 1 — structural validation and price/image resolution. Not
       // itself the stock-sufficiency check (that's the atomic
@@ -370,6 +396,54 @@ router.post('/',
           image: itemImage
         });
       }
+
+      // Pass 1b — Pass (event admission) resolution. Mirrors the Merchandise
+      // loop above: structural validation and price resolution here, the
+      // atomic seat/capacity reservation happens in the transaction below.
+      // Each request entry is either a RESERVED_SEAT pick (seatId + the
+      // holdToken from POST /pass-events/:id/seats/:seatId/hold) — always
+      // one Pass per entry — or a GENERAL_ADMISSION pick (quantity,
+      // no seat) — one entry can expand into several individual Passes,
+      // since each admission credential is independently scannable
+      // (see the schema comment on the Pass model for why).
+      const passUnits = [];
+      const gaDecrements = new Map(); // passTierId -> total quantity to decrement, once per tier
+
+      for (const p of passes || []) {
+        const tier = await passEventRepository.findTierById(p.passTierId);
+        if (!tier) {
+          return res.status(400).json({ success: false, message: `Pass tier not found: ${p.passTierId}` });
+        }
+
+        if (tier.venueSection.seatingType === 'RESERVED_SEAT') {
+          if (!p.seatId || !p.holdToken) {
+            return res.status(400).json({
+              success: false,
+              message: `A held seat is required for "${tier.name}" — select a seat before checking out.`
+            });
+          }
+          const eventSeat = await passRepository.findEventSeat({ passEventId: tier.passEventId, seatId: p.seatId });
+          if (!eventSeat) {
+            return res.status(400).json({ success: false, message: 'Seat not found for this event' });
+          }
+          passUnits.push({
+            passEventId: tier.passEventId,
+            passTierId: tier._id,
+            seatId: p.seatId,
+            passEventSeatId: eventSeat._id,
+            holdToken: p.holdToken,
+            price: tier.price,
+          });
+        } else {
+          const quantity = Math.max(1, Number(p.quantity) || 1);
+          for (let i = 0; i < quantity; i++) {
+            passUnits.push({ passEventId: tier.passEventId, passTierId: tier._id, price: tier.price });
+          }
+          gaDecrements.set(tier._id, (gaDecrements.get(tier._id) || 0) + quantity);
+        }
+      }
+
+      subtotal += passUnits.reduce((sum, unit) => sum + unit.price, 0);
 
       // Recalculate shipping fee server-side — never trust the client value
       const country = shippingAddress?.country || 'Philippines';
@@ -457,6 +531,20 @@ router.post('/',
             );
           }
 
+          // Same atomic unit again — GA capacity and reserved-seat
+          // redemption succeed or fail together with everything else above.
+          for (const [passTierId, quantity] of gaDecrements) {
+            await passRepository.decrementTierCapacity({ passTierId, quantity }, { client: tx });
+          }
+          for (const unit of passUnits) {
+            if (unit.seatId) {
+              await passRepository.redeemSeat(
+                { passEventId: unit.passEventId, seatId: unit.seatId, holdToken: unit.holdToken },
+                { client: tx }
+              );
+            }
+          }
+
           const createdOrder = await orderRepository.create(
             {
               userId: req.user?._id,
@@ -478,15 +566,33 @@ router.post('/',
             { client: tx }
           );
 
+          // Issued directly (no separate pre-status) the moment the order
+          // itself commits — by this point the seat/capacity reservation
+          // above has already succeeded, same "reserved at placement, not
+          // payment confirmation" rule Merchandise stock already follows.
+          for (const unit of passUnits) {
+            await passRepository.issuePass(
+              {
+                orderId: createdOrder._id,
+                passEventId: unit.passEventId,
+                passTierId: unit.passTierId,
+                passEventSeatId: unit.passEventSeatId,
+                price: unit.price,
+              },
+              { client: tx }
+            );
+          }
+
           await orderEventRepository.create(
             {
               orderId: createdOrder._id,
               type: 'created',
               actor: req.user ? 'customer' : 'system',
-              message: `Order placed with ${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`,
+              message: `Order placed with ${orderItems.length} item${orderItems.length === 1 ? '' : 's'}${passUnits.length ? ` and ${passUnits.length} pass${passUnits.length === 1 ? '' : 'es'}` : ''}`,
               metadata: {
                 total,
                 itemCount: orderItems.length,
+                passCount: passUnits.length,
                 paymentChannel,
                 gatewayFeeAmount,
                 ...(promoCodeRecord && { promoCode: promoCodeRecord.code, discountAmount }),
@@ -495,7 +601,17 @@ router.post('/',
             { client: tx }
           );
 
-          return createdOrder;
+          // orderRepository.create's own returned object was fetched before
+          // the Pass rows above existed (they're issued via separate
+          // queries afterward, unlike Merchandise's OrderItems which nest
+          // inside the same .create() call) — so createdOrder.passes would
+          // otherwise be permanently stale-empty on the object this
+          // function returns. Re-fetch once passes exist so the immediate
+          // gateway-failure path below (releaseStock(order), same request,
+          // no webhook/re-fetch involved) sees them — the webhook/expiry
+          // release path was already safe, since it always re-fetches the
+          // order fresh before calling releaseStock.
+          return passUnits.length > 0 ? orderRepository.findById(createdOrder._id, { client: tx }) : createdOrder;
         }, { timeout: 15000 }); // 2 round trips per item plus the order create — see releaseStock's matching note
       } catch (error) {
         if (error instanceof productRepository.InsufficientStockError) {
@@ -503,6 +619,18 @@ router.post('/',
           return res.status(400).json({
             success: false,
             message: `Insufficient stock for ${name}${error.color ? ` - ${error.color}` : ''} - Size ${error.size}`
+          });
+        }
+        if (error instanceof passRepository.SeatUnavailableError) {
+          return res.status(409).json({
+            success: false,
+            message: 'One of your selected seats was just taken. Please pick another.'
+          });
+        }
+        if (error instanceof passRepository.InsufficientPassCapacityError) {
+          return res.status(400).json({
+            success: false,
+            message: 'Not enough passes remaining at that tier.'
           });
         }
         if (error instanceof promoCodeRepository.PromoCodeExhaustedError) {

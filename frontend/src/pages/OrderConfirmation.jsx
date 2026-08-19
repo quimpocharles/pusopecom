@@ -7,6 +7,7 @@ import OrderTimeline from '../components/orders/OrderTimeline';
 import CompletePaymentButton from '../components/orders/CompletePaymentButton';
 import orderService from '../services/orderService';
 import useCartStore from '../store/cartStore';
+import usePassCartStore from '../store/passCartStore';
 import { toTitleCase } from '../utils/text';
 import { orderStatusLabel } from '../utils/orderStatus';
 import { downloadOrderSummaryPdf } from '../utils/orderPdf';
@@ -82,6 +83,7 @@ const OrderConfirmation = () => {
         // Clear cart after successful payment
         if (paymentStatusParam === 'success' || response.data.paymentStatus === 'paid') {
           useCartStore.getState().clearCart();
+          usePassCartStore.getState().clear();
         }
       } catch (err) {
         setError('Order not found');

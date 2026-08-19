@@ -51,7 +51,11 @@ function withOrderFallbacks(order) {
   return withUser;
 }
 
-const DEFAULT_INCLUDE = { items: true, promoCode: { select: { code: true, discountType: true } } };
+const DEFAULT_INCLUDE = {
+  items: true,
+  passes: true,
+  promoCode: { select: { code: true, discountType: true } },
+};
 
 /**
  * Order.shippingAddress was a single embedded object; the Prisma schema
