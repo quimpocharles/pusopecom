@@ -3,44 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeftIcon, PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import venueService from '../../services/venueService';
 
-const emptySectionForm = { name: '', seatingType: 'GENERAL_ADMISSION' };
-
-// A visual preview only — grouped by row, plain colored squares. This is
-// the admin's confirmation that the grid it generated looks right, not a
-// live availability map (that's per-PassEvent, via PassEventSeat, on the
-// customer-facing seat map — Stage 3, not this page).
-const SeatGridPreview = ({ seats }) => {
-  if (!seats.length) return <p className="text-sm text-gray-400">No seats generated yet.</p>;
-
-  const rows = {};
-  for (const seat of seats) {
-    (rows[seat.row] ??= []).push(seat);
-  }
-  for (const row of Object.values(rows)) {
-    row.sort((a, b) => Number(a.seatNumber) - Number(b.seatNumber));
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {Object.entries(rows).map(([row, rowSeats]) => (
-        <div key={row} className="flex items-center gap-1.5">
-          <span className="w-6 text-xs font-medium text-gray-500 flex-shrink-0">{row}</span>
-          <div className="flex flex-wrap gap-1">
-            {rowSeats.map((seat) => (
-              <span
-                key={seat._id}
-                title={seat.label}
-                className="w-7 h-7 flex items-center justify-center bg-white border border-ink-200 text-[10px] font-medium text-ink-700"
-              >
-                {seat.seatNumber}
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
+const emptySectionForm = { name: '' };
 
 const AdminVenueDetail = () => {
   const { id } = useParams();
@@ -52,8 +15,6 @@ const AdminVenueDetail = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [gridInputs, setGridInputs] = useState({}); // sectionId -> { rows, seatsPerRow }
-  const [generating, setGenerating] = useState(null); // sectionId currently generating
 
   const fetchVenue = useCallback(async () => {
     setLoading(true);
@@ -80,7 +41,7 @@ const AdminVenueDetail = () => {
 
   const openEditSection = (section) => {
     setEditingSectionId(section._id);
-    setSectionForm({ name: section.name, seatingType: section.seatingType });
+    setSectionForm({ name: section.name });
     setError('');
     setSectionModalOpen(true);
   };
@@ -111,20 +72,6 @@ const AdminVenueDetail = () => {
       fetchVenue();
     } catch (err) {
       console.error('Failed to delete section:', err);
-    }
-  };
-
-  const handleGenerateGrid = async (sectionId) => {
-    const { rows, seatsPerRow } = gridInputs[sectionId] || {};
-    if (!rows || !seatsPerRow) return;
-    setGenerating(sectionId);
-    try {
-      await venueService.generateSeatGrid(sectionId, { rows: Number(rows), seatsPerRow: Number(seatsPerRow) });
-      fetchVenue();
-    } catch (err) {
-      console.error('Failed to generate seat grid:', err);
-    } finally {
-      setGenerating(null);
     }
   };
 
@@ -163,70 +110,21 @@ const AdminVenueDetail = () => {
 
       {(venue.sections || []).length === 0 ? (
         <div className="card px-6 py-12 text-center text-sm text-gray-500">
-          No sections yet — add one to start building this venue's seating.
+          No sections yet — add one, then attach priced tiers to it from a Pass Event.
         </div>
       ) : (
         <div className="space-y-4">
           {venue.sections.map((section) => (
-            <div key={section._id} className="card p-6">
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">{section.name}</h2>
-                  <span className={`block text-xs font-semibold uppercase tracking-wide mt-1 ${
-                    section.seatingType === 'RESERVED_SEAT' ? 'text-blue-700' : 'text-purple-700'
-                  }`}>
-                    {section.seatingType === 'RESERVED_SEAT' ? 'Reserved Seating' : 'General Admission'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => openEditSection(section)} className="p-1.5 text-ink-500 hover:text-ink-900 hover:bg-ink-200 transition-colors">
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setDeleteConfirm(section._id)} className="p-1.5 text-ink-500 hover:text-red-600 hover:bg-red-50 transition-colors">
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
+            <div key={section._id} className="card p-6 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-gray-900">{section.name}</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={() => openEditSection(section)} className="p-1.5 text-ink-500 hover:text-ink-900 hover:bg-ink-200 transition-colors">
+                  <PencilIcon className="w-4 h-4" />
+                </button>
+                <button onClick={() => setDeleteConfirm(section._id)} className="p-1.5 text-ink-500 hover:text-red-600 hover:bg-red-50 transition-colors">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
               </div>
-
-              {section.seatingType === 'RESERVED_SEAT' ? (
-                <div>
-                  <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-paper border border-ink-200">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Rows</label>
-                      <input
-                        type="number"
-                        min="1"
-                        defaultValue={section.rows || ''}
-                        onChange={(e) => setGridInputs((prev) => ({ ...prev, [section._id]: { ...prev[section._id], rows: e.target.value } }))}
-                        className="w-24 px-2 py-1.5 border border-gray-300 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Seats per row</label>
-                      <input
-                        type="number"
-                        min="1"
-                        defaultValue={section.seatsPerRow || ''}
-                        onChange={(e) => setGridInputs((prev) => ({ ...prev, [section._id]: { ...prev[section._id], seatsPerRow: e.target.value } }))}
-                        className="w-28 px-2 py-1.5 border border-gray-300 text-sm"
-                      />
-                    </div>
-                    <button
-                      onClick={() => handleGenerateGrid(section._id)}
-                      disabled={generating === section._id}
-                      className="btn-primary px-3 py-1.5 text-sm disabled:opacity-50"
-                    >
-                      {generating === section._id ? 'Generating...' : section.seats?.length ? 'Regenerate Grid' : 'Generate Grid'}
-                    </button>
-                    {section.seats?.length > 0 && (
-                      <span className="text-xs text-gray-400">Regenerating replaces every seat in this section.</span>
-                    )}
-                  </div>
-                  <SeatGridPreview seats={section.seats || []} />
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">General admission — capacity is set per Pass Event tier, not here.</p>
-              )}
             </div>
           ))}
         </div>
@@ -254,17 +152,6 @@ const AdminVenueDetail = () => {
                   className="input-field text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Seating Type</label>
-                <select
-                  value={sectionForm.seatingType}
-                  onChange={(e) => setSectionForm({ ...sectionForm, seatingType: e.target.value })}
-                  className="input-field text-sm bg-white"
-                >
-                  <option value="GENERAL_ADMISSION">General Admission</option>
-                  <option value="RESERVED_SEAT">Reserved Seating</option>
-                </select>
-              </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
                   {saving ? 'Saving...' : editingSectionId ? 'Update' : 'Create'}
@@ -282,7 +169,7 @@ const AdminVenueDetail = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card p-6 max-w-sm w-full">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Section</h3>
-            <p className="text-sm text-gray-600 mb-6">This also removes every seat in this section. This cannot be undone.</p>
+            <p className="text-sm text-gray-600 mb-6">This cannot be undone.</p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setDeleteConfirm(null)} className="btn-secondary">Cancel</button>
               <button onClick={() => handleDeleteSection(deleteConfirm)} className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700">Delete</button>

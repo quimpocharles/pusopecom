@@ -40,11 +40,6 @@ const venueService = {
     const response = await api.delete(`/admin/venues/sections/${sectionId}`);
     return response.data;
   },
-
-  generateSeatGrid: async (sectionId, { rows, seatsPerRow }) => {
-    const response = await api.post(`/admin/venues/sections/${sectionId}/seats/generate`, { rows, seatsPerRow });
-    return response.data;
-  },
 };
 
 export default venueService;

@@ -11,21 +11,6 @@ const passEventService = {
     return response.data;
   },
 
-  getSectionSeats: async (eventId, sectionId) => {
-    const response = await api.get(`/pass-events/${eventId}/sections/${sectionId}/seats`);
-    return response.data;
-  },
-
-  holdSeat: async (eventId, seatId) => {
-    const response = await api.post(`/pass-events/${eventId}/seats/${seatId}/hold`);
-    return response.data;
-  },
-
-  releaseSeat: async (eventId, seatId, holdToken) => {
-    const response = await api.delete(`/pass-events/${eventId}/seats/${seatId}/hold`, { data: { holdToken } });
-    return response.data;
-  },
-
   getMyPasses: async () => {
     const response = await api.get('/pass-events/my/passes');
     return response.data;

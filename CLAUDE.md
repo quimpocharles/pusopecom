@@ -58,7 +58,7 @@ Full detail: `docs/DOMAIN_MODEL.md`. 28 concepts across 5 layers. Four were adde
 | Transaction & Fulfillment | Order, Payment, Shipment, Fulfillment, Inventory |
 | Presence & Story | Storefront, Discovery Hub, Story, Media, Season, Campaign |
 
-> **Event admission shipped as "Pass," not "Ticket," and ahead of Membership's planned sequencing.** The source docs (`docs/DOMAIN_MODEL.md`, ADR-003) call this category "Ticket" — that naming is superseded, not wrong at the time it was written. `docs/EXECUTION_PLAN.md` sequenced Membership as the first new category to build, not this one; ADR-011 documents the deliberate decision to go out of that order. See ADR-011 for the full reasoning, including why seat/capacity holds reuse this codebase's existing Postgres atomic-reservation pattern rather than Redis.
+> **Event admission shipped as "Pass," not "Ticket," and ahead of Membership's planned sequencing.** The source docs (`docs/DOMAIN_MODEL.md`, ADR-003) call this category "Ticket" — that naming is superseded, not wrong at the time it was written. `docs/EXECUTION_PLAN.md` sequenced Membership as the first new category to build, not this one; ADR-011 documents the deliberate decision to go out of that order, including why capacity holds reuse this codebase's existing Postgres atomic-reservation pattern rather than Redis. Per-seat selection (the original ADR-011 design) was later scrapped in favor of section + quantity + a static seating-chart reference image — see the ADR-011 addendum.
 
 Key structural facts, easy to get wrong:
 - A **League** (UAAP, PBA, PVL) is itself an **Organization** — related to member schools/clubs through *participation*, not *ownership*. Ownership is reserved for Organization→Team.
@@ -187,8 +187,8 @@ Use these words exactly as defined. If a term isn't here, check `docs/DOMAIN_MOD
 | **Commerce Item** | The category-agnostic abstract listing. Merchandise and Pass are its concrete categories today. |
 | **Merchandise** | The concrete, physical-goods Commerce Item category sold today. |
 | **Pass** | The concrete, event-admission Commerce Item category (ADR-011) — not "Ticket," see the Decision Log for why. Grants access to a time-boxed **PassEvent** at a **Venue**; fulfillment is the `Pass` credential itself (scannable, one per admitted person), not a Shipment. |
-| **PassTier** | The Product-Variant equivalent for Pass — a specific admission tier (e.g. GA, VIP, a numbered section) tied to one VenueSection. What Pass Inventory (seat/capacity availability) tracks. |
-| **Venue** | A physical location a PassEvent is held at. Owns VenueSections (RESERVED_SEAT or GENERAL_ADMISSION) and, for reserved sections, individual Seats — reused across every event held there. |
+| **PassTier** | The Product-Variant equivalent for Pass — a specific admission tier (e.g. GA, VIP, a section) tied to one VenueSection, with its own capacity/sold counter. What Pass Inventory tracks. Per-seat selection was scrapped (ADR-011 addendum) — every tier is capacity-based, no individual seats. |
+| **Venue** | A physical location a PassEvent is held at. Owns VenueSections (plain named areas, no seating-type distinction) and an optional `seatingChartUrl` — a static reference image shown to fans, not an interactive map. |
 | **Product Variant** | The actual purchasable unit — a specific size/color combination. What Inventory tracks. |
 | **Collection** | A curated, usually persistent grouping of Commerce Items. Not a pricing mechanism. |
 | **Drop** | A time-boxed, scarcity-driven release. Governs timing/availability, not price. PassEvent already carries this shape natively — no separate Drop entity was built for it. |

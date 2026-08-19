@@ -110,21 +110,4 @@ router.delete('/sections/:sectionId', async (req, res) => {
   }
 });
 
-// Grid-based MVP seat-map builder (ADR-011) — regenerates the section's
-// Seat rows wholesale from a rows x seatsPerRow layout.
-router.post('/sections/:sectionId/seats/generate', async (req, res) => {
-  try {
-    const { rows, seatsPerRow } = req.body;
-    if (!Number.isInteger(rows) || rows < 1 || !Number.isInteger(seatsPerRow) || seatsPerRow < 1) {
-      return res.status(400).json({ success: false, message: 'rows and seatsPerRow must be positive integers' });
-    }
-    const seats = await venueRepository.generateSeatGrid(req.params.sectionId, { rows, seatsPerRow });
-    res.json({ success: true, message: 'Seat grid generated successfully', data: seats });
-  } catch (error) {
-    logger.error({ err: error }, 'Generate seat grid error');
-    Sentry.captureException(error);
-    res.status(500).json({ success: false, message: 'Failed to generate seat grid' });
-  }
-});
-
 export default router;

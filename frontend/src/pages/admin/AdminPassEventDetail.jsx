@@ -38,8 +38,6 @@ const AdminPassEventDetail = () => {
     fetchData();
   }, [fetchData]);
 
-  const sectionById = (sectionId) => venue?.sections?.find((s) => s._id === sectionId);
-
   const openAdd = () => {
     setEditingTierId(null);
     setForm(emptyTierForm);
@@ -59,8 +57,6 @@ const AdminPassEventDetail = () => {
     setModalOpen(true);
   };
 
-  const selectedSection = sectionById(form.venueSectionId);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -70,10 +66,11 @@ const AdminPassEventDetail = () => {
         venueSectionId: form.venueSectionId,
         name: form.name,
         price: Number(form.price),
-        ...(selectedSection?.seatingType === 'GENERAL_ADMISSION' && { capacity: Number(form.capacity), sold: 0 }),
+        capacity: Number(form.capacity),
+        sold: 0,
       };
       if (editingTierId) {
-        await passEventService.updateTier(editingTierId, { name: payload.name, price: payload.price, ...(payload.capacity != null && { capacity: payload.capacity }) });
+        await passEventService.updateTier(editingTierId, { name: payload.name, price: payload.price, capacity: payload.capacity });
       } else {
         await passEventService.createTier(id, payload);
       }
@@ -132,7 +129,7 @@ const AdminPassEventDetail = () => {
 
       {!venue?.sections?.length && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 text-sm text-amber-800">
-          This venue has no sections yet — <Link to={`/admin/venues/${venue?._id}`} className="underline font-medium">add sections and seating</Link> before creating tiers.
+          This venue has no sections yet — <Link to={`/admin/venues/${venue?._id}`} className="underline font-medium">add sections</Link> before creating tiers.
         </div>
       )}
 
@@ -159,20 +156,9 @@ const AdminPassEventDetail = () => {
                 event.tiers.map((tier) => (
                   <tr key={tier._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{tier.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {tier.venueSection?.name}
-                      <span className={`ml-2 text-xs font-semibold uppercase tracking-wide ${
-                        tier.venueSection?.seatingType === 'RESERVED_SEAT' ? 'text-blue-700' : 'text-purple-700'
-                      }`}>
-                        {tier.venueSection?.seatingType === 'RESERVED_SEAT' ? 'Reserved' : 'GA'}
-                      </span>
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{tier.venueSection?.name}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">₱{Number(tier.price).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {tier.venueSection?.seatingType === 'GENERAL_ADMISSION'
-                        ? `${tier.sold ?? 0} / ${tier.capacity ?? '∞'}`
-                        : `${sectionById(tier.venueSectionId || tier.venueSection?._id)?.seats?.length ?? '—'} seats`}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{tier.sold ?? 0} / {tier.capacity ?? '∞'}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <button onClick={() => openEdit(tier)} className="p-1.5 text-ink-500 hover:text-ink-900 hover:bg-ink-200 transition-colors">
@@ -214,7 +200,7 @@ const AdminPassEventDetail = () => {
                 >
                   <option value="">Select...</option>
                   {venue?.sections?.map((s) => (
-                    <option key={s._id} value={s._id}>{s.name} ({s.seatingType === 'RESERVED_SEAT' ? 'Reserved' : 'GA'})</option>
+                    <option key={s._id} value={s._id}>{s.name}</option>
                   ))}
                 </select>
               </div>
@@ -244,22 +230,17 @@ const AdminPassEventDetail = () => {
                 />
               </div>
 
-              {selectedSection?.seatingType === 'GENERAL_ADMISSION' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.capacity}
-                    onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-                    required
-                    className="input-field text-sm"
-                  />
-                </div>
-              )}
-              {selectedSection?.seatingType === 'RESERVED_SEAT' && (
-                <p className="text-xs text-gray-400">Availability comes from this section's generated seats — no separate capacity needed.</p>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.capacity}
+                  onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                  required
+                  className="input-field text-sm"
+                />
+              </div>
 
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">

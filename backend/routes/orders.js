@@ -78,11 +78,7 @@ async function releaseStock(order) {
     // redemption, so it releases on the same trigger. Every releaseStock
     // caller gets this for free, same as the two releases above.
     for (const pass of order.passes ?? []) {
-      if (pass.passEventSeatId) {
-        await passRepository.releaseSoldSeat(pass.passEventSeatId, { client: tx });
-      } else {
-        await passRepository.restoreTierCapacity({ passTierId: pass.passTierId, quantity: 1 }, { client: tx });
-      }
+      await passRepository.restoreTierCapacity({ passTierId: pass.passTierId, quantity: 1 }, { client: tx });
       await passRepository.transition(pass._id, 'cancelled', {
         actor: 'system',
         message: 'Payment failed — pass reservation released',
@@ -399,15 +395,13 @@ router.post('/',
 
       // Pass 1b — Pass (event admission) resolution. Mirrors the Merchandise
       // loop above: structural validation and price resolution here, the
-      // atomic seat/capacity reservation happens in the transaction below.
-      // Each request entry is either a RESERVED_SEAT pick (seatId + the
-      // holdToken from POST /pass-events/:id/seats/:seatId/hold) — always
-      // one Pass per entry — or a GENERAL_ADMISSION pick (quantity,
-      // no seat) — one entry can expand into several individual Passes,
-      // since each admission credential is independently scannable
-      // (see the schema comment on the Pass model for why).
+      // atomic capacity reservation happens in the transaction below. Every
+      // tier is quantity/capacity-based (ADR-011 addendum — per-seat
+      // selection was scrapped) — one request entry can expand into several
+      // individual Passes, since each admission credential is independently
+      // scannable (see the schema comment on the Pass model for why).
       const passUnits = [];
-      const gaDecrements = new Map(); // passTierId -> total quantity to decrement, once per tier
+      const tierDecrements = new Map(); // passTierId -> total quantity to decrement, once per tier
 
       for (const p of passes || []) {
         const tier = await passEventRepository.findTierById(p.passTierId);
@@ -415,32 +409,11 @@ router.post('/',
           return res.status(400).json({ success: false, message: `Pass tier not found: ${p.passTierId}` });
         }
 
-        if (tier.venueSection.seatingType === 'RESERVED_SEAT') {
-          if (!p.seatId || !p.holdToken) {
-            return res.status(400).json({
-              success: false,
-              message: `A held seat is required for "${tier.name}" — select a seat before checking out.`
-            });
-          }
-          const eventSeat = await passRepository.findEventSeat({ passEventId: tier.passEventId, seatId: p.seatId });
-          if (!eventSeat) {
-            return res.status(400).json({ success: false, message: 'Seat not found for this event' });
-          }
-          passUnits.push({
-            passEventId: tier.passEventId,
-            passTierId: tier._id,
-            seatId: p.seatId,
-            passEventSeatId: eventSeat._id,
-            holdToken: p.holdToken,
-            price: tier.price,
-          });
-        } else {
-          const quantity = Math.max(1, Number(p.quantity) || 1);
-          for (let i = 0; i < quantity; i++) {
-            passUnits.push({ passEventId: tier.passEventId, passTierId: tier._id, price: tier.price });
-          }
-          gaDecrements.set(tier._id, (gaDecrements.get(tier._id) || 0) + quantity);
+        const quantity = Math.max(1, Number(p.quantity) || 1);
+        for (let i = 0; i < quantity; i++) {
+          passUnits.push({ passEventId: tier.passEventId, passTierId: tier._id, price: tier.price });
         }
+        tierDecrements.set(tier._id, (tierDecrements.get(tier._id) || 0) + quantity);
       }
 
       subtotal += passUnits.reduce((sum, unit) => sum + unit.price, 0);
@@ -531,18 +504,10 @@ router.post('/',
             );
           }
 
-          // Same atomic unit again — GA capacity and reserved-seat
-          // redemption succeed or fail together with everything else above.
-          for (const [passTierId, quantity] of gaDecrements) {
+          // Same atomic unit again — Pass tier capacity succeeds or fails
+          // together with everything else above.
+          for (const [passTierId, quantity] of tierDecrements) {
             await passRepository.decrementTierCapacity({ passTierId, quantity }, { client: tx });
-          }
-          for (const unit of passUnits) {
-            if (unit.seatId) {
-              await passRepository.redeemSeat(
-                { passEventId: unit.passEventId, seatId: unit.seatId, holdToken: unit.holdToken },
-                { client: tx }
-              );
-            }
           }
 
           const createdOrder = await orderRepository.create(
@@ -567,8 +532,8 @@ router.post('/',
           );
 
           // Issued directly (no separate pre-status) the moment the order
-          // itself commits — by this point the seat/capacity reservation
-          // above has already succeeded, same "reserved at placement, not
+          // itself commits — by this point the capacity reservation above
+          // has already succeeded, same "reserved at placement, not
           // payment confirmation" rule Merchandise stock already follows.
           for (const unit of passUnits) {
             await passRepository.issuePass(
@@ -576,7 +541,6 @@ router.post('/',
                 orderId: createdOrder._id,
                 passEventId: unit.passEventId,
                 passTierId: unit.passTierId,
-                passEventSeatId: unit.passEventSeatId,
                 price: unit.price,
               },
               { client: tx }
@@ -619,12 +583,6 @@ router.post('/',
           return res.status(400).json({
             success: false,
             message: `Insufficient stock for ${name}${error.color ? ` - ${error.color}` : ''} - Size ${error.size}`
-          });
-        }
-        if (error instanceof passRepository.SeatUnavailableError) {
-          return res.status(409).json({
-            success: false,
-            message: 'One of your selected seats was just taken. Please pick another.'
           });
         }
         if (error instanceof passRepository.InsufficientPassCapacityError) {

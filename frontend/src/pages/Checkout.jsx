@@ -75,8 +75,7 @@ const Checkout = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { items, getCartTotal, openCart } = useCartStore();
   const passEvent = usePassCartStore((s) => s.event);
-  const gaSelections = usePassCartStore((s) => s.gaSelections);
-  const seatSelections = usePassCartStore((s) => s.seatSelections);
+  const passSelections = usePassCartStore((s) => s.selections);
   const getPassTotal = usePassCartStore((s) => s.getPassTotal);
   const toOrderPasses = usePassCartStore((s) => s.toOrderPasses);
   const { user } = useAuthStore();
@@ -116,7 +115,7 @@ const Checkout = () => {
   const country = watch('country') || 'Philippines';
   const region  = watch('region')  || '';
   const passTotal = getPassTotal();
-  const passCount = gaSelections.reduce((sum, s) => sum + s.quantity, 0) + seatSelections.length;
+  const passCount = passSelections.reduce((sum, s) => sum + s.quantity, 0);
   const subtotal = getCartTotal() + passTotal; // hoisted above effects so it can be a dependency
 
   // Fetch shipping options from the server whenever country, region, or cart total changes.
@@ -614,7 +613,7 @@ const Checkout = () => {
                     </div>
                   </div>
                 ))}
-                {gaSelections.map((s) => (
+                {passSelections.map((s) => (
                   <div key={s.tierId} className="flex gap-3 pb-3 border-b">
                     <div className="flex-1">
                       <p className="font-semibold text-sm">{passEvent?.name}</p>
@@ -622,17 +621,6 @@ const Checkout = () => {
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">₱{(s.price * s.quantity).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
-                {seatSelections.map((s) => (
-                  <div key={s.seatId} className="flex gap-3 pb-3 border-b">
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">{passEvent?.name}</p>
-                      <p className="text-xs text-gray-600">{s.tierName} — {s.seatLabel}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">₱{s.price.toFixed(2)}</p>
                     </div>
                   </div>
                 ))}

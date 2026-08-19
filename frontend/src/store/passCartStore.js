@@ -2,70 +2,46 @@ import { create } from 'zustand';
 
 /**
  * A fan's pending Pass selection for one event at a time — not persisted to
- * localStorage the way cartStore.js's Merchandise cart is. That's
- * deliberate: a RESERVED_SEAT selection is backed by a real server-side
- * hold with a short TTL (see backend/repositories/passRepository.js), so
- * showing a "still selected" seat after a page reload — once its hold has
- * likely already expired — would be misleading rather than convenient.
- * Session-only state matches what's actually still true.
+ * localStorage the way cartStore.js's Merchandise cart is, to keep the same
+ * session-only shape now that selection has no server-side hold to expire
+ * either (ADR-011 addendum — per-seat selection was scrapped; every tier is
+ * a plain quantity pick now).
  *
- * Selections are keyed by passTierId for GENERAL_ADMISSION (one entry,
- * quantity adjustable) and by seatId for RESERVED_SEAT (one entry per
- * held seat, since each is independently scannable at checkout — see the
- * schema comment on the Pass model for why).
+ * Selections are keyed by passTierId, one entry per tier with an adjustable
+ * quantity.
  */
 const usePassCartStore = create((set, get) => ({
   event: null,
-  gaSelections: [], // { tierId, tierName, price, quantity }
-  seatSelections: [], // { tierId, tierName, price, seatId, seatLabel, holdToken, heldUntil }
+  selections: [], // { tierId, tierName, price, quantity }
 
   setEvent: (event) => {
-    set((state) => (state.event?._id === event._id ? state : { event, gaSelections: [], seatSelections: [] }));
+    set((state) => (state.event?._id === event._id ? state : { event, selections: [] }));
   },
 
-  setGaQuantity: (tier, quantity) => {
+  setQuantity: (tier, quantity) => {
     set((state) => {
-      const rest = state.gaSelections.filter((s) => s.tierId !== tier._id);
-      if (quantity <= 0) return { gaSelections: rest };
-      return { gaSelections: [...rest, { tierId: tier._id, tierName: tier.name, price: tier.price, quantity }] };
+      const rest = state.selections.filter((s) => s.tierId !== tier._id);
+      if (quantity <= 0) return { selections: rest };
+      return { selections: [...rest, { tierId: tier._id, tierName: tier.name, price: tier.price, quantity }] };
     });
   },
 
-  addSeatSelection: ({ tier, seat, holdToken, heldUntil }) => {
-    set((state) => ({
-      seatSelections: [
-        ...state.seatSelections.filter((s) => s.seatId !== seat._id),
-        { tierId: tier._id, tierName: tier.name, price: tier.price, seatId: seat._id, seatLabel: seat.label, holdToken, heldUntil },
-      ],
-    }));
-  },
-
-  removeSeatSelection: (seatId) => {
-    set((state) => ({ seatSelections: state.seatSelections.filter((s) => s.seatId !== seatId) }));
-  },
-
-  clear: () => set({ event: null, gaSelections: [], seatSelections: [] }),
+  clear: () => set({ event: null, selections: [] }),
 
   getPassCount: () => {
-    const { gaSelections, seatSelections } = get();
-    return gaSelections.reduce((sum, s) => sum + s.quantity, 0) + seatSelections.length;
+    const { selections } = get();
+    return selections.reduce((sum, s) => sum + s.quantity, 0);
   },
 
   getPassTotal: () => {
-    const { gaSelections, seatSelections } = get();
-    return (
-      gaSelections.reduce((sum, s) => sum + s.price * s.quantity, 0) +
-      seatSelections.reduce((sum, s) => sum + s.price, 0)
-    );
+    const { selections } = get();
+    return selections.reduce((sum, s) => sum + s.price * s.quantity, 0);
   },
 
   // Shape orders.js's POST /orders expects for its `passes` array.
   toOrderPasses: () => {
-    const { gaSelections, seatSelections } = get();
-    return [
-      ...gaSelections.map((s) => ({ passTierId: s.tierId, quantity: s.quantity })),
-      ...seatSelections.map((s) => ({ passTierId: s.tierId, seatId: s.seatId, holdToken: s.holdToken })),
-    ];
+    const { selections } = get();
+    return selections.map((s) => ({ passTierId: s.tierId, quantity: s.quantity }));
   },
 }));
 

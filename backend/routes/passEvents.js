@@ -1,10 +1,9 @@
 import express from 'express';
-import crypto from 'crypto';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as passEventRepository from '../repositories/passEventRepository.js';
 import * as passRepository from '../repositories/passRepository.js';
-import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
+import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
@@ -42,61 +41,6 @@ router.get('/:slug', async (req, res) => {
     logger.error({ err: error }, 'Get pass event error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to retrieve event' });
-  }
-});
-
-// Live seat availability for one RESERVED_SEAT section of an event — the
-// seat-map's data source. Deliberately narrow (one section per call) since
-// a real venue's full seat count can be large; the frontend fetches
-// section-by-section as the fan navigates the map.
-router.get('/:id/sections/:sectionId/seats', async (req, res) => {
-  try {
-    const seats = await passRepository.findEventSeats({ passEventId: req.params.id, venueSectionId: req.params.sectionId });
-    // holdToken is a bearer credential — whoever holds it can release or
-    // redeem that seat (see passRepository.releaseSeat/redeemSeat). This is
-    // a public, unauthenticated listing, so it must never leak another
-    // fan's token; the caller's own browser already knows which seats *it*
-    // holds from the response POST /seats/:seatId/hold gave it directly.
-    const publicSeats = seats.map(({ holdToken, ...seat }) => seat);
-    res.json({ success: true, data: publicSeats });
-  } catch (error) {
-    logger.error({ err: error }, 'Get event seats error');
-    Sentry.captureException(error);
-    res.status(500).json({ success: false, message: 'Failed to retrieve seats' });
-  }
-});
-
-// --- Seat hold/release — pre-checkout, no login required (guest browsing) ---
-
-router.post('/:id/seats/:seatId/hold', optionalAuth, async (req, res) => {
-  try {
-    const event = await passEventRepository.findById(req.params.id);
-    if (!event || !event.active) return res.status(404).json({ success: false, message: 'Event not found' });
-    if (!isOnSale(event)) return res.status(400).json({ success: false, message: 'This event is not currently on sale.' });
-
-    const holdToken = crypto.randomUUID();
-    const eventSeat = await passRepository.holdSeat({ passEventId: req.params.id, seatId: req.params.seatId, holdToken });
-    res.json({ success: true, data: { holdToken, seat: eventSeat, heldUntil: eventSeat.heldUntil } });
-  } catch (error) {
-    if (error instanceof passRepository.SeatUnavailableError) {
-      return res.status(409).json({ success: false, message: 'That seat is no longer available.' });
-    }
-    logger.error({ err: error }, 'Hold seat error');
-    Sentry.captureException(error);
-    res.status(500).json({ success: false, message: 'Failed to hold seat' });
-  }
-});
-
-router.delete('/:id/seats/:seatId/hold', async (req, res) => {
-  try {
-    const { holdToken } = req.body;
-    if (!holdToken) return res.status(400).json({ success: false, message: 'holdToken is required' });
-    await passRepository.releaseSeat({ passEventId: req.params.id, seatId: req.params.seatId, holdToken });
-    res.json({ success: true });
-  } catch (error) {
-    logger.error({ err: error }, 'Release seat error');
-    Sentry.captureException(error);
-    res.status(500).json({ success: false, message: 'Failed to release seat' });
   }
 });
 
@@ -179,15 +123,9 @@ router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSE
   }
 });
 
-// A RESERVED_SEAT tier's PassEventSeat rows are initialized the moment the
-// tier is created — see passRepository.initializeEventSeats's own comment
-// for why this happens up front rather than lazily.
 router.post('/:id/tiers', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MANAGE), async (req, res) => {
   try {
     const tier = await passEventRepository.createTier({ ...req.body, passEventId: req.params.id });
-    if (tier.venueSection.seatingType === 'RESERVED_SEAT') {
-      await passRepository.initializeEventSeats({ passEventId: req.params.id, venueSectionId: tier.venueSectionId });
-    }
     res.status(201).json({ success: true, message: 'Tier created successfully', data: tier });
   } catch (error) {
     logger.error({ err: error }, 'Create pass tier error');

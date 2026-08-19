@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MapIcon } from '@heroicons/react/24/outline';
 import venueService from '../../services/venueService';
 
-const emptyForm = { name: '', slug: '', address: '', city: '', capacity: '', mapImageUrl: '', active: true };
+const emptyForm = { name: '', slug: '', address: '', city: '', capacity: '', seatingChartUrl: '', active: true };
 
 const generateSlug = (name) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -49,7 +49,7 @@ const AdminVenues = () => {
       address: venue.address,
       city: venue.city,
       capacity: venue.capacity ?? '',
-      mapImageUrl: venue.mapImageUrl || '',
+      seatingChartUrl: venue.seatingChartUrl || '',
       active: venue.active,
     });
     setError('');
@@ -239,12 +239,12 @@ const AdminVenues = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Map Image URL</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Seating Chart URL</label>
                 <input
                   type="text"
-                  value={form.mapImageUrl}
-                  onChange={(e) => setForm({ ...form, mapImageUrl: e.target.value })}
-                  placeholder="Background for the seat-map builder (optional)"
+                  value={form.seatingChartUrl}
+                  onChange={(e) => setForm({ ...form, seatingChartUrl: e.target.value })}
+                  placeholder="Shown to fans on the event page so they can see where each section is (optional)"
                   className="input-field text-sm"
                 />
               </div>

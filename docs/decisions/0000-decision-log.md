@@ -259,3 +259,25 @@ Every piece reuses a pattern this codebase already proved rather than inventing 
 
 **Future implications**
 This pass ships the domain model, the atomic reservation engine, and checkout integration — schema, repositories, routes, and tests, verified against a live database including concurrent-hold and concurrent-capacity race tests. Admin venue/seat-map management UI, the customer-facing browse/seat-selection/checkout UI, My PUSO Locker surfacing, and the staff check-in tool's UI are later, separate stages, not part of this entry. Freeform seat-map layout matching a real venue's actual curved rows (vs. the grid-based MVP builder) and camera-based QR scanning (vs. a manually typed/looked-up token) are named, deliberate simplifications, not oversights — fast-follows once a real venue is on the platform. `shippingAddress` stays required even for a Pass-only order, reusing the existing checkout contact-form shape rather than building a parallel shipping-less path — a known simplification, not a design statement that Passes are shipped. Real venue authorization (Araneta, MOA, or any other venue) is a business/licensing dependency this document explicitly cannot resolve and does not attempt to.
+
+---
+
+### ADR-011 Addendum (2026-08-19) — per-seat selection scrapped in favor of sections + quantity + a static seating chart
+
+**Context**
+Walking the shipped design through a concrete case — games at Smart Araneta Coliseum, the actual venue this platform is meant to eventually onboard — exposed a real problem with the grid-based MVP seat-map builder: a coliseum's sections curve around a center court in a ring. A flat rows × seats-per-row grid cannot represent that shape, so it cannot tell a fan whether a seat is worth its price — sightline is the entire point of arena seating. Fixing that honestly would mean building true freeform, coordinate-positioned seat placement (an image upload, a seat-placement editor, a coordinate-aware customer-facing renderer) — a materially bigger feature than this platform's actual near-term need, on direct instruction to scrap seat-level selection rather than build toward it.
+
+**Decision**
+Individual seat selection is removed entirely — `Seat`, `PassEventSeat`, `SeatingType`, `PassEventSeatStatus`, and every hold/release/redeem code path built for them are deleted, not deprecated. Every `VenueSection` is now a plain named area (no seating-type distinction), and every `PassTier` behaves the way only `GENERAL_ADMISSION` tiers did before: a capacity/sold counter, decremented with the same atomic conditional-UPDATE already proven for stock and promo redemption. A fan picks a section and a quantity — the same interaction GA already had — for every tier, with no exceptions. `Venue.mapImageUrl`, added for a per-seat coordinate overlay that was never built, is renamed `seatingChartUrl` and repurposed as its simpler, actually-useful form: a single static reference image shown on the event page so a fan can see roughly where each section sits, with zero coordinate logic behind it.
+
+This is a pre-launch reversal — Pass ticketing had shipped in exactly one commit, with no real seat data — so the schema migration is a clean, destructive drop of the `seats`/`pass_event_seats` tables and the now-dead columns, not a coexistence migration.
+
+**Alternatives considered**
+- *Keep per-seat selection, fast-follow with freeform coordinate placement later.* Rejected — the grid-based version is actively misleading for a real curved venue (it implies spatial accuracy it doesn't have), and no near-term plan exists to build the freeform version, so shipping the honest, simpler section-level model now beats leaving a known-misleading one live indefinitely.
+- *Keep the RESERVED_SEAT/GENERAL_ADMISSION split, just stop building seat grids for RESERVED_SEAT sections.* Rejected — with no seat-level data ever populated, the distinction has no remaining behavioral difference; keeping it would be dead vocabulary the Coding Principles' "vocabulary matches the domain, exactly" rule argues directly against.
+
+**Why the chosen approach won**
+It tells the truth about what the platform actually knows: which section, roughly where (via the chart image), and how many are left (via the same proven capacity counter every tier already used for GA). It removes two models, two enums, an admin seat-grid builder, a customer-facing interactive seat map, three hold/release/redeem repository functions, and a live checkout branch — net less code, not more — while keeping every atomic-reservation guarantee this feature was built to prove.
+
+**Future implications**
+Reintroducing real seat-level selection — if a specific authorized venue and a real seating chart eventually justify it — is additive on top of this simpler shape (a new `Seat`/event-availability layer scoped underneath `VenueSection`, following the same atomic-CAS pattern), not a second rewrite of the section/tier/checkout spine. The staff check-in tool's UI, still not built, is unaffected by this change — `Pass`/`PassStatus`/`transition` are untouched.
