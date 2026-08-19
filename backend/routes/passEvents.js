@@ -3,6 +3,7 @@ import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as passEventRepository from '../repositories/passEventRepository.js';
 import * as passRepository from '../repositories/passRepository.js';
+import { ensureLeagueOrganization } from '../services/organizationMigrationService.js';
 import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 
@@ -85,9 +86,24 @@ router.get('/admin/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.PA
   }
 });
 
+// Resolves the admin form's `leagueId` (picked straight from the existing
+// League model, so admins never re-enter league data as a separate
+// Organization) into the real organizationId PassEvent's schema requires —
+// PassEvent.organizationId stays the Organization-first anchor, never a
+// flat league string, per CLAUDE.md. `organizationId`, if sent directly
+// (an Institution/Athlete pick), passes through untouched.
+async function resolveOrganizationId(body) {
+  const { leagueId, ...rest } = body;
+  if (leagueId && !rest.organizationId) {
+    rest.organizationId = await ensureLeagueOrganization(leagueId);
+  }
+  return rest;
+}
+
 router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MANAGE), async (req, res) => {
   try {
-    const event = await passEventRepository.create(req.body);
+    const data = await resolveOrganizationId(req.body);
+    const event = await passEventRepository.create(data);
     res.status(201).json({ success: true, message: 'Event created successfully', data: event });
   } catch (error) {
     if (error.code === 'P2002') {
@@ -101,7 +117,8 @@ router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MAN
 
 router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MANAGE), async (req, res) => {
   try {
-    const event = await passEventRepository.updateById(req.params.id, req.body);
+    const data = await resolveOrganizationId(req.body);
+    const event = await passEventRepository.updateById(req.params.id, data);
     res.json({ success: true, message: 'Event updated successfully', data: event });
   } catch (error) {
     if (error.code === 'P2025') return res.status(404).json({ success: false, message: 'Event not found' });

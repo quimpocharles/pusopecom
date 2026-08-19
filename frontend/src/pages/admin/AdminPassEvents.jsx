@@ -4,14 +4,24 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, TicketIcon } from '@heroico
 import passEventService from '../../services/passEventService';
 import venueService from '../../services/venueService';
 import organizationService from '../../services/organizationService';
+import leagueService from '../../services/leagueService';
+import ImageField from '../../components/admin/ImageField';
 
 const emptyForm = {
-  name: '', slug: '', description: '', organizationId: '', teamId: '', venueId: '',
-  startsAt: '', endsAt: '', salesStartAt: '', salesEndAt: '', active: true,
+  name: '', slug: '', description: '', organizationId: '', leagueId: '', teamId: '', venueId: '',
+  startsAt: '', endsAt: '', salesStartAt: '', salesEndAt: '', active: true, image: '',
 };
 
 const generateSlug = (name) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Institutions/Athletes only — Leagues are sourced straight from the
+// existing League model (below), not re-entered here as a second,
+// separately-managed Organization. See the League optgroup in the picker.
+const ORG_KIND_GROUPS = [
+  { kind: 'institution', label: 'Institutions' },
+  { kind: 'athlete', label: 'Athletes' },
+];
 
 // datetime-local inputs need "YYYY-MM-DDTHH:mm", ISO strings have seconds/Z
 const toDateTimeLocal = (iso) => (iso ? iso.slice(0, 16) : '');
@@ -20,6 +30,7 @@ const AdminPassEvents = () => {
   const [events, setEvents] = useState([]);
   const [venues, setVenues] = useState([]);
   const [organizations, setOrganizations] = useState([]);
+  const [leagues, setLeagues] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,15 +56,34 @@ const AdminPassEvents = () => {
     fetchEvents();
     venueService.getAll().then((res) => setVenues(res.data)).catch((err) => console.error('Failed to load venues:', err));
     organizationService.getAll().then((res) => setOrganizations(res.data)).catch((err) => console.error('Failed to load organizations:', err));
+    leagueService.getLeagues().then((res) => setLeagues(res.data)).catch((err) => console.error('Failed to load leagues:', err));
   }, [fetchEvents]);
 
+  // A picked League only has real Teams to offer if it's already been
+  // bridged to an Organization (League.organizationId) — a freshly-picked,
+  // not-yet-bridged League has none yet, same as any brand new Organization.
+  const selectedLeague = leagues.find((l) => l._id === form.leagueId);
+  const effectiveOrganizationId = form.organizationId || selectedLeague?.organizationId || '';
+
   useEffect(() => {
-    if (!form.organizationId) {
+    if (!effectiveOrganizationId) {
       setTeams([]);
       return;
     }
-    organizationService.getTeams(form.organizationId).then((res) => setTeams(res.data)).catch(() => setTeams([]));
-  }, [form.organizationId]);
+    organizationService.getTeams(effectiveOrganizationId).then((res) => setTeams(res.data)).catch(() => setTeams([]));
+  }, [effectiveOrganizationId]);
+
+  const orgPickerValue = form.leagueId ? `league:${form.leagueId}` : form.organizationId ? `org:${form.organizationId}` : '';
+
+  const handleOrgPickerChange = (e) => {
+    const [kind, id] = e.target.value.split(':');
+    setForm({
+      ...form,
+      leagueId: kind === 'league' ? id : '',
+      organizationId: kind === 'org' ? id : '',
+      teamId: '',
+    });
+  };
 
   const openAdd = () => {
     setEditingId(null);
@@ -64,11 +94,20 @@ const AdminPassEvents = () => {
 
   const openEdit = (event) => {
     setEditingId(event._id);
+    // The stored organization is always what's real (the League bridge
+    // target) — if it's a league-kind Organization, match it back to its
+    // League by name (the bridge always sets Organization.name =
+    // League.name exactly, see ensureLeagueOrganization) so the picker
+    // preselects the League option, not the underlying Organization one.
+    const matchedLeague = event.organization?.kind === 'league'
+      ? leagues.find((l) => l.name === event.organization.name)
+      : null;
     setForm({
       name: event.name,
       slug: event.slug,
       description: event.description || '',
-      organizationId: event.organizationId || event.organization?._id || '',
+      organizationId: matchedLeague ? '' : (event.organizationId || event.organization?._id || ''),
+      leagueId: matchedLeague?._id || '',
       teamId: event.teamId || event.team?._id || '',
       venueId: event.venueId || event.venue?._id || '',
       startsAt: toDateTimeLocal(event.startsAt),
@@ -76,6 +115,7 @@ const AdminPassEvents = () => {
       salesStartAt: toDateTimeLocal(event.salesStartAt),
       salesEndAt: toDateTimeLocal(event.salesEndAt),
       active: event.active,
+      image: event.images?.[0] || '',
     });
     setError('');
     setModalOpen(true);
@@ -91,11 +131,13 @@ const AdminPassEvents = () => {
     setError('');
     setSaving(true);
     try {
+      const { image, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
         teamId: form.teamId || null,
         salesStartAt: form.salesStartAt || null,
         salesEndAt: form.salesEndAt || null,
+        images: image ? [image] : [],
       };
       if (editingId) {
         await passEventService.update(editingId, payload);
@@ -166,7 +208,16 @@ const AdminPassEvents = () => {
               ) : (
                 events.map((event) => (
                   <tr key={event._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{event.name}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <div className="flex items-center gap-3">
+                        {event.images?.[0] ? (
+                          <img src={event.images[0]} alt="" className="w-8 h-8 object-cover border border-ink-200 flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 bg-ink-200 flex-shrink-0" />
+                        )}
+                        {event.name}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{event.venue?.name}</td>
                     <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">{new Date(event.startsAt).toLocaleString()}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{event.tiers?.length ?? 0}</td>
@@ -245,19 +296,36 @@ const AdminPassEvents = () => {
                 />
               </div>
 
+              <ImageField label="Event Image" value={form.image} onChange={(v) => setForm({ ...form, image: v })} />
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
                   <select
-                    value={form.organizationId}
-                    onChange={(e) => setForm({ ...form, organizationId: e.target.value, teamId: '' })}
+                    value={orgPickerValue}
+                    onChange={handleOrgPickerChange}
                     required
                     className="input-field text-sm bg-white"
                   >
                     <option value="">Select...</option>
-                    {organizations.map((org) => (
-                      <option key={org._id} value={org._id}>{org.name}</option>
-                    ))}
+                    {leagues.length > 0 && (
+                      <optgroup label="Leagues">
+                        {leagues.map((league) => (
+                          <option key={league._id} value={`league:${league._id}`}>{league.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {ORG_KIND_GROUPS.map(({ kind, label }) => {
+                      const inGroup = organizations.filter((org) => org.kind === kind);
+                      if (inGroup.length === 0) return null;
+                      return (
+                        <optgroup key={kind} label={label}>
+                          {inGroup.map((org) => (
+                            <option key={org._id} value={`org:${org._id}`}>{org.name}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -265,7 +333,7 @@ const AdminPassEvents = () => {
                   <select
                     value={form.teamId}
                     onChange={(e) => setForm({ ...form, teamId: e.target.value })}
-                    disabled={!form.organizationId}
+                    disabled={!orgPickerValue}
                     className="input-field text-sm bg-white disabled:bg-gray-50"
                   >
                     <option value="">None</option>

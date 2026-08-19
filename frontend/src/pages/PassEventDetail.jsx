@@ -98,6 +98,10 @@ const PassEventDetail = () => {
       <div className="container-custom py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
+            {event.images?.[0] && (
+              <img src={event.images[0]} alt={event.name} className="w-full aspect-video object-cover border border-ink-200" />
+            )}
+
             <div>
               {event.organization?.name && <p className="text-sm font-medium text-ink-500 uppercase tracking-wide mb-1">{event.organization.name}</p>}
               <h1 className="text-3xl font-bold mb-2">{event.name}</h1>

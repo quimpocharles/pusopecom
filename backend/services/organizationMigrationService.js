@@ -176,4 +176,29 @@ export async function revertPilotMigration({ institutionSlug, leagueSlug }, { cl
   return client ? run(client) : prisma.$transaction(run, { timeout: 15000 });
 }
 
-export default { FEU_PILOT_MANIFEST, planPilotMigration, applyPilotMigration, revertPilotMigration };
+/**
+ * The generic, self-service form of the League->Organization bridge the
+ * pilot script above only ever ran once, by hand, for UAAP. PassEvent needs
+ * every League selectable without re-entering the same league data as a
+ * second, separately-managed Organization — this just ensures a same-named
+ * Organization exists for a given League (creating it on first use) and
+ * returns its id, reusing League.organizationId as the idempotency check
+ * exactly the way the pilot's own leagueBridges step does. Deliberately
+ * skips the pilot's Team/Product backfill entirely — Pass Events don't need
+ * a league's historical roster, just a real Organization to anchor to.
+ */
+export async function ensureLeagueOrganization(leagueId, { client } = {}) {
+  const run = async (tx) => {
+    const league = await tx.league.findUnique({ where: { id: leagueId } });
+    if (!league) throw new Error(`League ${leagueId} not found`);
+    if (league.organizationId) return league.organizationId;
+
+    const org = await organizationRepository.create({ name: league.name, kind: 'league' }, { client: tx });
+    await tx.league.update({ where: { id: leagueId }, data: { organizationId: org._id } });
+    return org._id;
+  };
+
+  return client ? run(client) : prisma.$transaction(run);
+}
+
+export default { FEU_PILOT_MANIFEST, planPilotMigration, applyPilotMigration, revertPilotMigration, ensureLeagueOrganization };
