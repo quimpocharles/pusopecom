@@ -53,6 +53,7 @@ import campaignRoutes from './routes/campaigns.js';
 import fitCheckCampaignRoutes from './routes/fitCheckCampaigns.js';
 import faqRoutes from './routes/faq.js';
 import promoMessageRoutes from './routes/promoMessages.js';
+import promoCodeRoutes from './routes/promoCodes.js';
 import accountRoutes from './routes/account.js';
 import { authenticate } from './middleware/auth.js';
 
@@ -189,6 +190,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/fit-check-campaigns', fitCheckCampaignRoutes);
 app.use('/api/faq', faqRoutes);
 app.use('/api/promo-messages', promoMessageRoutes);
+app.use('/api/promo-codes', promoCodeRoutes);
 app.use('/api/account', authenticate, accountRoutes);
 
 // Sitemap endpoint

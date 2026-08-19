@@ -23,9 +23,11 @@ Six inversions govern every decision on this platform. Get these wrong and every
 
 ## Architecture
 
-Evolving the existing stack, not replacing it — React + Vite, Node.js + Express, PostgreSQL, Cloudinary, Maya, Replicate/WaveSpeed all stay. *(Technical Architecture, Decision Log ADR-007)*
+Evolving the existing stack, not replacing it — React + Vite, Node.js + Express, PostgreSQL, Cloudinary, Xendit, Replicate/WaveSpeed all stay. *(Technical Architecture, Decision Log ADR-007)*
 
 > **Database changed since Technical Architecture v1.0 was written.** The original MongoDB deployment was permanently removed with no data to preserve; persistence now runs on PostgreSQL (Railway) via Prisma. See ADR-007 for why this doesn't contradict "evolve the foundation, don't replace it" — the foundation itself changed underneath the principle, the principle didn't get abandoned.
+
+> **Payment gateway changed since Technical Architecture v1.0 was written.** Xendit is now the primary gateway (2026-08-19); Maya is not removed, just no longer the default for new checkouts — its gateway module, webhook route, and IP-allowlist middleware stay live so any order already mid-checkout on it still resolves, until a follow-up pass removes it once none remain. See ADR-010 for the full reasoning, including why the two gateways are verified differently (Xendit signs its webhooks with a real token; Maya's ADR-008 workaround was built specifically because it doesn't).
 
 | Layer | Decision | Why |
 |---|---|---|
@@ -37,7 +39,7 @@ Evolving the existing stack, not replacing it — React + Vite, Node.js + Expres
 | Events | Same Redis infra, lightweight pub/sub | Notifications is strictly downstream of every event-producing capability, never upstream |
 | Search | Dedicated managed search service, not MongoDB `$text` | IA requires identity-aware, multi-entity-type, fuzzy search (Organizations/Teams/Athletes, not just product names) |
 | Storage/Media/CDN | Cloudinary, actually using its transformation features | Audit found full-res images shipped everywhere with zero transformation |
-| Payments | Maya — no signature scheme exists on Maya's webhook, so every delivery is treated as a bare wake-up signal and re-verified via an authenticated pull against Maya's own status API, with IP allowlisting as the perimeter control in place of a signature (Decision Log ADR-008) | Audit's single most severe finding: the webhook trusted unverified payloads |
+| Payments | Xendit (primary, Decision Log ADR-010) — its webhook is verified via a real signed token (`x-callback-token`), so the verified payload is trusted directly, no re-pull needed. Maya (legacy, Decision Log ADR-008) stays live in parallel through the cutover window for orders already in flight on it; it has no signature scheme, so its webhook is instead treated as a bare wake-up signal and re-verified via an authenticated pull against Maya's own status API, with IP allowlisting as the perimeter control | Audit's single most severe finding: the webhook trusted unverified payloads. Xendit's fee is also passed to the customer per payment channel, disclosed before checkout locks in a total, never absorbed |
 | Auth | JWT + Google OAuth, add session revocation | 7-day token currently can't be invalidated on password change |
 | Deployment | CI/CD gating every deploy on tests | No promise in this document series can hold over time without this |
 | Observability | Structured logging + real error tracking | Trust's "ongoing monitoring" and Analytics literally cannot function on console.log |
@@ -215,7 +217,7 @@ These are hard boundaries from `docs/AI_CAPABILITY.md` and `docs/PLATFORM_STRATE
 - **An Athlete's identity, voice, or likeness is never AI-generated without their own authorization.**
 - **The Organization-first data anchor is never "simplified" back to flat sport/league/team strings.** Everything in this document depends on it remaining real.
 - **Inventory is never cached or read optimistically.** Live, every time.
-- **No webhook payload is trusted at face value** — every current or future integration must independently re-verify against the provider's own authenticated API before acting on it. Signature verification is the mechanism when a provider offers one; Maya doesn't, so IP allowlisting plus mandatory re-verification is the substitute (Decision Log ADR-008) — the rule is "never trust the payload," not "always check a signature."
+- **No webhook payload is trusted at face value** — every current or future integration must independently verify it's genuinely from the provider before acting on it. Signature verification is the mechanism when a provider offers one, and is sufficient on its own once checked — Xendit signs its webhooks with a real token, so its payload is trusted directly once that token is verified (Decision Log ADR-010). Maya doesn't offer one, so IP allowlisting plus mandatory re-verification via an authenticated pull is the substitute (Decision Log ADR-008) — the rule is "never act on an unauthenticated payload," not "always re-pull the same way."
 - **No Organization's return terms fall below the platform-wide baseline Guarantee.**
 
 ---

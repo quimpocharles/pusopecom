@@ -227,20 +227,20 @@ model User {
   // Enterprise Fulfillment Blueprint, Phase 1 — see the schema comment
   // above Shipment for the reasoning. staffProfile is null for every
   // customer-role User; only admin-role Users have one.
-  assignedShipments Shipment[]
-  shipmentEvents    ShipmentEvent[]
-  stockAdjustments  StockAdjustment[]
-  refundsInitiated  Refund[]
-  staffProfile      StaffProfile?
+  assignedShipments      Shipment[]
+  shipmentEvents         ShipmentEvent[]
+  stockAdjustments       StockAdjustment[]
+  refundsInitiated       Refund[]
+  staffProfile           StaffProfile?
   // Phase 2 — two distinct relations to the same model need explicit
   // names on both sides (Prisma requirement): the customer who filed the
   // return, and the (possibly different) admin who reviewed it.
-  returnRequests         ReturnRequest[] @relation("ReturnRequester")
-  returnRequestsReviewed ReturnRequest[] @relation("ReturnReviewer")
+  returnRequests         ReturnRequest[]   @relation("ReturnRequester")
+  returnRequestsReviewed ReturnRequest[]   @relation("ReturnReviewer")
 
   // Settings IA redesign — "Updated By" attribution.
-  siteSettingsUpdates      SiteSettings[]
-  staffProfileUpdatesMade  StaffProfile[] @relation("StaffProfileUpdatedBy")
+  siteSettingsUpdates     SiteSettings[]
+  staffProfileUpdatesMade StaffProfile[] @relation("StaffProfileUpdatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,14 +297,15 @@ model Product {
   totalSold    Int             @default(0)
   totalViews   Int             @default(0)
 
-  sizes        ProductSize[]
-  colors       ProductColor[]
-  orderItems   OrderItem[]
-  reviews      Review[]
-  tryOnLogs    TryOnLog[]
-  activities   UserActivity[]
-  campaigns    Campaign[] // campaigns featuring this product (e.g. the AI Try-On section's featuredProduct)
-  wishlistedBy Wishlist[]
+  sizes             ProductSize[]
+  colors            ProductColor[]
+  orderItems        OrderItem[]
+  reviews           Review[]
+  tryOnLogs         TryOnLog[]
+  activities        UserActivity[]
+  campaigns         Campaign[] // campaigns featuring this product (e.g. the AI Try-On section's featuredProduct)
+  wishlistedBy      Wishlist[]
+  promoCodeProducts PromoCodeProduct[] // PromoCode.scope = PRODUCT targeting
 
   // Organization-first migration (ADR-001/002, single pilot Organization —
   // see docs/decisions/0000-decision-log.md and the plan this shipped
@@ -436,19 +437,35 @@ model Order {
   shipToBarangay String?
   shipToZipCode  String
 
-  subtotal        Float
-  shippingFee     Float         @default(150)
-  total           Float
-  paymentMethod   String        @default("maya")
-  paymentStatus   PaymentStatus @default(pending)
-  mayaPaymentId   String?
-  mayaCheckoutUrl String?
-  orderStatus     OrderStatus   @default(awaiting_payment)
-  courier         String?
-  trackingNumber  String?
-  shippingMethod  String?
-  shippingRegion  String?
-  notes           String?
+  subtotal         Float
+  shippingFee      Float         @default(150)
+  // Promo Code Discounts — total = subtotal + shippingFee - discountAmount,
+  // uniformly for every PromoDiscountType. FREE_SHIPPING sets discountAmount
+  // equal to the real computed shippingFee rather than zeroing shippingFee
+  // itself, so the real cost stays visible/auditable and one formula covers
+  // every code type.
+  promoCodeId      String?
+  promoCode        PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  discountAmount   Float         @default(0)
+  // Xendit gateway integration — the processing fee is passed to the
+  // customer, not absorbed, and varies by which channel they pick
+  // (GCASH/MAYA/CARD/BANK_TRANSFER/QRPH — see lib/payments/xenditFees.js).
+  // paymentChannel is chosen in our own checkout UI before redirect, so the
+  // exact fee is known and disclosed before total is locked in — never
+  // decided on Xendit's own hosted page after the fact.
+  paymentChannel   String?
+  gatewayFeeAmount Float         @default(0)
+  total            Float
+  paymentMethod    String        @default("xendit")
+  paymentStatus    PaymentStatus @default(pending)
+  mayaPaymentId    String?
+  mayaCheckoutUrl  String?
+  orderStatus      OrderStatus   @default(awaiting_payment)
+  courier          String?
+  trackingNumber   String?
+  shippingMethod   String?
+  shippingRegion   String?
+  notes            String?
 
   // Payment Platform Redesign, Phase 6 — which reminder tiers
   // (lib/sendPaymentReminders.js's TIERS: '24h'/'6h'/'2h') have already
@@ -490,6 +507,7 @@ model Order {
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
   @@index([paymentStatus, orderStatus, userId, createdAt])
+  @@index([promoCodeId])
   @@map("orders")
 }
 
@@ -836,8 +854,8 @@ enum RefundStatus {
 model Refund {
   id String @id @default(uuid())
 
-  orderId String
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   paymentId String?
   payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
@@ -921,7 +939,7 @@ model ReturnRequest {
   status ReturnStatus @default(requested)
 
   reviewedByUserId String?
-  reviewedByUser   User?   @relation("ReturnReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedByUser   User?     @relation("ReturnReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   reviewedAt       DateTime?
   resolutionNotes  String?
 
@@ -937,11 +955,11 @@ model ReturnRequest {
 }
 
 model ReturnItem {
-  id              String        @id @default(uuid())
+  id              String               @id @default(uuid())
   returnRequestId String
-  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  returnRequest   ReturnRequest        @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
   orderItemId     String
-  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem            @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   quantity        Int
   condition       ReturnItemCondition?
 
@@ -982,11 +1000,11 @@ model Warehouse {
 // side-by-side, not duplicated vocabulary. `config` is a placeholder for
 // real API credentials, unused by the only gateway implemented so far.
 model CourierAccount {
-  id           String  @id @default(uuid())
-  courierName  String  @unique
-  displayName  String
-  config       Json?
-  active       Boolean @default(true)
+  id          String  @id @default(uuid())
+  courierName String  @unique
+  displayName String
+  config      Json?
+  active      Boolean @default(true)
 
   shipments Shipment[]
 
@@ -1064,13 +1082,13 @@ model StaffProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  department StaffDepartment
-  title      String?
+  department  StaffDepartment
+  title       String?
   // A string array, not a permission-per-department hardcode — the same
   // "string, not enum" flexibility Payment.provider already uses, chosen
   // for the same reason: a new permission shouldn't require a migration.
-  permissions String[] @default([])
-  active      Boolean  @default(true)
+  permissions String[]        @default([])
+  active      Boolean         @default(true)
 
   // Settings IA redesign — "who last changed someone's department/
   // permissions" is a real security-relevant question, not just cosmetic.
@@ -1784,6 +1802,71 @@ model PromoMessage {
 
   @@index([placement, active, displayOrder])
   @@map("promo_messages")
+}
+
+// ---------------------------------------------------------------------------
+// PromoCode — a fan-typed code applied at checkout that reduces what they
+// pay. Distinct from PromoMessage above despite the similar name: PromoMessage
+// is marketing copy (Announcement/Marquee bar text), PromoCode is a real
+// Commerce Engine discount mechanism that mutates Order.total. Platform-wide
+// only (no per-Organization ownership) — see Decision Log / CLAUDE.md
+// Commerce Engine section for the Promotion/Discount vocabulary this
+// implements.
+// ---------------------------------------------------------------------------
+
+enum PromoDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+enum PromoScope {
+  ORDER
+  PRODUCT
+}
+
+model PromoCode {
+  id          String  @id @default(uuid())
+  code        String  @unique // stored uppercased/trimmed by the repository
+  description String? // internal admin note only, never shown to customers
+
+  discountType PromoDiscountType
+  // App-level rule, not a DB constraint (same convention as PromoMessage's
+  // schedule window below): FREE_SHIPPING always implies scope = ORDER.
+  scope        PromoScope        @default(ORDER)
+  percentOff   Float? // 1-100, required when discountType = PERCENTAGE
+  amountOff    Float? // pesos, required when discountType = FIXED_AMOUNT
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  maxRedemptions   Int?
+  redemptionCount  Int    @default(0)
+  perCustomerLimit Int?
+  minOrderValue    Float?
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products PromoCodeProduct[]
+  orders   Order[]
+
+  @@map("promo_codes")
+}
+
+// Only populated when PromoCode.scope = PRODUCT — the set of Commerce Items
+// a "percent/fixed off specific items" code discounts.
+model PromoCodeProduct {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, productId])
+  @@index([productId])
+  @@map("promo_code_products")
 }
 
 // ---------------------------------------------------------------------------

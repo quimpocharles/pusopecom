@@ -11,9 +11,11 @@ import AddressForm from '../components/address/AddressForm';
 import useCartStore from '../store/cartStore';
 import useAuthStore from '../store/authStore';
 import orderService from '../services/orderService';
+import promoCodeService from '../services/promoCodeService';
 import authService from '../services/authService';
 import api from '../services/api';
 import { toTitleCase } from '../utils/text';
+import { PAYMENT_CHANNELS, calculateGatewayFee } from '../utils/paymentChannels';
 import SEO from '../components/common/SEO';
 
 // ─── Delivery option card ────────────────────────────────────────────────────
@@ -44,6 +46,29 @@ const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note
   </button>
 );
 
+// ─── Payment channel card ────────────────────────────────────────────────────
+// Same selectable-card shape as DeliveryCard above — the fee shown here is
+// the actual amount that'll be added to Total for this channel, computed
+// the same way the server will (see utils/paymentChannels.js's comment on
+// why this is a preview only, not the authoritative charge).
+const PaymentChannelCard = ({ selected, onClick, label, fee }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`w-full text-left border rounded-xl p-4 flex items-center gap-3 transition-all ${
+      selected ? 'border-[#0a0a0a] bg-gray-50' : 'border-gray-200 hover:border-gray-400'
+    }`}
+  >
+    <span className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+      selected ? 'border-[#0a0a0a]' : 'border-gray-300'
+    }`}>
+      {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#0a0a0a]" />}
+    </span>
+    <span className="flex-1 font-semibold text-sm text-gray-900">{label}</span>
+    <span className="flex-shrink-0 text-xs text-gray-500">+₱{fee.toFixed(2)} fee</span>
+  </button>
+);
+
 const Checkout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,6 +83,11 @@ const Checkout = () => {
   const [optionsLoading, setOptionsLoading] = useState(true);
   // Opt-in only — "once a user agrees to save it" — never saved silently.
   const [saveAddress, setSaveAddress] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState(null); // { code, discountAmount, freeShipping }
+  const [promoApplying, setPromoApplying] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  const [paymentChannel, setPaymentChannel] = useState(null);
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
 
@@ -128,15 +158,53 @@ const Checkout = () => {
     ? standardOption
     : (pickupSlots.find(o => o.slotId === deliveryMethod) ?? standardOption);
   const shippingFee = effectiveOption?.fee ?? null; // null → contact_us or still loading
-  const total = shippingFee != null ? subtotal + shippingFee : null;
+  const discountAmount = appliedPromo?.discountAmount ?? 0;
+  // Channel picked in our own UI before redirect, not on Xendit's hosted
+  // page — the exact fee for that channel is known and shown here, so
+  // Total never surprises the fan once they get to Xendit. See ADR-010.
+  const gatewayFeeAmount = paymentChannel != null && shippingFee != null
+    ? calculateGatewayFee(paymentChannel, subtotal + shippingFee - discountAmount)
+    : 0;
+  const total = shippingFee != null ? Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount) : null;
 
   const dismissCancelledAlert = () => {
     setSearchParams({}, { replace: true });
   };
 
+  const handleApplyPromo = async () => {
+    if (!promoInput.trim() || shippingFee == null) return;
+    setPromoApplying(true);
+    setPromoError('');
+    try {
+      const res = await promoCodeService.validateCode({
+        code: promoInput.trim(),
+        items: items.map((item) => ({ product: item.product._id, price: item.price, quantity: item.quantity })),
+        subtotal,
+        shippingFee,
+        email: watch('email'),
+      });
+      setAppliedPromo(res.data);
+    } catch (err) {
+      setAppliedPromo(null);
+      setPromoError(err.response?.data?.message || 'Invalid promo code.');
+    } finally {
+      setPromoApplying(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError('');
+  };
+
   const onSubmit = async (data) => {
     if (effectiveOption?.method === 'contact_us') {
       setError('Please contact us to arrange shipping for your location before placing an order.');
+      return;
+    }
+    if (!paymentChannel) {
+      setError('Please select a payment method.');
       return;
     }
 
@@ -200,6 +268,8 @@ const Checkout = () => {
         })),
         shippingAddress,
         shippingFee: shippingFee ?? 0,
+        promoCode: appliedPromo?.code || undefined,
+        paymentChannel,
         shippingMethod: effectiveOption?.method ?? null,
         slotId: isPickup ? (effectiveOption?.slotId ?? null) : undefined,
         shippingRegion: isPickup ? null
@@ -232,6 +302,12 @@ const Checkout = () => {
         setError('Failed to create checkout session. Please try again.');
       }
     } catch (err) {
+      // A race between the preview validate() call and this submission
+      // (code just expired/hit its cap) is the one way order creation can
+      // reject a code that already looked valid — don't silently resubmit
+      // the same now-invalid code on retry.
+      if (appliedPromo) setAppliedPromo(null);
+
       const errData = err.response?.data;
       if (errData?.errors?.length) {
         setError(errData.errors.map(e => e.msg || e.message).join(', '));
@@ -437,9 +513,19 @@ const Checkout = () => {
               {/* Payment Method */}
               <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Payment Method</h2>
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="font-medium text-sm text-gray-900">Maya, GCash & major credit/debit cards accepted</p>
-                  <p className="text-xs text-gray-500 mt-1">Visa, Mastercard, JCB, Amex · You'll be redirected to complete payment securely</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Each method's processing fee is added to your total — shown below before you pay, never as a surprise.
+                </p>
+                <div className="space-y-3">
+                  {PAYMENT_CHANNELS.map((channel) => (
+                    <PaymentChannelCard
+                      key={channel.code}
+                      selected={paymentChannel === channel.code}
+                      onClick={() => setPaymentChannel(channel.code)}
+                      label={channel.label}
+                      fee={shippingFee != null ? calculateGatewayFee(channel.code, subtotal + shippingFee - discountAmount) : 0}
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -465,7 +551,7 @@ const Checkout = () => {
               <div>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !paymentChannel}
                   className="btn-primary w-full text-lg flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -479,7 +565,8 @@ const Checkout = () => {
                     </>
                   )}
                 </button>
-                <p className="text-center text-xs text-gray-400 mt-2">Secure checkout powered by Maya</p>
+                {!paymentChannel && <p className="text-center text-xs text-amber-600 mt-2">Select a payment method above to continue</p>}
+                <p className="text-center text-xs text-gray-400 mt-2">Secure checkout powered by Xendit</p>
               </div>
             </form>
           </div>
@@ -520,6 +607,44 @@ const Checkout = () => {
                 ))}
               </div>
 
+              <div className="mb-4">
+                {appliedPromo ? (
+                  <div className="flex items-center justify-between px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm">
+                    <span className="text-green-700 font-medium">
+                      {appliedPromo.code} applied{appliedPromo.freeShipping ? ' — free shipping' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRemovePromo}
+                      className="text-green-700 hover:text-green-900 text-xs font-semibold underline underline-offset-2"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        placeholder="Promo code"
+                        className="input-field flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyPromo}
+                        disabled={promoApplying || !promoInput.trim() || shippingFee == null}
+                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {promoApplying ? 'Applying...' : 'Apply'}
+                      </button>
+                    </div>
+                    {promoError && <p className="text-red-600 text-xs mt-1">{promoError}</p>}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-2 pt-3 border-t">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
@@ -536,6 +661,18 @@ const Checkout = () => {
                         : <span className="text-gray-400 text-sm">Contact us</span>
                   }
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount {appliedPromo?.freeShipping ? '(free shipping)' : `(${appliedPromo.code})`}</span>
+                    <span>-₱{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {paymentChannel && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Processing Fee</span>
+                    <span>₱{gatewayFeeAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 {total != null && (
                   <div className="flex justify-between font-bold text-lg pt-2 border-t">
                     <span>Total</span>

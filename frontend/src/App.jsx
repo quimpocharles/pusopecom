@@ -33,6 +33,7 @@ const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
 const AdminProductForm = lazy(() => import('./pages/admin/AdminProductForm'));
 const AdminLeagues = lazy(() => import('./pages/admin/AdminLeagues'));
 const AdminCampaigns = lazy(() => import('./pages/admin/AdminCampaigns'));
+const AdminPromoCodes = lazy(() => import('./pages/admin/AdminPromoCodes'));
 const AdminFitCheckCampaigns = lazy(() => import('./pages/admin/AdminFitCheckCampaigns'));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
@@ -127,6 +128,7 @@ function App() {
             <Route path="products/:id/edit" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_MANAGE}><AdminProductForm /></PermissionRoute>} />
             <Route path="leagues" element={<PermissionRoute permission={PERMISSIONS.LEAGUES_MANAGE}><AdminLeagues /></PermissionRoute>} />
             <Route path="campaigns" element={<PermissionRoute permission={PERMISSIONS.CAMPAIGNS_MANAGE}><AdminCampaigns /></PermissionRoute>} />
+            <Route path="promo-codes" element={<PermissionRoute permission={PERMISSIONS.PROMOTIONS_MANAGE}><AdminPromoCodes /></PermissionRoute>} />
             <Route path="fit-check-campaigns" element={<PermissionRoute permission={PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE}><AdminFitCheckCampaigns /></PermissionRoute>} />
             <Route path="orders" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrders /></PermissionRoute>} />
             <Route path="orders/:orderNumber" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrderDetail /></PermissionRoute>} />

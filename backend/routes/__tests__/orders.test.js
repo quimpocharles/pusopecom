@@ -43,6 +43,10 @@ app.use(express.json());
 app.use('/api/orders', ordersRouter);
 
 const MARKER = `OrderRouteTest${Date.now()}`;
+// xenditWebhookVerify (middleware/xenditWebhookVerify.js) reads this at
+// request time — set once for the whole file, same as any other real
+// config value these webhook tests need.
+process.env.XENDIT_WEBHOOK_TOKEN = 'test-xendit-webhook-token';
 const createdProductIds = [];
 const createdUserIds = [];
 
@@ -81,6 +85,10 @@ function validOrderPayload(product, itemOverrides = {}) {
     // top-level field from shippingAddress's own embedded `region` — see
     // the schema comment on Order.shipTo* for why these aren't the same.
     shippingRegion: '13', // NCR — ₱99 flat rate, below the ₱2000 free-shipping threshold
+    // Chosen in our own checkout UI before redirect (ADR-010) — required
+    // on every order so the exact gateway fee for the channel charged is
+    // always known and disclosed, never a blended guess.
+    paymentChannel: 'GCASH',
     shippingAddress: {
       fullName: 'Juan Dela Cruz',
       phone: '09171234567',
@@ -147,7 +155,9 @@ describe('POST /orders — stock reservation atomicity', () => {
 
     const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
     expect(order.shippingFee).toBe(99); // NCR flat rate, not the client's fabricated 0
-    expect(order.total).toBe(599); // 500 + 99, not the client's fabricated 1
+    // 500 + 99 + GCash's 2% gateway fee (validOrderPayload's default
+    // channel), not the client's fabricated 1.
+    expect(order.total).toBe(599 + 11.98);
   }, 15000);
 
   it('rejects insufficient stock and decrements nothing — atomic across the whole order, not per-item', async () => {
@@ -240,6 +250,53 @@ describe('POST /orders — structural validation', () => {
 
   it('400s on missing required shippingAddress fields', async () => {
     const res = await request(app).post('/api/orders').send({ email: 'buyer@test.local', items: [], shippingAddress: {} });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
+  it('computes the gateway fee for the chosen channel and folds it into total, subtotal + shippingFee - discount + fee', async () => {
+    const product = await makeProduct({ name: 'GatewayFeeCard' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fee', redirectUrl: 'https://pay.example/chk_fee' });
+
+    const res = await request(app).post('/api/orders').send({ ...validOrderPayload(product), paymentChannel: 'CARD' });
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    // product 500 + NCR flat shipping 99 = 599 base; CARD is 2.9% + ₱15
+    const expectedFee = Math.round((599 * 0.029 + 15) * 100) / 100;
+    expect(order.paymentChannel).toBe('CARD');
+    expect(order.gatewayFeeAmount).toBe(expectedFee);
+    expect(order.total).toBe(599 + expectedFee);
+  }, 15000);
+
+  it('ignores a client-supplied gatewayFeeAmount and recomputes it server-side', async () => {
+    const product = await makeProduct({ name: 'GatewayFeeIgnoreClient' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fee2', redirectUrl: 'https://pay.example/chk_fee2' });
+
+    const res = await request(app)
+      .post('/api/orders')
+      .send({ ...validOrderPayload(product), paymentChannel: 'BANK_TRANSFER', gatewayFeeAmount: 0, total: 1 });
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.gatewayFeeAmount).toBe(15); // real BANK_TRANSFER flat fee, not the client's fabricated 0
+    expect(order.total).toBe(599 + 15);
+  }, 15000);
+
+  it('400s for an order with no recognized payment channel — never silently defaults to one', async () => {
+    const product = await makeProduct({ name: 'NoPaymentChannel' });
+    const payload = validOrderPayload(product);
+    delete payload.paymentChannel;
+
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('400s for an unrecognized payment channel code', async () => {
+    const product = await makeProduct({ name: 'BadPaymentChannel' });
+    const res = await request(app).post('/api/orders').send({ ...validOrderPayload(product), paymentChannel: 'BITCOIN' });
     expect(res.status).toBe(400);
   });
 });
@@ -344,6 +401,91 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
   });
 });
 
+describe('POST /orders/webhooks/xendit — token-verified, payload trusted directly (ADR-010)', () => {
+  it('rejects a webhook with a missing/invalid x-callback-token before ever touching the order', async () => {
+    const product = await makeProduct({ name: 'XenditNoToken' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xno', redirectUrl: 'https://pay.example/chk_xno' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    const res = await request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'wrong-token')
+      .send({ event: 'payment_session.completed', data: { reference_id: orderNumber } });
+    expect(res.status).toBe(403);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('pending'); // untouched
+  }, 15000);
+
+  it('a token-verified payment_session.completed event marks the order paid, trusting the payload directly (no re-pull)', async () => {
+    const product = await makeProduct({ name: 'XenditCompleted' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xok', redirectUrl: 'https://pay.example/chk_xok' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    const res = await request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'test-xendit-webhook-token')
+      .send({ event: 'payment_session.completed', data: { reference_id: orderNumber } });
+    expect(res.status).toBe(200);
+
+    // The whole point of decision #3 (ADR-010) — status comes straight from
+    // the verified payload's event name, never a getPaymentStatus re-pull.
+    expect(paymentService.getPaymentStatus).not.toHaveBeenCalled();
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('paid');
+    expect(order.orderStatus).toBe('paid');
+  }, 15000);
+
+  it('a payment_session.expired event marks the order failed and restores stock', async () => {
+    const product = await makeProduct({ name: 'XenditExpired' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xexp', redirectUrl: 'https://pay.example/chk_xexp' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    const beforeSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(beforeSize.stock).toBe(9);
+
+    const res = await request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'test-xendit-webhook-token')
+      .send({ event: 'payment_session.expired', data: { reference_id: orderNumber } });
+    expect(res.status).toBe(200);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('failed');
+
+    const afterSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(afterSize.stock).toBe(10); // released, same as Maya's failure path
+  }, 15000);
+
+  it('resolves an order from a reference_id carrying xenditGateway.js\'s attempt-unique "#" suffix', async () => {
+    const product = await makeProduct({ name: 'XenditHashSuffix' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xhash', redirectUrl: 'https://pay.example/chk_xhash' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    const res = await request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'test-xendit-webhook-token')
+      .send({ event: 'payment_session.completed', data: { reference_id: `${orderNumber}#a1b2c3d4e5f6` } });
+    expect(res.status).toBe(200);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('paid');
+  }, 15000);
+
+  it('silently acknowledges a webhook for an unknown order, without erroring', async () => {
+    const res = await request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'test-xendit-webhook-token')
+      .send({ event: 'payment_session.completed', data: { reference_id: 'PS-NOSUCHORDER' } });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('POST /orders/:orderNumber/verify-payment', () => {
   it('resolves a pending order to paid via the authenticated Maya pull', async () => {
     const product = await makeProduct({ name: 'VerifyPaid' });
@@ -396,11 +538,11 @@ describe('Payment dual-write (Payment Platform Redesign, Phase 1)', () => {
       await new Promise((r) => setTimeout(r, 100));
     }
     expect(payment).not.toBeNull();
-    expect(payment.provider).toBe('maya');
+    expect(payment.provider).toBe('xendit'); // primary gateway as of ADR-010
     expect(payment.status).toBe('pending');
     expect(payment.checkoutReference).toBe(order.mayaPaymentId);
     expect(payment.checkoutUrl).toBe(order.mayaCheckoutUrl);
-    expect(payment.expiresAt).not.toBeNull(); // computed at creation — Maya never returns one
+    expect(payment.expiresAt).not.toBeNull(); // computed at creation — neither gateway returns one
   }, 15000);
 
   it('a resolved payment leaves Order.paymentStatus and the matching Payment.status in agreement', async () => {
@@ -561,7 +703,7 @@ describe('GET /orders/:orderNumber — access control', () => {
     expect(res.body.data.items[0].product.name).toBe(product.name); // items.product populated
     // Payment Platform Redesign, Phase 3 — the latest Payment attempt's
     // customer-safe fields, nested alongside the order.
-    expect(res.body.data.payment).toMatchObject({ provider: 'maya', status: 'pending', checkoutUrl: 'https://pay.example/chk_guest' });
+    expect(res.body.data.payment).toMatchObject({ provider: 'xendit', status: 'pending', checkoutUrl: 'https://pay.example/chk_guest' });
     expect(res.body.data.payment.expiresAt).not.toBeNull();
   }, 15000);
 

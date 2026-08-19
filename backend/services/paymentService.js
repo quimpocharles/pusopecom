@@ -1,12 +1,15 @@
 import * as mayaGateway from './gateways/mayaGateway.js';
+import * as xenditGateway from './gateways/xenditGateway.js';
 import logger from '../lib/logger.js';
 
 /**
  * The internal interface routes/orders.js talks to — never a specific
- * gateway's SDK/API shape directly. Maya is the only gateway implemented
- * today; adding another (Stripe, PayMongo, Xendit...) means writing one
- * more module matching this same two-function shape and adding one line
- * to GATEWAYS below — nothing above this layer needs to change.
+ * gateway's SDK/API shape directly. Xendit is the primary gateway as of
+ * ADR-010; Maya stays registered through the transition window so any
+ * order already mid-checkout on it still resolves correctly. Adding
+ * another gateway (Stripe, PayMongo...) means writing one more module
+ * matching this same two-function shape and adding one line to GATEWAYS
+ * below — nothing above this layer needs to change.
  *
  * Every gateway module must implement:
  *   createCheckoutSession(order) -> { paymentReference, redirectUrl }
@@ -28,6 +31,7 @@ import logger from '../lib/logger.js';
  */
 const GATEWAYS = {
   maya: mayaGateway,
+  xendit: xenditGateway,
 };
 
 function resolveGateway(name) {

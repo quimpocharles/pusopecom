@@ -7,13 +7,16 @@ import * as orderRepository from '../repositories/orderRepository.js';
 import * as orderEventRepository from '../repositories/orderEventRepository.js';
 import * as paymentRepository from '../repositories/paymentRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
+import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js';
+import { xenditWebhookVerify } from '../middleware/xenditWebhookVerify.js';
 import * as paymentService from '../services/paymentService.js';
+import { calculateGatewayFee, isValidChannel } from '../lib/payments/xenditFees.js';
 import {
   sendOrderConfirmationEmail,
   sendPaymentPendingEmail,
@@ -62,6 +65,12 @@ async function releaseStock(order) {
         { client: tx }
       );
     }
+    // Promo Code Discounts — a redemption is claimed at Order placement
+    // exactly like a stock reservation, so it releases the same way and on
+    // the same trigger. Every releaseStock caller (gateway-session failure
+    // below, applyPaymentResolution's failed/expired branch, and
+    // transitively the stale-order sweep) gets this for free.
+    if (order.promoCodeId) await promoCodeRepository.releaseRedemption(order.promoCodeId, { client: tx });
     // Multiple round trips per item; Prisma's 5s default interactive-
     // transaction timeout has been observed to be too tight under this
     // deployment's real network latency (see the matching timeout on the
@@ -284,7 +293,13 @@ router.post('/',
     body('shippingAddress.zipCode').trim().notEmpty(),
     body('shippingAddress.country').optional().trim(),
     body('shippingAddress.region').optional().trim(),
-    body('shippingAddress.barangay').optional().trim()
+    body('shippingAddress.barangay').optional().trim(),
+    body('promoCode').optional({ nullable: true }).trim().isLength({ max: 40 }),
+    // Chosen in our own checkout UI before redirect, not on Xendit's hosted
+    // page — required so the processing fee shown to the fan (and included
+    // in `total`) is exact for the channel they'll actually be charged on,
+    // never a blended guess. See ADR-010.
+    body('paymentChannel').custom((value) => isValidChannel(value)).withMessage('A valid payment channel is required')
   ],
   async (req, res) => {
     try {
@@ -297,7 +312,7 @@ router.post('/',
         });
       }
 
-      const { email, items, shippingAddress, notes, shippingMethod, shippingRegion, slotId } = req.body;
+      const { email, items, shippingAddress, notes, shippingMethod, shippingRegion, slotId, promoCode, paymentChannel } = req.body;
 
       // Pass 1 — structural validation and price/image resolution. Not
       // itself the stock-sufficiency check (that's the atomic
@@ -376,7 +391,39 @@ router.post('/',
         shippingFee = intl.fee ?? 0;
       }
 
-      const total = subtotal + shippingFee;
+      // Promo Code Discounts — validated after pricing/shipping resolve (it
+      // needs the real subtotal/shippingFee, not the client's) and before
+      // total is computed, same style as the size/color checks above: a
+      // synchronous 400 with a clear reason, not a generic 500.
+      let promoCodeRecord = null;
+      let discountAmount = 0;
+      if (promoCode) {
+        try {
+          const result = await promoCodeRepository.validate({
+            code: promoCode,
+            userId: req.user?._id,
+            email,
+            items: orderItems,
+            subtotal,
+            shippingFee,
+          });
+          promoCodeRecord = result.promoCode;
+          discountAmount = result.discountAmount;
+        } catch (error) {
+          if (error instanceof promoCodeRepository.PromoCodeInvalidError) {
+            return res.status(400).json({ success: false, message: error.message });
+          }
+          throw error;
+        }
+      }
+
+      // Gateway fee — computed server-side from the same fee table the
+      // checkout UI previews from, never trusted off the client. Charged
+      // against the amount after the discount, before the fee itself is
+      // added (never a base that includes its own fee).
+      const gatewayFeeAmount = calculateGatewayFee(paymentChannel, subtotal + shippingFee - discountAmount);
+
+      const total = Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount);
 
       // Pass 2 — atomic: reserve stock for every item and create the order
       // together, or none of it happens. This is the direct fix for the
@@ -399,6 +446,17 @@ router.post('/',
             );
           }
 
+          // Same atomic unit as the stock reservation above — either both
+          // the last unit and the last redemption slot are claimed
+          // together, or neither is (transaction rolls back on either
+          // error), per the Commerce Engine's "checkout is atomic" rule.
+          if (promoCodeRecord) {
+            await promoCodeRepository.tryRedeem(
+              { promoCodeId: promoCodeRecord._id, maxRedemptions: promoCodeRecord.maxRedemptions },
+              { client: tx }
+            );
+          }
+
           const createdOrder = await orderRepository.create(
             {
               userId: req.user?._id,
@@ -407,6 +465,11 @@ router.post('/',
               shippingAddress,
               subtotal,
               shippingFee,
+              promoCodeId: promoCodeRecord?._id,
+              discountAmount,
+              paymentMethod: 'xendit',
+              paymentChannel,
+              gatewayFeeAmount,
               total,
               shippingMethod: shippingMethod || undefined,
               shippingRegion: shippingRegion || undefined,
@@ -421,7 +484,13 @@ router.post('/',
               type: 'created',
               actor: req.user ? 'customer' : 'system',
               message: `Order placed with ${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`,
-              metadata: { total, itemCount: orderItems.length },
+              metadata: {
+                total,
+                itemCount: orderItems.length,
+                paymentChannel,
+                gatewayFeeAmount,
+                ...(promoCodeRecord && { promoCode: promoCodeRecord.code, discountAmount }),
+              },
             },
             { client: tx }
           );
@@ -434,6 +503,12 @@ router.post('/',
           return res.status(400).json({
             success: false,
             message: `Insufficient stock for ${name}${error.color ? ` - ${error.color}` : ''} - Size ${error.size}`
+          });
+        }
+        if (error instanceof promoCodeRepository.PromoCodeExhaustedError) {
+          return res.status(400).json({
+            success: false,
+            message: 'This promo code just reached its redemption limit. Please remove it and try again.'
           });
         }
         throw error;
@@ -914,6 +989,69 @@ router.post('/webhooks/maya', mayaWebhookIpAllowlist, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error, orderNumber: req.body?.requestReferenceNumber }, 'Webhook error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Xendit's documented webhook event names for the Payment Sessions product
+// — anything not in this map (e.g. an intermediate, non-terminal event)
+// falls through to 'pending', the same "unrecognized = still pending"
+// convention mayaGateway.js's STATUS_MAP already uses.
+const XENDIT_WEBHOOK_EVENT_STATUS = {
+  'payment_session.completed': 'succeeded',
+  'payment_session.expired': 'expired',
+  'payment.failure': 'failed',
+};
+
+// Xendit webhook handler — token-verified by xenditWebhookVerify before
+// this ever runs (see that file's comment for why the payload can be
+// trusted directly here, unlike Maya's below: Xendit signs its webhooks,
+// Maya doesn't). See ADR-010.
+//
+// The payload envelope (`event` name + a `data` object carrying the
+// session/payment) matches Xendit's documented shape for its other webhook
+// families but was not confirmed against a real delivery for Payment
+// Sessions specifically at write time — verify field names here against
+// Xendit Dashboard > Webhooks > "Send test webhook" before relying on this
+// in production.
+router.post('/webhooks/xendit', xenditWebhookVerify, async (req, res) => {
+  try {
+    const { event, data } = req.body || {};
+    const referenceId = data?.reference_id;
+    if (!referenceId) {
+      return res.status(400).json({ success: false });
+    }
+
+    // xenditGateway.js sends `${orderNumber}#${attempt-unique suffix}` as
+    // reference_id — same attempt-scoped-not-order-scoped convention
+    // Maya's requestReferenceNumber already established (ADR-008). The
+    // order number is always everything before the first '#'.
+    const orderNumber = referenceId.split('#')[0];
+    logger.info({ orderNumber, gateway: 'xendit', event }, 'Webhook received');
+
+    const order = await orderRepository.findByOrderNumber(orderNumber);
+    if (!order || order.paymentStatus === 'paid' || order.paymentStatus === 'failed' || !order.mayaPaymentId) {
+      return res.json({ success: true });
+    }
+
+    await orderEventRepository.create({
+      orderId: order._id,
+      type: 'webhook_received',
+      actor: 'webhook',
+      message: `Webhook received from ${order.paymentMethod}`,
+    });
+
+    const status = XENDIT_WEBHOOK_EVENT_STATUS[event] || 'pending';
+    logger.info(
+      { orderNumber: order.orderNumber, gateway: order.paymentMethod, event, status },
+      'Webhook token verified — trusting payload status directly (see ADR-010)'
+    );
+    await applyPaymentResolution(order, status, 'webhook');
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, referenceId: req.body?.data?.reference_id }, 'Webhook error');
     Sentry.captureException(error);
     res.status(500).json({ success: false });
   }

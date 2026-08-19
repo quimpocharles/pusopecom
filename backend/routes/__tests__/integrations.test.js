@@ -16,6 +16,7 @@ app.use(express.json());
 app.use('/api/admin/integrations', integrationsRouter);
 
 const ENV_KEYS = [
+  'XENDIT_SECRET_KEY', 'XENDIT_WEBHOOK_TOKEN',
   'MAYA_PUBLIC_KEY', 'MAYA_SECRET_KEY',
   'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET',
   'WAVESPEED_API_KEY', 'REPLICATE_API_TOKEN',
@@ -43,7 +44,17 @@ describe('GET /admin/integrations/status', () => {
     expect(res.body.data.every((i) => i.connected === false)).toBe(true);
     expect(JSON.stringify(res.body)).not.toMatch(/dummy-|test-key/); // sanity: no leaked secret-shaped value
     const names = res.body.data.map((i) => i.name);
-    expect(names).toEqual(['Maya', 'Cloudinary', 'AI Provider', 'Redis', 'Email']);
+    expect(names).toEqual(['Xendit', 'Maya', 'Cloudinary', 'AI Provider', 'Redis', 'Email']);
+  });
+
+  it('reports Xendit connected only when both the secret key and webhook token are present (primary gateway, ADR-010)', async () => {
+    process.env.XENDIT_SECRET_KEY = 'x';
+    const partial = await request(app).get('/api/admin/integrations/status');
+    expect(partial.body.data.find((i) => i.name === 'Xendit').connected).toBe(false);
+
+    process.env.XENDIT_WEBHOOK_TOKEN = 'y';
+    const complete = await request(app).get('/api/admin/integrations/status');
+    expect(complete.body.data.find((i) => i.name === 'Xendit').connected).toBe(true);
   });
 
   it('reports Maya connected only when both keys are present', async () => {

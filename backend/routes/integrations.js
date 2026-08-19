@@ -26,9 +26,14 @@ router.get('/status', (req, res) => {
 
     const integrations = [
       {
+        name: 'Xendit',
+        connected: Boolean(process.env.XENDIT_SECRET_KEY && process.env.XENDIT_WEBHOOK_TOKEN),
+        detail: 'Payment checkout & status polling — primary gateway (ADR-010)',
+      },
+      {
         name: 'Maya',
         connected: Boolean(process.env.MAYA_PUBLIC_KEY && process.env.MAYA_SECRET_KEY),
-        detail: 'Payment checkout & status polling',
+        detail: 'Payment checkout & status polling — legacy, kept live for in-flight orders only',
       },
       {
         name: 'Cloudinary',
