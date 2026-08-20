@@ -9,20 +9,28 @@ import api from '../../services/api';
 // use case, per the project's "no abstraction before that" rule).
 const ImageField = ({ label, value, onChange }) => {
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setError('');
     try {
       const formData = new FormData();
       formData.append('image', file);
       const res = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       onChange(res.data.data.url);
     } catch (err) {
+      // Previously silent (console.error only) — a failed upload looked
+      // identical to a successful one (a brief "Uploading..." flash, then
+      // back to normal), so the field just stayed empty with no sign
+      // anything had gone wrong.
       console.error('Upload failed:', err);
+      setError(err.response?.data?.message || 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
+      e.target.value = ''; // allow re-selecting the same file after a failure
     }
   };
 
@@ -33,7 +41,7 @@ const ImageField = ({ label, value, onChange }) => {
         <input
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { onChange(e.target.value); setError(''); }}
           placeholder="https://res.cloudinary.com/..."
           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
@@ -43,6 +51,7 @@ const ImageField = ({ label, value, onChange }) => {
           <input type="file" accept="image/*" onChange={handleUpload} className="hidden" disabled={uploading} />
         </label>
       </div>
+      {error && <p className="text-red-600 text-xs mt-1">{error}</p>}
       {value && <img src={value} alt="" className="mt-2 w-24 h-auto rounded-lg border border-gray-200" />}
     </div>
   );
