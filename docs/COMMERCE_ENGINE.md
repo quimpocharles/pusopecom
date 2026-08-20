@@ -100,10 +100,10 @@ The test of whether this engine was actually built as business architecture, and
 |---|---|---|
 | Commerce Items / Products | The Commerce Item anchor itself | A new concrete category per type — the same pattern Merchandise already follows |
 | Pricing | The single-canonical-price rule | Membership introduces recurring, tiered pricing — the one genuinely new pricing pattern |
-| Promotions / Discounts / Bundles | The whole mechanism, unchanged | Nothing — a Bundle spanning a jersey and a Ticket already works under today's rules |
+| Promotions / Discounts / Bundles | The whole mechanism, unchanged | A Bundle can no longer span Pass and Merchandise, since one purchase can't anymore either — see the Checkout / Orders row |
 | Inventory | Reserve → commit → release | Counts a different thing per category — seats, time slots, membership-tier capacity — but the mechanism doesn't change |
 | Drops | The whole mechanism, unchanged | Applies directly to a limited Ticket release or a limited Equipment run |
-| Checkout / Orders | The whole mechanism, including multi-Organization Orders | Nothing — a mixed-category Order (jersey plus Ticket) already works today |
+| Checkout / Orders | The whole mechanism, including multi-Organization Orders | One exception, decided after this table was written: Pass (née Ticket) and Merchandise are kept out of the same Order entirely, not merged — see Decision Log ADR-011 addendum (2026-08-20) |
 | Shipping / Taxes | The atomic, upfront-disclosure rule | Tickets and Experiences need a sibling to physical shipping — an access grant or booking confirmation, not a package |
 | Payments | Authorization at Checkout | Membership needs the one genuinely new capability: recurring capture |
 | Returns | The coordinated-reversal pattern | Tickets and Experiences need a different concrete meaning of "return" — cancellation and refund policy rather than physical restock — but the pattern itself still applies |

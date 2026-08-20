@@ -312,22 +312,27 @@ router.post('/',
   optionalAuth,
   [
     body('email').isEmail().normalizeEmail(),
-    // Merchandise (items) and Pass admission (passes) are independently
-    // optional — a Pass-only order (no shipping to speak of) or a
-    // Merchandise-only order are both valid, only an order with neither is
-    // rejected (see the custom check below). Commerce Engine Stage 9: "a
-    // mixed-category Order already works today."
+    // Merchandise (items) and Pass admission (passes) are each individually
+    // optional but never both at once — a Pass-only order (no shipping to
+    // speak of, ADR-011 addendum) and a Merchandise-only order are the only
+    // two valid shapes. Mixed-category Orders were a deliberate feature at
+    // first (Commerce Engine Stage 9) but reversed once Pass's own checkout
+    // needed to stop looking like a shipment: see the ADR-011 addendum.
     body('items').isArray(),
     body('passes').optional().isArray(),
     body().custom((value) => (value.items?.length ?? 0) + (value.passes?.length ?? 0) > 0)
       .withMessage('An order must contain at least one item or pass'),
+    body().custom((value) => !((value.items?.length ?? 0) > 0 && (value.passes?.length ?? 0) > 0))
+      .withMessage('An order cannot mix Merchandise items and Passes — check out each separately'),
     body('shippingAddress').isObject(),
     body('shippingAddress.fullName').trim().notEmpty(),
     body('shippingAddress.phone').trim().notEmpty(),
-    body('shippingAddress.address').trim().notEmpty(),
-    body('shippingAddress.city').trim().notEmpty(),
-    body('shippingAddress.province').trim().notEmpty(),
-    body('shippingAddress.zipCode').trim().notEmpty(),
+    // Only meaningful for a Merchandise order — a Pass is never shipped, so
+    // these are required exclusively when the order actually has items.
+    body('shippingAddress.address').if((value, { req }) => (req.body.items?.length ?? 0) > 0).trim().notEmpty(),
+    body('shippingAddress.city').if((value, { req }) => (req.body.items?.length ?? 0) > 0).trim().notEmpty(),
+    body('shippingAddress.province').if((value, { req }) => (req.body.items?.length ?? 0) > 0).trim().notEmpty(),
+    body('shippingAddress.zipCode').if((value, { req }) => (req.body.items?.length ?? 0) > 0).trim().notEmpty(),
     body('shippingAddress.country').optional().trim(),
     body('shippingAddress.region').optional().trim(),
     body('shippingAddress.barangay').optional().trim(),
@@ -433,11 +438,17 @@ router.post('/',
 
       subtotal += passUnits.reduce((sum, unit) => sum + unit.price, 0);
 
-      // Recalculate shipping fee server-side — never trust the client value
+      // Recalculate shipping fee server-side — never trust the client value.
+      // A Pass-only order (no items — enforced above, items and passes
+      // never mix) has nothing to ship, full stop; the domestic/
+      // international rate lookup below is Merchandise-specific and would
+      // be meaningless here.
       const country = shippingAddress?.country || 'Philippines';
       let shippingFee;
 
-      if (shippingMethod === 'venue_pickup' && country === 'Philippines') {
+      if (orderItems.length === 0) {
+        shippingFee = 0;
+      } else if (shippingMethod === 'venue_pickup' && country === 'Philippines') {
         // Verify the specific slot is still active at time of order
         const venue = await venuePickupConfigRepository.get();
         const targetSlot = venue?.slots?.find(s => s._id === slotId);

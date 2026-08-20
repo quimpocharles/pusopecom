@@ -429,15 +429,22 @@ model Order {
   // fields below, which are distinct from the embedded address's own
   // `region` field in the original schema) — always exactly one per order,
   // never independently queried, so a join table would only add overhead.
+  //
+  // fullName/phone/country stay required — contact info any order needs,
+  // Pass or Merchandise (mirrors ticket-sys's own buyerName/buyerPhone,
+  // which never had an address concept at all). The genuinely
+  // shipping-specific fields are nullable: a Pass is never shipped
+  // (ADR-011 addendum — Pass and Merchandise checkouts don't mix), so
+  // there's nothing to address.
   shipToFullName String
   shipToPhone    String
   shipToCountry  String  @default("Philippines")
-  shipToAddress  String
-  shipToCity     String
-  shipToProvince String
+  shipToAddress  String?
+  shipToCity     String?
+  shipToProvince String?
   shipToRegion   String?
   shipToBarangay String?
-  shipToZipCode  String
+  shipToZipCode  String?
 
   subtotal         Float
   shippingFee      Float         @default(150)

@@ -301,7 +301,7 @@ describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
   });
 });
 
-describe('POST /orders — Pass (event admission) checkout, mixed with Merchandise (ADR-011)', () => {
+describe('POST /orders — Pass (event admission) checkout, always separate from Merchandise (ADR-011 addendum)', () => {
   const createdOrgIds = [];
   const createdVenueIds = [];
   const createdEventIds = [];
@@ -318,6 +318,18 @@ describe('POST /orders — Pass (event admission) checkout, mixed with Merchandi
     return { org, venue, section, event, tier };
   }
 
+  // A Pass is never shipped — only contact info, no address/city/province/
+  // zip at all (Order.shipTo* is nullable exactly for this).
+  function passOnlyPayload(tier, quantity = 1) {
+    return {
+      email: 'buyer@test.local',
+      items: [],
+      passes: [{ passTierId: tier.id, quantity }],
+      paymentChannel: 'GCASH',
+      shippingAddress: { fullName: 'Juan Dela Cruz', phone: '09171234567' },
+    };
+  }
+
   afterAll(async () => {
     await prisma.passLog.deleteMany({ where: { pass: { passEventId: { in: createdEventIds } } } });
     await prisma.pass.deleteMany({ where: { passEventId: { in: createdEventIds } } });
@@ -328,42 +340,33 @@ describe('POST /orders — Pass (event admission) checkout, mixed with Merchandi
     await prisma.organization.deleteMany({ where: { id: { in: createdOrgIds } } });
   });
 
-  it('a Pass tier folds into subtotal alongside Merchandise, one Order, one atomic transaction', async () => {
-    const product = await makeProduct({ name: 'MixedOrderProduct' });
+  it('rejects an order that mixes Merchandise items and Passes', async () => {
+    const product = await makeProduct({ name: 'MixedOrderRejected' });
     const { tier } = await makePassFixture();
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_mixed', redirectUrl: 'https://pay.example/chk_mixed' });
 
-    const payload = { ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 2 }] };
+    const payload = { ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 1 }] };
     const res = await request(app).post('/api/orders').send(payload);
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
 
-    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
-    // 500 (product) + 300*2 (2 passes) = 1100 base; + NCR shipping 99 + GCash 2% fee
-    const expectedFee = Math.round((1100 + 99) * 0.02 * 100) / 100;
-    expect(order.subtotal).toBe(1100);
-    expect(order.total).toBe(1100 + 99 + expectedFee);
-
-    const passes = await prisma.pass.findMany({ where: { orderId: order.id } });
-    expect(passes).toHaveLength(2);
-    expect(passes.every((p) => p.status === 'issued' && p.price === 300)).toBe(true);
-
-    const updatedTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
-    expect(updatedTier.sold).toBe(2);
-  }, 25000);
-
-  it('accepts a Pass-only order with no Merchandise items at all', async () => {
+  it('accepts a Pass-only order with no shipping address fields at all — no items, no address, no city, no province, no zip', async () => {
     const { tier } = await makePassFixture();
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_passonly', redirectUrl: 'https://pay.example/chk_passonly' });
 
-    const res = await request(app).post('/api/orders').send({
-      email: 'buyer@test.local',
-      items: [],
-      passes: [{ passTierId: tier.id, quantity: 1 }],
-      shippingRegion: '13',
-      paymentChannel: 'GCASH',
-      shippingAddress: { fullName: 'Juan Dela Cruz', phone: '09171234567', address: '123 Rizal St', city: 'Quezon City', province: 'Metro Manila', zipCode: '1100' },
-    });
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
     expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.shipToAddress).toBeNull();
+    expect(order.shipToCity).toBeNull();
+    expect(order.shipToProvince).toBeNull();
+    expect(order.shipToZipCode).toBeNull();
+    expect(order.shippingFee).toBe(0);
+
+    const passes = await prisma.pass.findMany({ where: { orderId: order.id } });
+    expect(passes).toHaveLength(1);
+    expect(passes[0].status).toBe('issued');
   }, 15000);
 
   it('400s an order with neither items nor passes', async () => {
@@ -379,10 +382,9 @@ describe('POST /orders — Pass (event admission) checkout, mixed with Merchandi
 
   it('releasing a failed order\'s payment restores tier capacity and cancels the Pass, same trigger as stock release', async () => {
     const { tier } = await makePassFixture();
-    const product = await makeProduct({ name: 'ReleaseGaProduct' });
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_release_ga', redirectUrl: 'https://pay.example/chk_release_ga' });
 
-    const createRes = await request(app).post('/api/orders').send({ ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 1 }] });
+    const createRes = await request(app).post('/api/orders').send(passOnlyPayload(tier));
     const { orderNumber } = createRes.body.data;
 
     const soldTier = await prisma.passTier.findUnique({ where: { id: tier.id } });
@@ -411,10 +413,9 @@ describe('POST /orders — Pass (event admission) checkout, mixed with Merchandi
   // which already re-fetches the order fresh and was never affected.
   it('releases a Pass reservation when gateway checkout session creation fails immediately — same request, no webhook involved', async () => {
     const { tier } = await makePassFixture();
-    const product = await makeProduct({ name: 'PassGatewayFailure' });
     paymentService.createCheckoutSession.mockRejectedValueOnce(new Error('Xendit is down'));
 
-    const res = await request(app).post('/api/orders').send({ ...validOrderPayload(product), passes: [{ passTierId: tier.id, quantity: 1 }] });
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
     expect(res.status).toBe(500);
 
     const releasedTier = await prisma.passTier.findUnique({ where: { id: tier.id } });

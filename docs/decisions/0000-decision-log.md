@@ -281,3 +281,28 @@ It tells the truth about what the platform actually knows: which section, roughl
 
 **Future implications**
 Reintroducing real seat-level selection — if a specific authorized venue and a real seating chart eventually justify it — is additive on top of this simpler shape (a new `Seat`/event-availability layer scoped underneath `VenueSection`, following the same atomic-CAS pattern), not a second rewrite of the section/tier/checkout spine. The staff check-in tool's UI, still not built, is unaffected by this change — `Pass`/`PassStatus`/`transition` are untouched.
+
+---
+
+### ADR-011 Addendum (2026-08-20) — Pass and Merchandise checkouts no longer mix
+
+**Context**
+The original entry above named `shippingAddress` staying required on a Pass-only order as "a known simplification, not a design statement that Passes are shipped." Comparing against a working reference ticketing product (`ticket-sys`) confirmed what that simplification was hiding: its entire buyer form is name/email/phone(/country) — no address concept exists at all, because nothing physical ever ships. PusoStore's Checkout instead forced every order, Pass-only or not, through the full Merchandise shipping-address form (region → province → city → barangay → zip → street) purely because Pass checkout was built by extending the Merchandise path rather than a separate one.
+
+Fixing just the address form wasn't the whole ask. Commerce Engine Stage 9's own claim — "a mixed-category Order (jersey plus Pass) already works today" — was cited in the original ADR-011 entry as proof the category-agnostic Commerce Item architecture holds. Direct instruction reversed that: Pass and Merchandise should never combine into one checkout or one Order at all.
+
+**Decision**
+`POST /orders` now rejects (400) any request where both `items` and `passes` are non-empty — a hard boundary, not just a frontend convention, matching the "never trust the client" discipline already applied to price/promo/gateway-fee re-validation throughout checkout. The two Zustand cart stores (`useCartStore`, persisted Merchandise; `usePassCartStore`, session-only Pass selection) stay independent — a fan can still hold both at once — but `Checkout.jsx` treats a non-empty Pass selection as exclusive: that checkout processes the Pass only, the persisted Merchandise cart is excluded from the submission (not merged in) and left completely untouched for a separate checkout later, with an on-screen notice saying so.
+
+Contact info and shipping address are no longer the same thing. `Order.shipToFullName`/`shipToPhone`/`shipToCountry` stay required — every order, Pass or Merchandise, still needs to know who it's for (mirrors `ticket-sys`'s own `buyerName`/`buyerPhone`, which never had an address concept to begin with). `shipToAddress`/`shipToCity`/`shipToProvince`/`shipToZipCode` become nullable — the genuinely shipping-specific fields, meaningless for something that's never shipped. `Checkout.jsx`'s Delivery Method and Shipping Address sections are skipped entirely in Pass-only mode, and `shippingFee` is forced to 0 server-side rather than running the domestic/international rate lookup against nothing.
+
+**Alternatives considered**
+- *Keep mixed-category Orders, just skip the address form for a Pass-only cart.* Rejected — this was the first, narrower framing, but direct instruction was explicit: separate the transaction for Merchandise, not just hide a form section.
+- *Auto-split a mixed cart into two sequential orders/checkouts at submit time.* Rejected as unnecessary complexity for what was asked — the simpler rule (a Pass selection makes the checkout Pass-only; Merchandise stays in the cart for its own later checkout) needs no cross-request state and no second payment flow chained automatically behind the first.
+- *Force mutual exclusivity at add-to-cart time (block adding a Pass while Merchandise is in cart, and vice versa).* Rejected — bigger and more disruptive than asked; a fan browsing and adding a jersey while they still have a pending Pass pick is normal, only checkout itself needed the split.
+
+**Why the chosen approach won**
+It matches a working reference implementation's own proven shape (`ticket-sys`) rather than inventing a novel checkout flow, and it's a small, local rule (branch on whether a Pass is selected) rather than a cart-level restructuring. The backend enforcing the same rule as a real 400, not just a frontend nicety, closes the boundary the same way every other checkout value in this codebase has been treated since the platform audit's original webhook-trust finding.
+
+**Future implications**
+The "a mixed-category Order already works today" claim in the original ADR-011 entry and in `CLAUDE.md`'s Commerce Engine table is now superseded, not true — corrected there, not silently left stale. Applying a promo code during a Pass-only checkout now validates against an empty `items` array (never the untouched Merchandise cart) — whether platform-wide promos should discount Pass tiers at all is an open question this pass doesn't resolve, since no behavior change was needed to fix the actual bug (sending the wrong cart's contents for validation). If Membership (the next planned commerce category, `docs/EXECUTION_PLAN.md`) ever wants to combine with something else in one checkout, that decision should be made fresh against its own real requirements, not inherited from Pass's now-reversed precedent.

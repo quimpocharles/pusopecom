@@ -194,7 +194,14 @@ const orderItemsRows = (order) => order.items.map(item => `
   </tr>
 `).join('');
 
-const orderAddressBlock = (order) => order.shippingMethod === 'venue_pickup' ? `
+// A Pass-only order (no Merchandise items — Order.passes handles its own
+// section, see passCards above) has nothing to ship and no address on
+// file (shipTo{Address,City,Province,ZipCode} are nullable exactly for
+// this, ADR-011 addendum) — skip the block entirely rather than render
+// blank city/province lines.
+const orderAddressBlock = (order) => {
+  if (!order.items?.length) return '';
+  return order.shippingMethod === 'venue_pickup' ? `
   ${label('Pick-Up Venue')}
   ${value(`${order.shippingAddress.city}<br><span style="color:rgba(255,255,255,0.50);font-size:13px;">${order.shippingAddress.address}</span>`)}
 ` : `
@@ -208,6 +215,7 @@ const orderAddressBlock = (order) => order.shippingMethod === 'venue_pickup' ? `
     </span>
   `)}
 `;
+};
 
 const orderShippingLabel = (order) => order.shippingMethod === 'venue_pickup'
   ? '<span style="color:#a78bfa;">FREE &nbsp;&middot;&nbsp; Venue Pick-Up</span>'

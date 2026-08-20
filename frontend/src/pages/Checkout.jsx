@@ -48,11 +48,11 @@ const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note
 );
 
 // ─── Payment channel card ────────────────────────────────────────────────────
-// Same selectable-card shape as DeliveryCard above — the fee shown here is
-// the actual amount that'll be added to Total for this channel, computed
-// the same way the server will (see utils/paymentChannels.js's comment on
-// why this is a preview only, not the authoritative charge).
-const PaymentChannelCard = ({ selected, onClick, label, fee }) => (
+// Same selectable-card shape as DeliveryCard above. The per-channel fee used
+// to be echoed on each card, redundant with Xendit's own hosted checkout
+// page (which shows the locked-in channel again) — it now surfaces exactly
+// once, in the Order Summary's "Processing Fee" line once a channel is picked.
+const PaymentChannelCard = ({ selected, onClick, label }) => (
   <button
     type="button"
     onClick={onClick}
@@ -66,7 +66,6 @@ const PaymentChannelCard = ({ selected, onClick, label, fee }) => (
       {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#0a0a0a]" />}
     </span>
     <span className="flex-1 font-semibold text-sm text-gray-900">{label}</span>
-    <span className="flex-shrink-0 text-xs text-gray-500">+₱{fee.toFixed(2)} fee</span>
   </button>
 );
 
@@ -116,11 +115,23 @@ const Checkout = () => {
   const region  = watch('region')  || '';
   const passTotal = getPassTotal();
   const passCount = passSelections.reduce((sum, s) => sum + s.quantity, 0);
-  const subtotal = getCartTotal() + passTotal; // hoisted above effects so it can be a dependency
+  // Passes and Merchandise never check out together (ADR-011 addendum) —
+  // whenever a Pass is selected, this checkout is Pass-only, full stop.
+  // The persisted Merchandise cart (if any) is left completely untouched
+  // for a separate checkout later; see the notice rendered near the form.
+  const isPassOnly = passCount > 0;
+  const subtotal = isPassOnly ? passTotal : getCartTotal(); // hoisted above effects so it can be a dependency
 
   // Fetch shipping options from the server whenever country, region, or cart total changes.
-  // Server auto-disables venue pickup if the pickup date has passed.
+  // Server auto-disables venue pickup if the pickup date has passed. A Pass
+  // has nothing to ship — skip the fetch entirely rather than ask the
+  // server a question that doesn't apply.
   useEffect(() => {
+    if (isPassOnly) {
+      setShippingOptions([]);
+      setOptionsLoading(false);
+      return;
+    }
     setOptionsLoading(true);
     api.post('/shipping/options', { cartTotal: subtotal, country, region })
       .then(res => {
@@ -136,7 +147,7 @@ const Checkout = () => {
       })
       .catch(() => {})
       .finally(() => setOptionsLoading(false));
-  }, [country, region, subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPassOnly, country, region, subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset to standard delivery whenever the country changes
   useEffect(() => { setDeliveryMethod('standard'); }, [country]);
@@ -164,7 +175,7 @@ const Checkout = () => {
   const effectiveOption = deliveryMethod === 'standard'
     ? standardOption
     : (pickupSlots.find(o => o.slotId === deliveryMethod) ?? standardOption);
-  const shippingFee = effectiveOption?.fee ?? null; // null → contact_us or still loading
+  const shippingFee = isPassOnly ? 0 : (effectiveOption?.fee ?? null); // null → contact_us or still loading
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   // Channel picked in our own UI before redirect, not on Xendit's hosted
   // page — the exact fee for that channel is known and shown here, so
@@ -185,7 +196,9 @@ const Checkout = () => {
     try {
       const res = await promoCodeService.validateCode({
         code: promoInput.trim(),
-        items: items.map((item) => ({ product: item.product._id, price: item.price, quantity: item.quantity })),
+        // Never the merchandise cart's items during a Pass-only checkout —
+        // that cart isn't part of this order (see isPassOnly above).
+        items: isPassOnly ? [] : items.map((item) => ({ product: item.product._id, price: item.price, quantity: item.quantity })),
         subtotal,
         shippingFee,
         email: watch('email'),
@@ -206,7 +219,7 @@ const Checkout = () => {
   };
 
   const onSubmit = async (data) => {
-    if (effectiveOption?.method === 'contact_us') {
+    if (!isPassOnly && effectiveOption?.method === 'contact_us') {
       setError('Please contact us to arrange shipping for your location before placing an order.');
       return;
     }
@@ -219,11 +232,21 @@ const Checkout = () => {
     setError('');
 
     try {
-      const isPickup = deliveryMethod !== 'standard';
+      const isPickup = !isPassOnly && deliveryMethod !== 'standard';
       const isPH = data.country === 'Philippines';
       let shippingAddress;
 
-      if (isPickup) {
+      if (isPassOnly) {
+        // A Pass is never shipped — just who to contact, matching
+        // ticket-sys's own buyerName/buyerPhone/buyerEmail shape. No
+        // address/city/province/zip at all (Order.shipTo* is nullable
+        // exactly for this, ADR-011 addendum).
+        shippingAddress = {
+          fullName: data.fullName,
+          phone: data.phone,
+          country: 'Philippines',
+        };
+      } else if (isPickup) {
         // Pickup orders: use buyer's real name + venue details as address
         shippingAddress = {
           fullName: data.fullName,
@@ -265,7 +288,10 @@ const Checkout = () => {
 
       const orderData = {
         email: data.email,
-        items: items.map(item => ({
+        // Merchandise and Passes never check out together — the persisted
+        // cart is deliberately excluded here (not merged in) whenever a
+        // Pass is present, and stays exactly as-is for a separate checkout.
+        items: isPassOnly ? [] : items.map(item => ({
           product: item.product._id,
           name: item.product.name,
           price: item.price,
@@ -278,24 +304,26 @@ const Checkout = () => {
         shippingFee: shippingFee ?? 0,
         promoCode: appliedPromo?.code || undefined,
         paymentChannel,
-        shippingMethod: effectiveOption?.method ?? null,
+        shippingMethod: isPassOnly ? null : (effectiveOption?.method ?? null),
         slotId: isPickup ? (effectiveOption?.slotId ?? null) : undefined,
-        shippingRegion: isPickup ? null
+        shippingRegion: isPassOnly ? null
+          : isPickup ? null
           : data.country === 'Philippines' ? (data.region || null)
           : (standardOption?.region || null),
         notes: isPickup
           ? `VENUE PICKUP${data.notes ? ` — ${data.notes}` : ''}`
-          : data.notes,
+          : (isPassOnly ? undefined : data.notes),
       };
 
       const response = await orderService.createOrder(orderData);
 
       if (response.success && response.data.checkoutUrl) {
         // Only a real typed address is worth saving — not the synthetic
-        // venue-pickup "address", and only once the order itself is
-        // confirmed to have gone through. Never blocks or fails checkout:
-        // the save is a convenience for next time, not a requirement now.
-        if (user && saveAddress && !isPickup) {
+        // venue-pickup "address" or a Pass-only order's address-less
+        // contact info — and only once the order itself is confirmed to
+        // have gone through. Never blocks or fails checkout: the save is a
+        // convenience for next time, not a requirement now.
+        if (user && saveAddress && !isPickup && !isPassOnly) {
           try {
             await authService.addAddress(shippingAddress);
           } catch (saveError) {
@@ -413,8 +441,16 @@ const Checkout = () => {
                 </div>
               </div>
 
+              {/* Passes are never shipped — Delivery Method and Shipping
+                  Address only make sense for a Merchandise checkout. */}
+              {isPassOnly && items.length > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
+                  Checking out your Pass only — the items in your cart are untouched and ready whenever you check out separately.
+                </div>
+              )}
+
               {/* Delivery Method */}
-              <div className="card p-6">
+              {!isPassOnly && <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Delivery Method</h2>
 
                 {optionsLoading ? (
@@ -477,10 +513,10 @@ const Checkout = () => {
                     International orders may be subject to import duties and customs fees charged by the destination country. These are the buyer's responsibility.
                   </p>
                 )}
-              </div>
+              </div>}
 
-              {/* Shipping Address — hidden when venue pickup is selected */}
-              {deliveryMethod === 'standard' && <div className="card p-6">
+              {/* Shipping Address — hidden when venue pickup or Pass-only checkout */}
+              {!isPassOnly && deliveryMethod === 'standard' && <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Shipping Address</h2>
 
                 <div className="space-y-4">
@@ -522,16 +558,15 @@ const Checkout = () => {
               <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Payment Method</h2>
                 <p className="text-xs text-gray-500 mb-3">
-                  Each method's processing fee is added to your total — shown below before you pay, never as a surprise.
+                  Each method's processing fee is added to your total — shown in the breakdown below before you pay, never as a surprise.
                 </p>
-                <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
                   {PAYMENT_CHANNELS.map((channel) => (
                     <PaymentChannelCard
                       key={channel.code}
                       selected={paymentChannel === channel.code}
                       onClick={() => setPaymentChannel(channel.code)}
                       label={channel.label}
-                      fee={shippingFee != null ? calculateGatewayFee(channel.code, subtotal + shippingFee - discountAmount) : 0}
                     />
                   ))}
                 </div>
@@ -594,7 +629,19 @@ const Checkout = () => {
               </div>
 
               <div className="space-y-3 mb-4">
-                {items.map((item) => (
+                {/* Only whichever type is actually being checked out —
+                    never both, matching the Pass/Merchandise split above. */}
+                {isPassOnly ? passSelections.map((s) => (
+                  <div key={s.tierId} className="flex gap-3 pb-3 border-b">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{passEvent?.name}</p>
+                      <p className="text-xs text-gray-600">{s.tierName} × {s.quantity}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">₱{(s.price * s.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                )) : items.map((item) => (
                   <div key={`${item.product._id}-${item.size}-${item.color || ''}`} className="flex gap-3 pb-3 border-b">
                     <img
                       src={item.product.images[0]}
@@ -610,17 +657,6 @@ const Checkout = () => {
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">₱{(item.price * item.quantity).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
-                {passSelections.map((s) => (
-                  <div key={s.tierId} className="flex gap-3 pb-3 border-b">
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">{passEvent?.name}</p>
-                      <p className="text-xs text-gray-600">{s.tierName} × {s.quantity}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">₱{(s.price * s.quantity).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
@@ -669,17 +705,19 @@ const Checkout = () => {
                   <span>Subtotal</span>
                   <span>₱{subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Shipping</span>
-                  {optionsLoading
-                    ? <span className="text-gray-300 animate-pulse">···</span>
-                    : shippingFee === 0
-                      ? <span className="text-green-600 font-semibold">FREE</span>
-                      : shippingFee != null
-                        ? <span>₱{shippingFee.toFixed(2)}</span>
-                        : <span className="text-gray-400 text-sm">Contact us</span>
-                  }
-                </div>
+                {!isPassOnly && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Shipping</span>
+                    {optionsLoading
+                      ? <span className="text-gray-300 animate-pulse">···</span>
+                      : shippingFee === 0
+                        ? <span className="text-green-600 font-semibold">FREE</span>
+                        : shippingFee != null
+                          ? <span>₱{shippingFee.toFixed(2)}</span>
+                          : <span className="text-gray-400 text-sm">Contact us</span>
+                    }
+                  </div>
+                )}
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount {appliedPromo?.freeShipping ? '(free shipping)' : `(${appliedPromo.code})`}</span>

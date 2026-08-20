@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "orders" ALTER COLUMN "shipToAddress" DROP NOT NULL,
+ALTER COLUMN "shipToCity" DROP NOT NULL,
+ALTER COLUMN "shipToProvince" DROP NOT NULL,
+ALTER COLUMN "shipToZipCode" DROP NOT NULL;
