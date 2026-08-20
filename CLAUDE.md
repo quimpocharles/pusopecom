@@ -164,7 +164,7 @@ Full detail: `docs/MY_PUSO_MANIFESTO.md`. My PUSO is the customer portal's real 
 | Concept | Is | Is not |
 |---|---|---|
 | **Home** | A living feed of what changed since the fan's last visit | A dashboard of statistics about them |
-| **Locker** | A fan's growing personal collection — Merchandise and Passes *(backend live, ADR-011; Locker UI surfacing not yet built)* today, Memberships/Digital Collectibles/Rewards later, same shape | "Purchases" or order history |
+| **Locker** | A fan's growing personal collection — Merchandise and Passes (ADR-011; `LockerPasses` in `pages/account/Locker.jsx`) today, Memberships/Digital Collectibles/Rewards later, same shape | "Purchases" or order history |
 | **Fit Check** | The AI Try-On feature, treated as identity and self-expression | A utility tool buried in account settings |
 | **Following** | The mechanism (built on the existing `Favorite` domain concept) that makes fandom, not shopping, a reason to return | "Organizations," a management page |
 

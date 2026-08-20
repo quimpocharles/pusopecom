@@ -227,6 +227,28 @@ The hardcoded fee table in `lib/payments/xenditFees.js` must be replaced with Pu
 
 ---
 
+### ADR-010 Addendum (2026-08-20) — the endpoint path and two channel codes this ADR flagged as unverified were wrong; Bank Transfer removed rather than fixed
+
+**Context**
+This ADR's own "Future implications" named the exact risk: the Payment Sessions endpoint path and `channel_code` values were built from public documentation, never confirmed against a live account. Pushing real checkouts through Xendit's sandbox and then production surfaced four separate failures, each fixed the same way — real error, real fix, not another guess: the endpoint itself was wrong (`/v3/sessions` 404s; the real path is `/sessions`), `customer.type` is a required field the original payload never sent, `customer.mobile_number` must be E.164 (`+639171234567`), not the local format (`09171234567`) every other part of the platform stores, and `customer.reference_id` — originally scoped to the signed-in user — collided on a second order from the same account, since Xendit's Sessions API creates a Customer record inline and rejects a `reference_id` it's already seen.
+
+Card's channel code was also wrong (`CREDIT_CARD`, rejected; the real code is `CARDS`) and got fixed the same way. Bank Transfer's guessed code (`VIRTUAL_ACCOUNT`) was rejected too, but unlike Card this wasn't a wrong-string problem: the Xendit dashboard lists Philippine bank transfer per-bank (BPI, RCBC, UBP, each its own "Direct Debit" channel), not as one generic channel a single code could ever cover.
+
+**Decision**
+All four confirmed bugs are fixed in `xenditGateway.js`: the endpoint path, `customer.type: 'INDIVIDUAL'`, a local `toE164PH()` conversion before sending `mobile_number`, and `reference_id` scoped to the order (`${userId}-${orderNumber}`) instead of just the user. Card's channel code is corrected to `CARDS`. Bank Transfer is removed outright from `lib/payments/xenditFees.js` and `utils/paymentChannels.js` rather than re-guessed, since there's no single code to guess — re-adding it needs real per-bank codes and a UI that can present "which bank," not a fix to this file alone. Apple Pay (confirmed `Activated` in the Xendit dashboard) is added in Bank Transfer's place; its channel code (`APPLE_PAY`) and fee rate are fresh, still-unverified placeholders, same status Card's now-fixed code had before tonight.
+
+**Alternatives considered**
+- *Guess a per-bank channel code for Bank Transfer the same way Card's was fixed.* Rejected — Card had exactly one real code to find; Bank Transfer has several (one per bank), and guessing one wouldn't restore the "any bank" option the removed channel implied. That needs its own UI decision (bank picker vs. one representative bank), not a same-pass fix.
+- *Leave Bank Transfer in place, flagged as broken, rather than removing it.* Rejected — it was actively producing 500s for any real customer who selected it; a channel customers can pick but can't actually use is worse than one less option.
+
+**Why the chosen approach won**
+Every fix here follows the exact discipline this ADR's own "Future implications" called for: don't trust a doc-derived assumption until a live account confirms it, and when it's wrong, fix it from the real error rather than guess again. Removing Bank Transfer instead of forcing a guess keeps that discipline intact rather than trading it for the appearance of completeness.
+
+**Future implications**
+`MAYA` and `QRPH`'s channel codes remain exactly as unverified as Bank Transfer's was before tonight — confirm each against a real checkout attempt before trusting them, the same way `/sessions`, `customer.type`, `mobile_number`, `reference_id`, and `CARDS` were each confirmed only once a real order actually exercised them. Bank Transfer can come back once real per-bank codes and a bank-selection UI exist; until then, `lib/payments/xenditFees.js`'s own comment is the source of truth for which channels are confirmed versus still placeholders.
+
+---
+
 ## ADR-011 — Pass: event admission as a new Commerce Item category, ahead of Membership's planned sequencing
 
 **Context**
