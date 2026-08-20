@@ -49,7 +49,7 @@ describe('decrementTierCapacity / restoreTierCapacity — PassTier counters', ()
   it('decrements atomically when enough capacity remains', () =>
     withRollback(async (tx) => {
       const { tier } = await makeVenueEventFixtures(tx);
-      await passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 2 }, { client: tx });
+      await passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 2, capacity: tier.capacity }, { client: tx });
       const updated = await tx.passTier.findUnique({ where: { id: tier.id } });
       expect(updated.sold).toBe(2);
     }, { timeout: 15000 }), 15000);
@@ -58,7 +58,7 @@ describe('decrementTierCapacity / restoreTierCapacity — PassTier counters', ()
     withRollback(async (tx) => {
       const { tier } = await makeVenueEventFixtures(tx);
       await expect(
-        passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 3 }, { client: tx })
+        passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 3, capacity: tier.capacity }, { client: tx })
       ).rejects.toThrow(passRepo.InsufficientPassCapacityError);
       const unchanged = await tx.passTier.findUnique({ where: { id: tier.id } });
       expect(unchanged.sold).toBe(0);
@@ -67,7 +67,7 @@ describe('decrementTierCapacity / restoreTierCapacity — PassTier counters', ()
   it('restoreTierCapacity is the exact symmetric inverse', () =>
     withRollback(async (tx) => {
       const { tier } = await makeVenueEventFixtures(tx);
-      await passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 2 }, { client: tx });
+      await passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 2, capacity: tier.capacity }, { client: tx });
       await passRepo.restoreTierCapacity({ passTierId: tier.id, quantity: 2 }, { client: tx });
       const restored = await tx.passTier.findUnique({ where: { id: tier.id } });
       expect(restored.sold).toBe(0);
@@ -83,7 +83,7 @@ describe('decrementTierCapacity / restoreTierCapacity — PassTier counters', ()
     await prisma.passTier.update({ where: { id: tier.id }, data: { capacity: 1 } });
 
     try {
-      const attempt = () => prisma.$transaction((tx) => passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 1 }, { client: tx }));
+      const attempt = () => prisma.$transaction((tx) => passRepo.decrementTierCapacity({ passTierId: tier.id, quantity: 1, capacity: 1 }, { client: tx }));
       const results = await Promise.allSettled([attempt(), attempt()]);
       const succeeded = results.filter((r) => r.status === 'fulfilled');
       const failed = results.filter((r) => r.status === 'rejected');

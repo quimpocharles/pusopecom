@@ -421,7 +421,10 @@ router.post('/',
       // individual Passes, since each admission credential is independently
       // scannable (see the schema comment on the Pass model for why).
       const passUnits = [];
-      const tierDecrements = new Map(); // passTierId -> total quantity to decrement, once per tier
+      // passTierId -> { quantity, capacity } — capacity carried alongside
+      // quantity so decrementTierCapacity never has to re-read it inside
+      // the transaction (see that function's own comment for why).
+      const tierDecrements = new Map();
 
       for (const p of passes || []) {
         const tier = await passEventRepository.findTierById(p.passTierId);
@@ -433,7 +436,8 @@ router.post('/',
         for (let i = 0; i < quantity; i++) {
           passUnits.push({ passEventId: tier.passEventId, passTierId: tier._id, price: tier.price });
         }
-        tierDecrements.set(tier._id, (tierDecrements.get(tier._id) || 0) + quantity);
+        const existing = tierDecrements.get(tier._id);
+        tierDecrements.set(tier._id, { quantity: (existing?.quantity || 0) + quantity, capacity: tier.capacity });
       }
 
       subtotal += passUnits.reduce((sum, unit) => sum + unit.price, 0);
@@ -532,8 +536,8 @@ router.post('/',
 
           // Same atomic unit again — Pass tier capacity succeeds or fails
           // together with everything else above.
-          for (const [passTierId, quantity] of tierDecrements) {
-            await passRepository.decrementTierCapacity({ passTierId, quantity }, { client: tx });
+          for (const [passTierId, { quantity, capacity }] of tierDecrements) {
+            await passRepository.decrementTierCapacity({ passTierId, quantity, capacity }, { client: tx });
           }
 
           const createdOrder = await orderRepository.create(

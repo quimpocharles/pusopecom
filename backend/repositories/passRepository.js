@@ -12,22 +12,36 @@ export class InsufficientPassCapacityError extends Error {
 // --- PassTier capacity ---
 
 /**
- * Mirrors productRepository.decrementStock's conditional-update-not-
- * read-then-write shape. `sold + quantity <= capacity` isn't directly
- * expressible as a Prisma filter (comparing two columns plus a literal),
- * so it's rearranged to `sold <= capacity - quantity` — capacity is read
- * first (a rarely-changing, admin-set value) and used as a literal in the
- * WHERE, the same technique promoCodeRepository.tryRedeem already used for
- * `redemptionCount < maxRedemptions`.
+ * Mirrors productRepository.decrementStock's single-atomic-statement
+ * shape — genuinely one round trip, not read-then-write. `sold + quantity
+ * <= capacity` isn't directly expressible as a Prisma filter (comparing
+ * two columns plus a literal), so it's rearranged to
+ * `sold <= capacity - quantity`, with `capacity` passed in by the caller
+ * rather than read here — the same shape promoCodeRepository.tryRedeem
+ * already uses for `redemptionCount < maxRedemptions` (maxRedemptions is
+ * a parameter there too, never re-read inside that function).
+ *
+ * An earlier version read `capacity` internally, inside this same
+ * function, before the conditional UPDATE — a second round trip inside
+ * the race-sensitive step. Two concurrent callers racing for the exact
+ * last unit of capacity could then hit a raw, unhandled
+ * PrismaClientKnownRequestError instead of the clean
+ * InsufficientPassCapacityError below (confirmed via two consecutive
+ * isolated reruns of the concurrency test, while the equivalent
+ * decrementStock race passed cleanly on the same database — this
+ * function's extra round trip, not the environment, was the difference).
+ * Capacity is effectively static (admin-set, not concurrently written the
+ * way `sold` is), so reading it in the caller — which already fetches the
+ * tier once per order, before the transaction even starts — costs nothing
+ * real and removes the second round trip from the transaction entirely.
  */
-export async function decrementTierCapacity({ passTierId, quantity }, { client } = {}) {
+export async function decrementTierCapacity({ passTierId, quantity, capacity }, { client } = {}) {
   if (!client) throw new Error('decrementTierCapacity must be called with a transaction client');
-  const tier = await client.passTier.findUnique({ where: { id: passTierId } });
-  if (!tier || tier.capacity == null) {
+  if (capacity == null) {
     throw new Error(`Pass tier ${passTierId} has no capacity configured`);
   }
   const result = await client.passTier.updateMany({
-    where: { id: passTierId, sold: { lte: tier.capacity - quantity } },
+    where: { id: passTierId, sold: { lte: capacity - quantity } },
     data: { sold: { increment: quantity } },
   });
   if (result.count === 0) throw new InsufficientPassCapacityError({ passTierId });
