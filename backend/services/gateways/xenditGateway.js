@@ -37,16 +37,20 @@ const getAuthHeader = () => {
 
 // Our internal channel codes (lib/payments/xenditFees.js) mapped to
 // Xendit's own channel_code vocabulary. GCASH and CARDS confirmed against
-// a live sandbox account (2026-08-20) — CARD was originally guessed as
-// CREDIT_CARD, which Xendit rejected ("channel(s) CREDIT_CARD are not
-// available"); the real code is CARDS. MAYA/BANK_TRANSFER/QRPH remain
-// unverified placeholders — confirm each against a live checkout attempt
-// before relying on them.
+// a live account (2026-08-20) — CARD was originally guessed as CREDIT_CARD,
+// which Xendit rejected ("channel(s) CREDIT_CARD are not available"); the
+// real code is CARDS. BANK_TRANSFER (guessed as VIRTUAL_ACCOUNT) was
+// removed outright rather than re-guessed — Xendit rejected that too, and
+// the dashboard shows PH bank transfer per-bank (BPI/RCBC/UBP), not as one
+// generic channel, so it needs real per-bank codes, not just a fixed
+// string. APPLE_PAY is a fresh, unverified guess — confirm it against a
+// live checkout attempt before trusting it; MAYA/QRPH remain unverified
+// placeholders too.
 const CHANNEL_CODE_MAP = {
   GCASH: 'GCASH',
   MAYA: 'PAYMAYA',
   CARD: 'CARDS',
-  BANK_TRANSFER: 'VIRTUAL_ACCOUNT',
+  APPLE_PAY: 'APPLE_PAY',
   QRPH: 'QRPH',
 };
 

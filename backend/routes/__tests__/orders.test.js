@@ -276,12 +276,12 @@ describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
 
     const res = await request(app)
       .post('/api/orders')
-      .send({ ...validOrderPayload(product), paymentChannel: 'BANK_TRANSFER', gatewayFeeAmount: 0, total: 1 });
+      .send({ ...validOrderPayload(product), paymentChannel: 'APPLE_PAY', gatewayFeeAmount: 0, total: 1 });
     expect(res.status).toBe(201);
 
     const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
-    expect(order.gatewayFeeAmount).toBe(15); // real BANK_TRANSFER flat fee, not the client's fabricated 0
-    expect(order.total).toBe(599 + 15);
+    expect(order.gatewayFeeAmount).toBe(11.98); // real APPLE_PAY fee (2% of 599), not the client's fabricated 0
+    expect(order.total).toBe(599 + 11.98);
   }, 15000);
 
   it('400s for an order with no recognized payment channel — never silently defaults to one', async () => {

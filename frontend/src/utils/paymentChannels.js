@@ -11,7 +11,7 @@ export const PAYMENT_CHANNELS = Object.freeze([
   { code: 'GCASH', label: 'GCash', feeType: 'percent', percent: 0.02 },
   { code: 'MAYA', label: 'Maya', feeType: 'percent', percent: 0.02 },
   { code: 'CARD', label: 'Credit/Debit Card', feeType: 'percent_plus_flat', percent: 0.029, flatAmount: 15 },
-  { code: 'BANK_TRANSFER', label: 'Online Banking (InstaPay/PESONet)', feeType: 'flat', flatAmount: 15 },
+  { code: 'APPLE_PAY', label: 'Apple Pay', feeType: 'percent', percent: 0.02 },
   { code: 'QRPH', label: 'QR Ph', feeType: 'percent', percent: 0.007 },
 ]);
 

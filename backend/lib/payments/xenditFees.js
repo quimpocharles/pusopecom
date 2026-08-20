@@ -20,9 +20,16 @@ export const CHANNELS = Object.freeze([
   { code: 'GCASH', label: 'GCash', feeType: 'percent', percent: 0.02 },
   { code: 'MAYA', label: 'Maya', feeType: 'percent', percent: 0.02 },
   { code: 'CARD', label: 'Credit/Debit Card', feeType: 'percent_plus_flat', percent: 0.029, flatAmount: 15 },
-  { code: 'BANK_TRANSFER', label: 'Online Banking (InstaPay/PESONet)', feeType: 'flat', flatAmount: 15 },
+  { code: 'APPLE_PAY', label: 'Apple Pay', feeType: 'percent', percent: 0.02 },
   { code: 'QRPH', label: 'QR Ph', feeType: 'percent', percent: 0.007 },
 ]);
+// BANK_TRANSFER removed (2026-08-20) — its channel code (VIRTUAL_ACCOUNT) was
+// a guess that Xendit's live account rejected outright ("Channel(s)
+// VIRTUAL_ACCOUNT are not available"), and unlike CARD's wrong-code fix,
+// there's no single confirmed replacement: the Xendit dashboard lists PH
+// bank transfer per-bank (BPI, RCBC, UBP), not as one generic channel, so
+// this was a structural mismatch, not just a wrong string. Re-add once the
+// real per-bank channel codes are confirmed.
 
 const CHANNELS_BY_CODE = Object.freeze(
   Object.fromEntries(CHANNELS.map((channel) => [channel.code, channel]))

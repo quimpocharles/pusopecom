@@ -18,9 +18,8 @@ describe('xenditFees', () => {
     expect(calculateGatewayFee('CARD', 1000)).toBe(44); // 2.9% + ₱15
   });
 
-  it('computes a flat fee (Bank Transfer) regardless of amount', () => {
-    expect(calculateGatewayFee('BANK_TRANSFER', 1)).toBe(15);
-    expect(calculateGatewayFee('BANK_TRANSFER', 100000)).toBe(15);
+  it('computes a percent fee (Apple Pay)', () => {
+    expect(calculateGatewayFee('APPLE_PAY', 1000)).toBe(20); // 2%
   });
 
   it('rounds to the nearest centavo', () => {
