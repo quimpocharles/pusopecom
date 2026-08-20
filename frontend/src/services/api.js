@@ -27,7 +27,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // suppressAuthRedirect: set by background/queued callers (the Pass
+    // check-in offline sync queue replaying a check-in) that shouldn't
+    // yank the user out to /login mid-session over a stale token — they
+    // handle the 401 themselves and surface a "sign in again" prompt
+    // in place instead. Every normal foreground call keeps this behavior.
+    if (error.response?.status === 401 && !error.config?.suppressAuthRedirect) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

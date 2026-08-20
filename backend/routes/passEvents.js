@@ -180,6 +180,46 @@ router.delete('/tiers/:tierId', authenticate, isAdmin, requirePermission(PERMISS
 // gate staff scanning passes shouldn't need full event-management rights,
 // the same VIEW/MANAGE-style split RETURNS_VIEW/RETURNS_APPROVE already uses.
 
+// Event picker for the scanner — deliberately PASSES_CHECKIN, not
+// PASSES_MANAGE like /admin/all above, so check-in-only staff aren't
+// locked out of picking which event they're working. A narrow field list,
+// not passEventRepository's DEFAULT_INCLUDE (venue+organization+tiers.
+// venueSection) — a picker needs a name and a venue, nothing else.
+router.get('/checkin/upcoming', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_CHECKIN), async (req, res) => {
+  try {
+    const events = await passEventRepository.find({
+      where: { active: true, endsAt: { gte: new Date() } },
+      orderBy: { startsAt: 'asc' },
+      include: { venue: { select: { name: true } } },
+    });
+    res.json({ success: true, data: events.map((e) => ({ _id: e._id, name: e.name, slug: e.slug, startsAt: e.startsAt, venue: e.venue })) });
+  } catch (error) {
+    logger.error({ err: error }, 'Get upcoming events for check-in error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve events' });
+  }
+});
+
+// Bulk, read-only pre-sync payload for the scanner's offline pre-sync —
+// a narrow scalar select (passRepository.findByEventId), not the same
+// pass/pass-lookup shape the two routes below return, since this needs to
+// stay light across up to ~5000 rows. Tier names come back once as a
+// small side list rather than repeated per pass.
+router.get('/:eventId/passes/sync', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_CHECKIN), async (req, res) => {
+  try {
+    const event = await passEventRepository.findById(req.params.eventId);
+    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    const passes = await passRepository.findByEventId(req.params.eventId);
+    const tiers = (event.tiers || []).map((t) => ({ _id: t._id, name: t.name }));
+    res.json({ success: true, data: { passes, tiers } });
+  } catch (error) {
+    logger.error({ err: error }, 'Pass sync error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to sync passes' });
+  }
+});
+
 router.get('/passes/lookup/:qrToken', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_CHECKIN), async (req, res) => {
   try {
     const pass = await passRepository.findByQrToken(req.params.qrToken);

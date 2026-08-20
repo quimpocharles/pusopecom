@@ -204,3 +204,46 @@ describe('issuePass / transition — the Pass state machine', () => {
     }
   }, 15000);
 });
+
+describe('findByEventId — the check-in scanner\'s offline pre-sync payload', () => {
+  async function makeOrder(tx) {
+    return tx.order.create({
+      data: {
+        orderNumber: `PS-PASSTEST-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        email: 'pass-test@test.local',
+        shipToFullName: 'Test', shipToPhone: '09171234567', shipToAddress: 'x', shipToCity: 'x', shipToProvince: 'x', shipToZipCode: '1000',
+        subtotal: 2000, shippingFee: 0, total: 2000,
+      },
+    });
+  }
+
+  it('returns only the light scalar fields a bulk offline sync needs, scoped to one event', () =>
+    withRollback(async (tx) => {
+      const { event, tier } = await makeVenueEventFixtures(tx);
+      const order = await makeOrder(tx);
+      const pass = await passRepo.issuePass(
+        { orderId: order.id, passEventId: event.id, passTierId: tier.id, price: 300 },
+        { client: tx }
+      );
+
+      const passes = await passRepo.findByEventId(event.id, { client: tx });
+      expect(passes).toHaveLength(1);
+      expect(passes[0]).toMatchObject({
+        _id: pass._id,
+        qrToken: pass.qrToken,
+        status: 'issued',
+        passTierId: tier.id,
+        price: 300,
+      });
+      // Narrow select, not DEFAULT_INCLUDE — no relation objects.
+      expect(passes[0].passEvent).toBeUndefined();
+      expect(passes[0].passTier).toBeUndefined();
+    }, { timeout: 15000 }), 15000);
+
+  it('returns an empty array for an event with no passes, not an error', () =>
+    withRollback(async (tx) => {
+      const { event } = await makeVenueEventFixtures(tx);
+      const passes = await passRepo.findByEventId(event.id, { client: tx });
+      expect(passes).toEqual([]);
+    }, { timeout: 15000 }), 15000);
+});

@@ -87,6 +87,21 @@ export async function findByUserId(userId, { include = DEFAULT_INCLUDE, client =
   return serialize(passes);
 }
 
+/**
+ * Deliberately a narrow `select`, not DEFAULT_INCLUDE — for the gate
+ * check-in scanner's offline pre-sync (up to ~5000 rows per event), where
+ * the full passEvent/passTier relation objects would be pure repeated
+ * weight; the scanner already knows which event it synced and fetches
+ * tier names once as a small side list, not per row.
+ */
+export async function findByEventId(passEventId, { client = prisma } = {}) {
+  const passes = await client.pass.findMany({
+    where: { passEventId },
+    select: { id: true, qrToken: true, status: true, passTierId: true, price: true },
+  });
+  return serialize(passes);
+}
+
 export async function updateById(id, data, { client = prisma } = {}) {
   const pass = await client.pass.update({ where: { id }, data });
   return serialize(pass);
@@ -176,6 +191,7 @@ export default {
   findByQrToken,
   findByOrderId,
   findByUserId,
+  findByEventId,
   updateById,
   issuePass,
   transition,
