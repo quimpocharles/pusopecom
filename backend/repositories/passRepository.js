@@ -46,7 +46,7 @@ export async function restoreTierCapacity({ passTierId, quantity }, { client } =
 
 const DEFAULT_INCLUDE = {
   passEvent: { include: { venue: true, organization: { select: { id: true, name: true, slug: true } } } },
-  passTier: true,
+  passTier: { include: { venueSection: true } },
 };
 
 export async function findById(id, { include = DEFAULT_INCLUDE, client = prisma } = {}) {

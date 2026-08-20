@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, DocumentArrowDownIcon, ClipboardDocumentIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
+import PusoLogo from '../assets/images/Logo.png';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import OrderTimeline from '../components/orders/OrderTimeline';
 import CompletePaymentButton from '../components/orders/CompletePaymentButton';
@@ -10,7 +11,9 @@ import useCartStore from '../store/cartStore';
 import usePassCartStore from '../store/passCartStore';
 import { toTitleCase } from '../utils/text';
 import { orderStatusLabel } from '../utils/orderStatus';
+import { passStatusLabel, passStatusStyle } from '../utils/passStatus';
 import { downloadOrderSummaryPdf } from '../utils/orderPdf';
+import { downloadTicketImage } from '../utils/ticketImage';
 import usePaymentCountdown from '../hooks/usePaymentCountdown';
 
 const SUPPORT_EMAIL = 'support@pusopilipinas.com';
@@ -68,6 +71,9 @@ const OrderConfirmation = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  // Keyed by pass._id — an order can hold more than one Pass, each needs
+  // its own captured node for downloadTicketImage.
+  const ticketRefs = useRef({});
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -126,6 +132,9 @@ const OrderConfirmation = () => {
   // nothing left to pay — every other state (including failed/expired) is
   // exactly what this redesign exists to make recoverable.
   const canPay = order.paymentStatus !== 'paid' && order.orderStatus !== 'cancelled';
+  // Pass and Merchandise orders are mutually exclusive (ADR-011 addendum) —
+  // a non-empty passes array is enough to tell which this order is.
+  const isPassOrder = order.passes?.length > 0;
 
   const handleCopyOrderNumber = async () => {
     try {
@@ -163,99 +172,204 @@ const OrderConfirmation = () => {
             )}
           </div>
 
-          {/* Payment Information + Order Timeline */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="card p-6">
-              <h2 className="font-bold mb-4">Payment Information</h2>
-              <dl className="space-y-3">
-                <InfoRow label="Payment Method" value={toTitleCase(order.paymentMethod)} />
-                <InfoRow label="Payment Status" value={toTitleCase(order.paymentStatus)} />
-                <InfoRow label="Order Status" value={orderStatusLabel(order.orderStatus)} />
-                <InfoRow label="Order Date" value={new Date(order.createdAt).toLocaleString('en-PH')} />
-                {paymentExpiresAt && (
-                  <>
-                    <InfoRow label="Payment Expiration" value={new Date(paymentExpiresAt).toLocaleString('en-PH')} />
-                    <InfoRow label="Time Remaining" value={countdownExpired ? 'Expired' : timeRemaining} />
-                  </>
-                )}
-                <InfoRow label="Order Number" value={order.orderNumber} />
-                {/* Enterprise Fulfillment Blueprint, Phase 1 — captured by
-                    admin since Payment Platform Redesign shipped, never
-                    rendered anywhere in the customer's own order view until
-                    now (a Fulfillment Audit finding). */}
-                {order.courier && <InfoRow label="Courier" value={order.courier} />}
-                {order.trackingNumber && <InfoRow label="Tracking Number" value={order.trackingNumber} />}
-              </dl>
+          {/* Payment Information + Order Timeline — Merchandise only. A
+              Pass has no fulfillment pipeline to track (Preparing Order/
+              Shipped/Delivered never apply, ADR-011 addendum) and the
+              ticket card below already carries its own status/order
+              number, so both cards were pure noise on a Pass confirmation. */}
+          {!isPassOrder && (
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="card p-6">
+                <h2 className="font-bold mb-4">Payment Information</h2>
+                <dl className="space-y-3">
+                  <InfoRow label="Payment Method" value={toTitleCase(order.paymentMethod)} />
+                  <InfoRow label="Payment Status" value={toTitleCase(order.paymentStatus)} />
+                  <InfoRow label="Order Status" value={orderStatusLabel(order.orderStatus)} />
+                  <InfoRow label="Order Date" value={new Date(order.createdAt).toLocaleString('en-PH')} />
+                  {paymentExpiresAt && (
+                    <>
+                      <InfoRow label="Payment Expiration" value={new Date(paymentExpiresAt).toLocaleString('en-PH')} />
+                      <InfoRow label="Time Remaining" value={countdownExpired ? 'Expired' : timeRemaining} />
+                    </>
+                  )}
+                  <InfoRow label="Order Number" value={order.orderNumber} />
+                  {/* Enterprise Fulfillment Blueprint, Phase 1 — captured by
+                      admin since Payment Platform Redesign shipped, never
+                      rendered anywhere in the customer's own order view until
+                      now (a Fulfillment Audit finding). */}
+                  {order.courier && <InfoRow label="Courier" value={order.courier} />}
+                  {order.trackingNumber && <InfoRow label="Tracking Number" value={order.trackingNumber} />}
+                </dl>
+              </div>
+
+              <div className="card p-6">
+                <h2 className="font-bold mb-4">Order Timeline</h2>
+                <OrderTimeline orderStatus={order.orderStatus} />
+              </div>
             </div>
+          )}
 
-            <div className="card p-6">
-              <h2 className="font-bold mb-4">Order Timeline</h2>
-              <OrderTimeline orderStatus={order.orderStatus} />
-            </div>
-          </div>
+          {isPassOrder ? (
+            /* Styled like an actual mobile ticket — a narrow vertical
+               stub, not a full-width panel. Only the photo hero stays dark
+               (text needs to sit over the event image); the QR/details
+               body below it is off-white, matching the platform's `paper`
+               token, not a continuation of the dark header. Same
+               qrCodeUrl/qrToken the confirmation email and My PUSO Locker
+               already render (backend/lib/passQrCode.js). */
+            <div className="space-y-4">
+              {order.passes.map((pass) => (
+                <div key={pass._id} className="max-w-sm mx-auto">
+                  <div
+                    ref={(el) => { ticketRefs.current[pass._id] = el; }}
+                    className="border-2 border-ink-900 overflow-hidden"
+                  >
+                    <div
+                      className="relative bg-cover bg-center bg-ink-900"
+                      style={pass.passEvent?.images?.[0] ? { backgroundImage: `url(${pass.passEvent.images[0]})` } : undefined}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/70 to-ink-900" />
+                      <div className="relative px-6 pt-4 pb-10 text-center text-white">
+                        {pass.passEvent?.organization?.name && (
+                          <p className="text-xs uppercase tracking-wide text-white/60 mb-3">
+                            {pass.passEvent.organization.name}
+                          </p>
+                        )}
+                        <p className="text-xl font-bold">{pass.passEvent?.name}</p>
+                        {pass.passEvent?.startsAt && (
+                          <p className="text-sm text-white/80 mt-1">
+                            {new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </p>
+                        )}
+                        {pass.passEvent?.venue?.name && <p className="text-sm text-white/80">{pass.passEvent.venue.name}</p>}
+                      </div>
+                    </div>
 
-          {/* Order Details */}
-          <div className="card p-8">
-            <h2 className="text-xl font-bold mb-4">Order Details</h2>
+                    <div className="bg-black py-3 flex items-center justify-center">
+                      <img src={PusoLogo} alt="Puso Pilipinas" className="h-6 w-auto" />
+                    </div>
 
-            {/* Items */}
-            <h3 className="font-bold mb-3">Items</h3>
-            <div className="space-y-3 mb-6 pb-6 border-b">
-              {order.items.map((item, index) => (
-                <div key={index} className="flex gap-4">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-16 h-16 object-cover rounded"
-                  />
-                  <div className="flex-1">
-                    <p className="font-semibold">{toTitleCase(item.name)}</p>
-                    <p className="text-sm text-gray-600">
-                      Size: {item.size} | Qty: {item.quantity}
-                    </p>
+                    <div className="bg-paper px-6 py-6 flex flex-col items-center text-center">
+                      {/* "Ready" (the issued label) is the default, expected
+                          state — showing it adds nothing; the other statuses
+                          (checked in/cancelled/refunded) are the ones worth
+                          a customer actually seeing. */}
+                      {pass.status !== 'issued' && (
+                        <span className={`text-xs font-semibold uppercase tracking-wide mb-3 ${passStatusStyle(pass.status)}`}>
+                          {passStatusLabel(pass.status)}
+                        </span>
+                      )}
+                      {pass.status === 'issued' ? (
+                        <>
+                          <p className="text-xs text-gray-500 mb-3">Show this code at the gate</p>
+                          {pass.qrCodeUrl ? (
+                            <img src={pass.qrCodeUrl} alt="Pass QR code" className="w-44 h-44 bg-white border border-ink-200 p-3" />
+                          ) : (
+                            <p className="font-mono text-sm bg-white border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-500">This pass isn't ready to show yet.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-paper px-6 pb-6 pt-4 border-t border-ink-200">
+                      <p className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-3">Ticket Details</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                        <div>
+                          <p className="text-gray-500">Ticket Type</p>
+                          <p className="font-semibold text-ink-900">{pass.passTier?.name}</p>
+                        </div>
+                        {pass.passTier?.venueSection?.name && (
+                          <div>
+                            <p className="text-gray-500">Section</p>
+                            <p className="font-semibold text-ink-900">{pass.passTier.venueSection.name}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold">
-                      ₱{(item.price * item.quantity).toFixed(2)}
-                    </p>
-                  </div>
+
+                  {pass.status === 'issued' && (
+                    <button
+                      onClick={() => downloadTicketImage(ticketRefs.current[pass._id], `${pass.passEvent?.name || 'ticket'}-${pass.passTier?.name || ''}.png`)}
+                      className="btn-outline w-full mt-3 inline-flex items-center justify-center gap-1.5"
+                    >
+                      <DocumentArrowDownIcon className="w-4 h-4" />
+                      Download Ticket
+                    </button>
+                  )}
                 </div>
               ))}
-            </div>
-
-            {/* Shipping Address */}
-            <h3 className="font-bold mb-3">Shipping Address</h3>
-            <div className="mb-6 pb-6 border-b">
-              <p>{order.shippingAddress.fullName}</p>
-              <p>{order.shippingAddress.phone}</p>
-              <p>{order.shippingAddress.address}</p>
-              <p>
-                {order.shippingAddress.city}, {order.shippingAddress.province}{' '}
-                {order.shippingAddress.zipCode}
-              </p>
-            </div>
-
-            {/* Total */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span>
-                <span>₱{order.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Shipping</span>
-                <span>₱{order.shippingFee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                <span>Total</span>
-                <span className="text-primary-600">₱{order.total.toFixed(2)}</span>
+              <div className="max-w-sm mx-auto flex justify-between items-center px-1 text-sm text-gray-500">
+                <span>Order {order.orderNumber}</span>
+                <span className="font-bold text-lg text-ink-900">₱{order.total.toFixed(2)}</span>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Order Details */
+            <div className="card p-8">
+              <h2 className="text-xl font-bold mb-4">Order Details</h2>
 
-          {/* Secondary actions */}
+              <h3 className="font-bold mb-3">Items</h3>
+              <div className="space-y-3 mb-6 pb-6 border-b">
+                {order.items.map((item, index) => (
+                  <div key={index} className="flex gap-4">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="w-16 h-16 object-cover rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="font-semibold">{toTitleCase(item.name)}</p>
+                      <p className="text-sm text-gray-600">
+                        Size: {item.size} | Qty: {item.quantity}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        ₱{(item.price * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className="font-bold mb-3">Shipping Address</h3>
+              <div className="mb-6 pb-6 border-b">
+                <p>{order.shippingAddress.fullName}</p>
+                <p>{order.shippingAddress.phone}</p>
+                <p>{order.shippingAddress.address}</p>
+                <p>
+                  {order.shippingAddress.city}, {order.shippingAddress.province}{' '}
+                  {order.shippingAddress.zipCode}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal</span>
+                  <span>₱{order.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Shipping</span>
+                  <span>₱{order.shippingFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                  <span>Total</span>
+                  <span className="text-primary-600">₱{order.total.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Secondary actions — trimmed to what's actually actionable for
+              a Pass: PDF summary/order-number-copy/returns are all
+              Merchandise concepts (a Return especially — Passes have no
+              ReturnRequest flow to send someone to, per the Domain Model). */}
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link to="/products" className="btn-outline">
-              Continue Shopping
+            <Link to={isPassOrder ? '/events' : '/products'} className="btn-outline">
+              {isPassOrder ? 'Browse Events' : 'Continue Shopping'}
             </Link>
             <a
               href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Order ${order.orderNumber}`)}`}
@@ -264,22 +378,26 @@ const OrderConfirmation = () => {
               <EnvelopeIcon className="w-4 h-4" />
               Contact Support
             </a>
-            <button onClick={() => downloadOrderSummaryPdf(order)} className="btn-outline inline-flex items-center gap-1.5">
-              <DocumentArrowDownIcon className="w-4 h-4" />
-              Download Order Summary (PDF)
-            </button>
-            <button onClick={handleCopyOrderNumber} className="btn-outline inline-flex items-center gap-1.5">
-              <ClipboardDocumentIcon className="w-4 h-4" />
-              {copied ? 'Copied!' : 'Copy Order Number'}
-            </button>
-            {/* Enterprise Fulfillment Blueprint, Phase 2 — self-service
-                returns only apply to a paid order; the backend enforces the
-                same rule (routes/returns.js), this just avoids offering a
-                dead-end action. */}
-            {order.paymentStatus === 'paid' && (
-              <Link to={`/order/${order.orderNumber}/return`} className="btn-outline">
-                Request a Return
-              </Link>
+            {!isPassOrder && (
+              <>
+                <button onClick={() => downloadOrderSummaryPdf(order)} className="btn-outline inline-flex items-center gap-1.5">
+                  <DocumentArrowDownIcon className="w-4 h-4" />
+                  Download Order Summary (PDF)
+                </button>
+                <button onClick={handleCopyOrderNumber} className="btn-outline inline-flex items-center gap-1.5">
+                  <ClipboardDocumentIcon className="w-4 h-4" />
+                  {copied ? 'Copied!' : 'Copy Order Number'}
+                </button>
+                {/* Enterprise Fulfillment Blueprint, Phase 2 — self-service
+                    returns only apply to a paid order; the backend enforces
+                    the same rule (routes/returns.js), this just avoids
+                    offering a dead-end action. */}
+                {order.paymentStatus === 'paid' && (
+                  <Link to={`/order/${order.orderNumber}/return`} className="btn-outline">
+                    Request a Return
+                  </Link>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -7,6 +7,7 @@ import { Panel, Pagination, EmptyState, ErrorState } from '../../components/ui';
 import accountService from '../../services/accountService';
 import passEventService from '../../services/passEventService';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FILTER_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
+import { passStatusLabel, passStatusStyle } from '../../utils/passStatus';
 
 // docs/MY_PUSO_MANIFESTO.md: Locker is one destination — what's mine, plus
 // a lighter Saved section for what a fan is thinking about adding — not a
@@ -283,20 +284,6 @@ const LockerSaved = () => {
   );
 };
 
-const PASS_STATUS_STYLES = {
-  issued: 'text-green-600',
-  checked_in: 'text-blue-600',
-  cancelled: 'text-gray-400',
-  refunded: 'text-gray-400',
-};
-
-const PASS_STATUS_LABELS = {
-  issued: 'Ready',
-  checked_in: 'Checked In',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
-};
-
 const LockerPasses = () => {
   const [passes, setPasses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -343,8 +330,8 @@ const LockerPasses = () => {
                 {pass.passEvent?.venue?.name} · {pass.passEvent?.startsAt && new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
               </p>
             </div>
-            <span className={`font-semibold text-sm ${PASS_STATUS_STYLES[pass.status] || 'text-gray-500'}`}>
-              {PASS_STATUS_LABELS[pass.status] || pass.status}
+            <span className={`font-semibold text-sm ${passStatusStyle(pass.status)}`}>
+              {passStatusLabel(pass.status)}
             </span>
           </div>
 

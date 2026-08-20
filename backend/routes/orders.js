@@ -931,9 +931,16 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
         }
       : null;
 
+    // The `include` above doesn't fetch passes at all (it overrides
+    // DEFAULT_INCLUDE, which only carries scalars anyway) — enriched here
+    // the same way applyPaymentResolution does for the confirmation email,
+    // so OrderConfirmation.jsx can actually render the QR/event/tier, not
+    // just know a Pass exists.
+    const passes = await passRepository.findByOrderId(order._id);
+
     res.json({
       success: true,
-      data: { ...order, payment }
+      data: { ...order, payment, passes }
     });
   } catch (error) {
     logger.error({ err: error }, 'Get order error');
