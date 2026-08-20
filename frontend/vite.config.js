@@ -10,6 +10,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // .ngrok-free.dev: temporary, for testing Xendit locally (it requires
+    // an HTTPS success/cancel return URL) — remove once that's done.
+    allowedHosts: ['.ngrok-free.dev'],
     proxy: {
       '/api': {
         target: 'http://localhost:5001',

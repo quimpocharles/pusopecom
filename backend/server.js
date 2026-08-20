@@ -82,8 +82,13 @@ app.use(helmet({
 }));
 
 // CORS configuration
+// Temporarily allows both localhost:5173 (what you actually browse) and
+// FRONTEND_URL (currently an ngrok tunnel, needed only because Xendit
+// requires an HTTPS success/cancel return URL) — collapse back to a single
+// origin once local Xendit testing is done and FRONTEND_URL reverts.
+const corsOrigins = [...new Set(['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean))];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: corsOrigins,
   credentials: true
 }));
 

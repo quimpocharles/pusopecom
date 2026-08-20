@@ -14,13 +14,11 @@ import Sentry from '../../lib/sentry.js';
  * vs. live is entirely which key prefix XENDIT_SECRET_KEY has
  * (xnd_development_... vs xnd_production_...), not a separate hostname.
  *
- * The exact endpoint path/response field names below were built from
- * Xendit's public docs (docs.xendit.co/apidocs/create-session,
- * .../get-session) but not verified against a live account at write time —
- * confirm both against a real Xendit sandbox account (Dashboard > API
- * Reference) before treating this as final. XENDIT_API_URL is a single
- * constant for exactly this reason: one place to correct if the path is
- * wrong.
+ * Endpoint path and response field names verified against
+ * docs.xendit.co/apidocs/create-session (2026-08-20) — the initial write
+ * guessed `/v3/sessions`, which 404'd against a live account; the real
+ * path is `/sessions`. Response field names (payment_session_id,
+ * payment_link_url, status) were already correct.
  */
 
 const XENDIT_API_URL = 'https://api.xendit.co';
@@ -38,13 +36,16 @@ const getAuthHeader = () => {
 };
 
 // Our internal channel codes (lib/payments/xenditFees.js) mapped to
-// Xendit's own channel_code vocabulary — confirm each of these against the
-// Dashboard's channel list before going live; GCASH and CARD are
-// well-documented, the rest are best-available-source placeholders.
+// Xendit's own channel_code vocabulary. GCASH and CARDS confirmed against
+// a live sandbox account (2026-08-20) — CARD was originally guessed as
+// CREDIT_CARD, which Xendit rejected ("channel(s) CREDIT_CARD are not
+// available"); the real code is CARDS. MAYA/BANK_TRANSFER/QRPH remain
+// unverified placeholders — confirm each against a live checkout attempt
+// before relying on them.
 const CHANNEL_CODE_MAP = {
   GCASH: 'GCASH',
   MAYA: 'PAYMAYA',
-  CARD: 'CREDIT_CARD',
+  CARD: 'CARDS',
   BANK_TRANSFER: 'VIRTUAL_ACCOUNT',
   QRPH: 'QRPH',
 };
@@ -62,6 +63,15 @@ function normalizeStatus(xenditStatus) {
   return STATUS_MAP[xenditStatus] || 'pending';
 }
 
+// Xendit requires E.164 (+63917...); every other part of the platform
+// stores/collects PH mobile numbers in local format (09171234567).
+function toE164PH(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.startsWith('63')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+63${digits.slice(1)}`;
+  return `+63${digits}`;
+}
+
 export async function createCheckoutSession(order) {
   try {
     const channelCode = CHANNEL_CODE_MAP[order.paymentChannel];
@@ -77,9 +87,16 @@ export async function createCheckoutSession(order) {
       session_type: 'PAY',
       mode: 'PAYMENT_LINK',
       customer: {
-        reference_id: order.user?.toString() || `guest-${order.orderNumber}`,
+        type: 'INDIVIDUAL',
+        // Xendit's Sessions API creates a Customer record inline from this
+        // object and rejects a reference_id it's already seen — scoped to
+        // order.user, the same signed-in customer's second-ever order would
+        // collide with their first. Order-scoped instead, since nothing
+        // here needs a persistent Xendit customer profile reused across
+        // orders yet (that's recurring/Membership billing, not built).
+        reference_id: `${order.user?.toString() || 'guest'}-${order.orderNumber}`,
         email: order.email,
-        mobile_number: order.shippingAddress.phone,
+        mobile_number: toE164PH(order.shippingAddress.phone),
         individual_detail: {
           given_names: order.shippingAddress.fullName.split(' ')[0],
           surname: order.shippingAddress.fullName.split(' ').slice(1).join(' ') || order.shippingAddress.fullName.split(' ')[0],
@@ -102,7 +119,7 @@ export async function createCheckoutSession(order) {
       },
     };
 
-    const response = await axios.post(`${XENDIT_API_URL}/v3/sessions`, sessionData, {
+    const response = await axios.post(`${XENDIT_API_URL}/sessions`, sessionData, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: getAuthHeader(),
@@ -122,7 +139,7 @@ export async function createCheckoutSession(order) {
 
 export async function getPaymentStatus(paymentReference) {
   try {
-    const response = await axios.get(`${XENDIT_API_URL}/v3/sessions/${paymentReference}`, {
+    const response = await axios.get(`${XENDIT_API_URL}/sessions/${paymentReference}`, {
       headers: {
         Authorization: getAuthHeader(),
       },
