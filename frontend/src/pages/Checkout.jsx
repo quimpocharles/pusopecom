@@ -598,7 +598,10 @@ const Checkout = () => {
                   className="btn-primary w-full text-lg flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    'Processing...'
+                    <>
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Processing...
+                    </>
                   ) : (
                     <>
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

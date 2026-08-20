@@ -901,7 +901,7 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 router.get('/:orderNumber', optionalAuth, async (req, res) => {
   try {
     const order = await orderRepository.findByOrderNumber(req.params.orderNumber, {
-      include: { items: { include: { product: true } } },
+      include: { items: { include: { product: true } }, passes: true },
     });
 
     if (!order) {
@@ -935,12 +935,15 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
         }
       : null;
 
-    // The `include` above doesn't fetch passes at all (it overrides
-    // DEFAULT_INCLUDE, which only carries scalars anyway) — enriched here
-    // the same way applyPaymentResolution does for the confirmation email,
-    // so OrderConfirmation.jsx can actually render the QR/event/tier, not
-    // just know a Pass exists.
-    const passes = await passRepository.findByOrderId(order._id);
+    // `passes: true` above is only the flat scalar list (same shape
+    // DEFAULT_INCLUDE already carries) — enough to know whether this
+    // order has any. Only Pass orders pay for the extra round trip to
+    // enrich them with passEvent/passTier (the same fetch
+    // applyPaymentResolution does for the confirmation email); the
+    // overwhelming majority of orders are Merchandise with none, and were
+    // paying for that unconditionally until this fix — a real, avoidable
+    // latency hit on every single order confirmation page load.
+    const passes = order.passes?.length ? await passRepository.findByOrderId(order._id) : [];
 
     res.json({
       success: true,
