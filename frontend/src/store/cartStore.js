@@ -13,9 +13,14 @@ const useCartStore = create(
 
       // Drawer state (not persisted)
       isCartOpen: false,
+      // Set on openCart(tab) to force CartDrawer to a specific tab on open
+      // (e.g. PassEventDetail's "View Cart" always wants Passes, regardless
+      // of CartDrawer's own empty/non-empty default heuristic). null means
+      // "no preference — use the heuristic," the common case (header icon).
+      requestedTab: null,
 
-      openCart: () => {
-        set({ isCartOpen: true });
+      openCart: (tab = null) => {
+        set({ isCartOpen: true, requestedTab: tab });
       },
 
       closeCart: () => {

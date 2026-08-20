@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import LogoColor from '../../assets/images/puso.png';
 import { ShoppingBagIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
+import usePassCartStore from '../../store/passCartStore';
 import useAuthStore from '../../store/authStore';
 import { useState, useRef, useEffect } from 'react';
 import navigationLinkService from '../../services/navigationLinkService';
@@ -10,6 +11,8 @@ const Header = () => {
   const navigate  = useNavigate();
   const location  = useLocation();
   const cartCount = useCartStore((state) => state.getCartCount());
+  const passCount = usePassCartStore((state) => state.getPassCount());
+  const totalCartCount = cartCount + passCount;
   const { user, isAuthenticated, logout } = useAuthStore();
 
   // Nav links — fully CMS-driven via NavigationLink (Admin > Homepage >
@@ -153,17 +156,19 @@ const Header = () => {
           outer/inner padding structure as the left cluster's top row
           (p-2 lg:p-3 wrapper, px-3 md:px-4 py-2 md:py-2.5 inner control)
           so the two match height exactly at every breakpoint, not by
-          eyeballed padding numbers. */}
+          eyeballed padding numbers. One button for both Merchandise and
+          Passes — CartDrawer.jsx has an internal tab switch between the
+          two; the badge here is their combined count. */}
       <div className="pointer-events-auto bg-white p-2 lg:p-3 border-2 border-ink-900">
         <button
           onClick={() => useCartStore.getState().openCart()}
           className="relative h-11 md:h-12 border-2 border-ink-900 flex items-center justify-center px-3 md:px-4 text-ink-900 hover:bg-ink-900 hover:text-white transition-colors duration-150"
-          aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} item${cartCount !== 1 ? 's' : ''}` : ''}`}
+          aria-label={`Cart${totalCartCount > 0 ? `, ${totalCartCount} item${totalCartCount !== 1 ? 's' : ''}` : ''}`}
         >
           <ShoppingBagIcon className="w-5 h-5" />
-          {cartCount > 0 && (
+          {totalCartCount > 0 && (
             <span className="absolute -top-2 -right-2 text-[10px] w-4 h-4 rounded-full bg-ink-900 text-white flex items-center justify-center font-bold">
-              {cartCount > 9 ? '9+' : cartCount}
+              {totalCartCount > 9 ? '9+' : totalCartCount}
             </span>
           )}
         </button>
