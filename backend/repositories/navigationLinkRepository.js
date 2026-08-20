@@ -11,11 +11,12 @@ export async function find({ where, orderBy, skip, take, client = prisma } = {})
   return serialize(links);
 }
 
-/** Top-level active links, in order — the public header read. Dropdown children aren't queried yet; see the schema's own comment. */
+/** Top-level active links, in order, with their active children nested — the public header read. */
 export async function findActive({ client = prisma } = {}) {
   const links = await client.navigationLink.findMany({
     where: { active: true, parentId: null },
     orderBy: { displayOrder: 'asc' },
+    include: { children: { where: { active: true }, orderBy: { displayOrder: 'asc' } } },
   });
   return serialize(links);
 }

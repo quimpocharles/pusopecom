@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import LogoColor from '../../assets/images/puso.png';
-import { ShoppingBagIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import { ShoppingBagIcon, Bars3Icon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import useCartStore from '../../store/cartStore';
 import usePassCartStore from '../../store/passCartStore';
 import useAuthStore from '../../store/authStore';
@@ -36,6 +36,19 @@ const Header = () => {
   const [navOpen, setNavOpen] = useState(false);
   const navRef = useRef(null);
 
+  // Which top-level links (e.g. Shop) currently have their children
+  // expanded — a Set rather than a single id, in case more than one
+  // parent link exists later. Reset whenever the panel itself closes, so
+  // it doesn't reopen already-expanded next time.
+  const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const toggleExpanded = (id) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   // ── Close the panel on an outside click ──────────
   useEffect(() => {
     if (!navOpen) return;
@@ -44,6 +57,10 @@ const Header = () => {
     };
     document.addEventListener('pointerdown', handlePointerDown);
     return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [navOpen]);
+
+  useEffect(() => {
+    if (!navOpen) setExpandedIds(new Set());
   }, [navOpen]);
 
   // Close on navigation, so it doesn't stay open after a link is followed.
@@ -97,12 +114,62 @@ const Header = () => {
 
         <div
           className={`flex flex-col items-start bg-white transition-all duration-200 ease-out overflow-hidden ${
-            navOpen ? 'max-h-96 border-x-2 border-b-2 border-ink-900 py-2' : 'max-h-0 border-0'
+            navOpen ? 'max-h-[36rem] overflow-y-auto border-x-2 border-b-2 border-ink-900 py-2' : 'max-h-0 border-0'
           }`}
         >
           {navLinks.map((link) => {
             const isExternal = /^https?:\/\//.test(link.destination);
             const highlightCls = link.highlight ? 'text-primary-600 font-semibold' : '';
+            const hasChildren = link.children?.length > 0;
+
+            if (hasChildren) {
+              const expanded = expandedIds.has(link._id);
+              return (
+                <div key={link._id} className="w-full">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(link._id)}
+                    aria-expanded={expanded}
+                    className={`${itemCls} flex items-center justify-between ${highlightCls}`}
+                  >
+                    {link.label}
+                    <ChevronDownIcon className={`w-4 h-4 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expanded && (
+                    <div className="flex flex-col w-full">
+                      {link.children.map((child) => {
+                        const childExternal = /^https?:\/\//.test(child.destination);
+                        const childHighlightCls = child.highlight ? 'text-primary-600 font-semibold' : '';
+                        return childExternal ? (
+                          <a
+                            key={child._id}
+                            href={child.destination}
+                            target={child.openInNewTab ? '_blank' : undefined}
+                            rel={child.openInNewTab ? 'noopener noreferrer' : undefined}
+                            onClick={() => setNavOpen(false)}
+                            className={`${itemCls} pl-8 text-sm ${childHighlightCls}`}
+                          >
+                            {child.label}
+                          </a>
+                        ) : (
+                          <Link
+                            key={child._id}
+                            to={child.destination}
+                            target={child.openInNewTab ? '_blank' : undefined}
+                            rel={child.openInNewTab ? 'noopener noreferrer' : undefined}
+                            onClick={() => setNavOpen(false)}
+                            className={`${itemCls} pl-8 text-sm ${childHighlightCls}`}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return isExternal ? (
               <a
                 key={link._id}
