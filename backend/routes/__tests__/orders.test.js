@@ -49,6 +49,7 @@ const MARKER = `OrderRouteTest${Date.now()}`;
 process.env.XENDIT_WEBHOOK_TOKEN = 'test-xendit-webhook-token';
 const createdProductIds = [];
 const createdUserIds = [];
+const createdOwnedOrderIds = [];
 
 async function makeProduct(overrides = {}) {
   // `name` is derived from overrides.name before the spread below, so
@@ -100,6 +101,31 @@ function validOrderPayload(product, itemOverrides = {}) {
   };
 }
 
+// Creates a user-owned order directly (no gateway call) for ownership tests.
+// Every order number here carries this file's MARKER so cleanup can find it.
+async function makeOwnedOrder({ userId, email = `owned-${Date.now()}@test.local` } = {}) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const order = await prisma.order.create({
+    data: {
+      orderNumber: `PS-MARKEROWN-${suffix}`,
+      userId,
+      email,
+      shipToFullName: 'Owned Buyer',
+      shipToPhone: '09171234567',
+      shipToAddress: '1 St',
+      shipToCity: 'QC',
+      shipToProvince: 'Metro Manila',
+      shipToZipCode: '1100',
+      subtotal: 500,
+      total: 599,
+      paymentStatus: 'pending',
+      orderStatus: 'awaiting_payment',
+    },
+  });
+  createdOwnedOrderIds.push(order.id);
+  return order;
+}
+
 beforeAll(async () => {
   await prisma.user.upsert({
     where: { id: 'test-user' },
@@ -122,6 +148,7 @@ beforeEach(() => {
 
 afterAll(async () => {
   await prisma.orderItem.deleteMany({ where: { productId: { in: createdProductIds } } });
+  await prisma.order.deleteMany({ where: { id: { in: createdOwnedOrderIds } } });
   await prisma.order.deleteMany({ where: { email: { in: ['buyer@test.local', 'guest@test.local'] } } });
   await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
@@ -1061,6 +1088,52 @@ describe('GET /orders/:orderNumber — access control', () => {
     const res = await request(app).get('/api/orders/PS-NOSUCHORDER');
     expect(res.status).toBe(404);
   });
+});
+
+describe('Order ownership enforcement — unauthenticated request to a user-owned order (P0)', () => {
+  it('GET /:orderNumber 403s an unauthenticated request to a user-owned order', async () => {
+    const order = await makeOwnedOrder({ userId: 'test-user' });
+    const res = await request(app).get(`/api/orders/${order.orderNumber}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /:orderNumber/pay 403s an unauthenticated request to a user-owned order before creating any session', async () => {
+    const order = await makeOwnedOrder({ userId: 'test-user' });
+    const res = await request(app).post(`/api/orders/${order.orderNumber}/pay`);
+    expect(res.status).toBe(403);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('POST /:orderNumber/verify-payment 403s an unauthenticated request to a user-owned order before polling', async () => {
+    const order = await makeOwnedOrder({ userId: 'test-user', email: 'owned-verify@test.local' });
+    const res = await request(app).post(`/api/orders/${order.orderNumber}/verify-payment`);
+    expect(res.status).toBe(403);
+    expect(paymentService.getPaymentStatus).not.toHaveBeenCalled();
+  });
+
+  it('GET /:orderNumber still allows a guest (ownerless) order without authentication', async () => {
+    const order = await makeOwnedOrder({ userId: null });
+    const res = await request(app).get(`/api/orders/${order.orderNumber}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('all three endpoints allow the owner and an admin, and deny a different authenticated user', async () => {
+    const order = await makeOwnedOrder({ userId: 'test-user' });
+    const orderNumber = order.orderNumber;
+    paymentService.createCheckoutSession.mockResolvedValue({ paymentReference: 'chk_owner', redirectUrl: 'https://pay.example/chk_owner' });
+
+    // Owner
+    expect((await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'test-user')).status).toBe(200);
+    // Admin
+    expect((await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'admin-user').set('x-test-role', 'admin')).status).toBe(200);
+    // Different logged-in user
+    expect((await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'someone-else')).status).toBe(403);
+
+    // /pay: owner ok, admin ok, different user denied
+    expect((await request(app).post(`/api/orders/${orderNumber}/pay`).set('x-test-userid', 'test-user')).status).toBe(200);
+    expect((await request(app).post(`/api/orders/${orderNumber}/pay`).set('x-test-userid', 'admin-user').set('x-test-role', 'admin')).status).toBe(200);
+    expect((await request(app).post(`/api/orders/${orderNumber}/pay`).set('x-test-userid', 'someone-else')).status).toBe(403);
+  }, 20000);
 });
 
 describe('POST /orders/:orderNumber/pay — resume or regenerate checkout (Payment Platform Redesign, Phase 3)', () => {

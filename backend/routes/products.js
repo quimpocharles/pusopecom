@@ -5,6 +5,7 @@ import { body, validationResult } from 'express-validator';
 import * as productRepository from '../repositories/productRepository.js';
 import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
+import { escapeCsvCell } from '../lib/csv.js';
 
 const router = express.Router();
 
@@ -78,15 +79,6 @@ router.get('/admin/export',
 
       const SIZE_COLS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
-      const escape = (val) => {
-        if (val === null || val === undefined) return '';
-        const str = String(val);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      };
-
       const headers = ['Item(s)', ...SIZE_COLS, 'QTY', 'Unit Price'];
 
       const rows = products.map((p) => {
@@ -105,9 +97,9 @@ router.get('/admin/export',
         }
 
         const unitPrice = (p.salePrice || p.price).toFixed(2);
-        const sizeCells = SIZE_COLS.map(sz => escape(sizeMap[sz] > 0 ? sizeMap[sz] : ''));
+        const sizeCells = SIZE_COLS.map(sz => escapeCsvCell(sizeMap[sz] > 0 ? sizeMap[sz] : ''));
 
-        return [escape(p.name), ...sizeCells, escape(p.totalStock), escape(unitPrice)].join(',');
+        return [escapeCsvCell(p.name), ...sizeCells, escapeCsvCell(p.totalStock), escapeCsvCell(unitPrice)].join(',');
       });
 
       const csv = [headers.join(','), ...rows].join('\n');

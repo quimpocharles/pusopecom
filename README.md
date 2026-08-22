@@ -1,20 +1,21 @@
 # Puso Pilipinas - Sports Merchandise Store
 
-A full-stack ecommerce platform for Philippine sports merchandise, featuring the PusoStore Editorial System storefront design, Maya payment integration, and email notifications.
+A full-stack ecommerce platform for Philippine sports merchandise, featuring the PusoStore Editorial System storefront design, Xendit payment integration, and email notifications.
 
 ## Tech Stack
 
 ### Backend
 - Node.js + Express
 - PostgreSQL (Railway) + Prisma ORM
-- JWT Authentication (local + Google OAuth)
+- JWT Authentication (local + Google OAuth; Facebook OAuth scaffolded in the schema but not yet wired)
 - Nodemailer (SMTP)
-- Maya Checkout API
+- Xendit (primary payment gateway; per-channel processing fee passed to the customer) with Maya (legacy, transition window) as a second gateway
 - Cloudinary (Image hosting)
-- WaveSpeed AI (Virtual try-on, default — nano-banana-2/seedream, configurable via `WAVESPEED_MODEL`) with Replicate (Seedream 4.5) as fallback when `WAVESPEED_API_KEY` is unset
+- WaveSpeed AI (Virtual try-on, default — nano-banana-2, configurable via `WAVESPEED_MODEL`) with Replicate (Seedream 4.5) as fallback when `WAVESPEED_API_KEY` is unset
 - Redis (rate limiting persistence; optional — falls back to in-memory when unset)
 - Pino (structured JSON logging) + Sentry (error tracking, optional)
 - node-cron (Scheduled tasks)
+- express-validator (request validation), qrcode + pdfkit (Pass QR/PDF), sharp (images), exceljs (CSV exports)
 - GitHub Actions CI, gating Railway deploys on the test suite passing
 
 ### Frontend
@@ -25,6 +26,7 @@ A full-stack ecommerce platform for Philippine sports merchandise, featuring the
 - React Hook Form
 - react-helmet-async (SEO)
 - Recharts (Admin reports)
+- @zxing/browser (Pass QR check-in scanning), html2canvas + jspdf (ticket/QR download), zod, select-philippines-address
 
 ## Features
 
@@ -33,15 +35,23 @@ A full-stack ecommerce platform for Philippine sports merchandise, featuring the
 - Product color variants with per-color sizes, stock, and images
 - Search autocomplete with debounced suggestions and keyboard navigation
 - Shopping cart with persistent storage (color-aware) as a global slide-out drawer
-- Checkout flow with Maya payment integration (GCash + Maya)
+- Checkout flow with Xendit payment integration (GCash, Maya, Card, Apple Pay, QR Ph), with the gateway's per-channel processing fee disclosed and folded into the locked total before checkout (ADR-010)
 - Guest checkout option
 - Order management and tracking
+- Pass event-admission checkout (tiers, per-tier capacity, QR credentials) — always separate from Merchandise, never mixed in one Order (ADR-011 addendum)
 - Product reviews and ratings
-- Virtual try-on powered by Replicate (Seedream 4.5) with download and add-to-cart on result; predictions are cancelled automatically on timeout or error to avoid wasted credits
+- Virtual try-on powered by WaveSpeed AI (default) or Replicate (fallback) with download and add-to-cart on result; predictions are cancelled automatically on timeout or error to avoid wasted credits
 - Size chart modal on product detail page (XS–3XL with shoulder, chest, and body length measurements); full size list always shown — sizes with no stock are greyed out with a diagonal slash; hidden for sizeless products (caps, stickers, etc.)
 - Mobile-first responsive design
 - PusoStore Editorial homepage design
 - `sport: general` products appear across all sport filters
+
+### Pass Event Admission (ADR-011)
+- Event admission as a new Commerce Item category, shipped as **Pass** (née Ticket) — a time-boxed event at a Venue, with a scannable credential per admitted person
+- `PassEvent` / `PassTier` / `Venue` / `VenueSection` models; every tier is capacity-based (`capacity` / `sold` counters, decremented atomically — per-seat selection was deliberately scrapped, ADR-011 addendum)
+- A `Pass` is the fulfillment unit itself (one per admitted person), issued at order placement; the frontend renders its QR code and supports download (html2canvas/jspdf)
+- **Pass-only checkout** — never mixed with Merchandise in one Order or one checkout (ADR-011 addendum); a Pass order needs only contact info, no shipping address, and `shippingFee` is forced to 0 server-side
+- Staff check-in scanning via @zxing/browser (`POST /api/pass-events/passes/:passId/checkin` and the QR-token lookup), with an offline pre-sync payload (`GET /api/pass-events/:eventId/passes/sync`)
 
 ### User Account
 - Authentication (register, login, email verification, password reset, Google OAuth)
@@ -120,7 +130,8 @@ The homepage follows a dark B&W editorial aesthetic (`#0a0a0a` / `#1a1a1a` alter
 - Node.js (v20 recommended — matches CI)
 - PostgreSQL (Railway or local)
 - SMTP email account
-- Maya Checkout API account (https://developers.maya.ph/)
+- Xendit account (https://www.xendit.co/) — primary payment gateway
+- Maya Checkout API account (https://developers.maya.ph/) — legacy gateway, transition window only
 - WaveSpeed account (https://wavespeed.ai/) — for virtual try-on (default provider)
 - Replicate account (https://replicate.com/) — optional, fallback virtual try-on provider
 - Cloudinary account (optional, for image hosting)
@@ -158,10 +169,13 @@ EMAIL_PORT=587
 EMAIL_USER=your-email@example.com
 EMAIL_PASSWORD=your-email-password
 
-# Maya Payment Gateway
-MAYA_PUBLIC_KEY=pk-test-your-maya-public-key
-MAYA_SECRET_KEY=sk-test-your-maya-secret-key
-MAYA_SANDBOX=true
+# Xendit (primary payment gateway — ADR-010)
+XENDIT_SECRET_KEY=xnd_development_your-xendit-secret-key
+XENDIT_WEBHOOK_TOKEN=your-xendit-webhook-verification-token
+
+# Maya (legacy gateway — transition window; only in-flight orders still use it)
+MAYA_PUBLIC_KEY=your-maya-public-key
+MAYA_SECRET_KEY=your-maya-secret-key
 
 # WaveSpeed AI (Virtual Try-On) — default provider when set.
 # WAVESPEED_MODEL: seedream | nano-banana-2 | nano-banana-pro
@@ -170,6 +184,7 @@ WAVESPEED_MODEL=nano-banana-2
 
 # Replicate (Virtual Try-On) — fallback used only when WAVESPEED_API_KEY is unset
 REPLICATE_API_TOKEN=your-replicate-api-token
+REPLICATE_MODEL=nano-banana-2
 
 # Frontend URL
 FRONTEND_URL=http://localhost:5173
@@ -181,6 +196,9 @@ CLOUDINARY_API_SECRET=your-cloudinary-api-secret
 
 # OAuth - Google
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+# OAuth - Facebook
+FACEBOOK_APP_ID=your-facebook-app-id
+FACEBOOK_APP_SECRET=your-facebook-app-secret
 
 # Admin
 ADMIN_EMAIL=admin@example.com
@@ -213,12 +231,12 @@ Create a `.env` file in the `frontend` directory:
 VITE_API_URL=http://localhost:5001/api
 ```
 
-### 4. Maya Payment Setup
+### 4. Payment Gateway Setup (Xendit primary)
 
-1. Sign up at https://developers.maya.ph/
-2. Get your sandbox API keys from the dashboard
-3. Add the keys to your `.env` file
-4. Set `MAYA_SANDBOX=false` for production
+1. Sign up at https://www.xendit.co/
+2. Get your secret key (`XENDIT_SECRET_KEY`) and set a shared webhook verification token (`XENDIT_WEBHOOK_TOKEN`) — Xendit signs every webhook with that token (verified via `crypto.timingSafeEqual`), so a verified payload is trusted directly, no re-pull (ADR-010)
+3. Add both keys to your `.env` file
+4. Maya remains configured (equivalent `MAYA_PUBLIC_KEY`/`MAYA_SECRET_KEY`) for the transition window, so any order already mid-checkout on it still resolves; it is not the default for new checkouts
 
 ### 5. WaveSpeed (Virtual Try-On) Setup
 
@@ -287,7 +305,7 @@ puso-shop/
 │   │   ├── config/      # shipping.js — thresholds, DOMESTIC_RATES, COUNTRY_REGION_MAP, SHIPPING_METHODS
 │   │   └── shipping/    # calculateShipping.js — getDomesticRate, getInternationalRate, getVenuePickupRate, isSlotActive
 │   ├── __tests__/       # Vitest unit tests (calculateShipping, prisma singleton)
-│   ├── services/        # Business logic (email, Maya payment, WaveSpeed/Replicate try-on, daily sales)
+│   ├── services/        # Business logic (email, Xendit/Maya payment, WaveSpeed/Replicate try-on, daily sales)
 │   ├── middleware/      # auth.js — authenticate, isAdmin, optionalAuth
 │   ├── scripts/         # One-off/CLI scripts (data imports, migration pilots)
 │   ├── server.js        # Express app, middleware, cron job
@@ -354,15 +372,33 @@ puso-shop/
 - `DELETE /:id/permanent` - Hard-delete product from DB (superadmin only)
 
 ### Orders (`/api/orders`)
-- `POST /` - Create order and initiate Maya checkout
+- `POST /` - Create order (Merchandise items or Passes, never both) and initiate the gateway checkout
 - `GET /:orderNumber` - Get order details
 - `GET /user/:userId` - Get user's orders
-- `POST /:orderNumber/verify-payment` - Verify payment status with Maya
+- `POST /:orderNumber/verify-payment` - Verify payment status with the gateway
 - `GET /admin/all` - Get all orders with status/payment filters (Admin)
 - `GET /admin/stats` - Dashboard statistics (Admin)
 - `GET /admin/export?period=daily|weekly|monthly|yearly|all` - Download transaction CSV (Admin)
 - `PATCH /:id/status` - Update order status, courier, and tracking number (Admin)
-- `POST /webhooks/maya` - Maya payment webhook handler
+- `POST /webhooks/maya` - Maya payment webhook handler (legacy; treated as a trigger, re-verified via an authenticated pull)
+- `POST /webhooks/xendit` - Xendit payment webhook handler (verified via the signed `x-callback-token`, payload trusted directly)
+
+### Pass Events (`/api/pass-events`)
+- `GET /` - List active pass events (public)
+- `GET /:slug` - Get a pass event by slug (public)
+- `GET /my/passes` - Get the current user's Passes (authenticated)
+- `GET /admin/all` - List all pass events incl. inactive (Admin)
+- `GET /admin/:id` - Get a pass event (Admin)
+- `POST /` - Create a pass event (Admin)
+- `PUT /:id` - Update a pass event (Admin)
+- `DELETE /:id` - Soft-delete a pass event (Admin)
+- `POST /:id/tiers` - Add a tier to a pass event (Admin)
+- `PUT /tiers/:tierId` - Update a tier (Admin)
+- `DELETE /tiers/:tierId` - Delete a tier (Admin)
+- `GET /checkin/upcoming` - Upcoming events for the check-in scanner (Admin)
+- `GET /:eventId/passes/sync` - Offline pre-sync payload of a scanning event's Passes (Admin)
+- `GET /passes/lookup/:qrToken` - Look up a Pass by QR token (Admin)
+- `POST /passes/:passId/checkin` - Check a Pass in (Admin)
 
 ### Reviews (`/api/products`)
 - `GET /:slug/reviews` - Get product reviews with summary
@@ -446,7 +482,8 @@ Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.pr
 - `shippingMethod` — one of `domestic_flat_rate`, `domestic_free`, `international`, `venue_pickup`, `contact_us`
 - `shippingRegion` — PSGC region code for domestic orders; zone name (SEA / Middle East / North America / Europe) for international; null for pick-up
 - Payment method, payment status (pending / paid / failed / refunded)
-- Maya payment ID and checkout URL
+- `paymentChannel` — the gateway channel chosen at checkout (GCASH / MAYA / CARD / APPLE_PAY / QRPH); `gatewayFeeAmount` — the per-channel processing fee folded into `total` (ADR-010)
+- Payment reference/ID and checkout URL; the detailed attempt history lives in the `Payment` entity (ADR-008), one row per checkout session attempt
 - Order status (processing / confirmed / shipped / delivered / cancelled)
 - Courier, tracking number, notes
 - Stock is reserved atomically at order creation (real DB transaction), not at payment confirmation — closes the overselling race the pre-migration platform audit flagged as Critical
@@ -457,6 +494,14 @@ Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.pr
 - **Ownership** (`Organization` → `Team`, e.g. FEU owns FEU Tamaraws) is a real FK; **participation** (e.g. FEU participates in UAAP without being owned by it) is a separate join table, `OrganizationParticipation`
 - `AthleteAffiliation` is time-bounded (`startDate`/`endDate`) — zero rows exist yet, no athlete data has been migrated
 - Single-pilot scope: only Far Eastern University + UAAP exist as real rows; every other Organization is still represented by the flat `Product.league`/`team`/`player` strings and the pre-existing `League` model until the full cutover
+
+### Pass Event Admission (ADR-011)
+- `PassEvent` — a time-boxed event at a Venue; carries `startsAt`/`endsAt`, an optional on-sale window (`salesStartAt`/`salesEndAt`), `teamNames`, and an `active` flag
+- `Venue` / `VenueSection` — physical location and plain named areas (no seating-type distinction beyond `name`); `Venue` has an optional `seatingChartUrl` static reference image
+- `PassTier` — the Product-Variant equivalent for a Pass (e.g. GA, VIP, Lower Box A), tied to one `VenueSection`, with its own `price` and capacity (`capacity` / `sold` counters, atomically decremented — per-seat selection was scrapped, ADR-011 addendum)
+- `Pass` — the individual scannable admission credential, one per admitted person, issued at order placement (`status: issued`); carries a `qrToken`/`qrCodeUrl` and a typed `PassLog` history (`created` / `status_changed`)
+- `PassStatus` — `issued / checked_in / cancelled / refunded`, advanced by a race-safe atomic transition map (`PASS_TRANSITIONS`)
+- Pass fulfillment is the credential itself, not a Shipment; a Pass order carries contact info only (no shipping address) and `shippingFee` is forced to 0 server-side
 
 ### Review
 - Product reference, author name, email
@@ -492,7 +537,7 @@ Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.pr
 - A slot is hidden from buyers once `now ≥ slotStartPHT − deadlineHours`; deadline is computed by `isSlotActive()` in `calculateShipping.js` using `Date.UTC` PHT→UTC arithmetic
 
 ### ShippingEvent
-- Written on every successfully paid order (both `verify-payment` and `webhooks/maya` paths)
+- Written on every successfully paid order (both `verify-payment` and the gateway webhook paths)
 - `orderId` (order number), `shippingMethod`, `orderTotal`, `region` (PSGC code or zone name)
 - Powers the Shipping Analytics report (`GET /api/reports/shipping`)
 
@@ -500,13 +545,14 @@ Persistence is PostgreSQL (Railway) via Prisma — see `backend/prisma/schema.pr
 
 1. User fills Contact Information (email, phone, full name — always collected for all delivery types)
 2. User selects delivery method (domestic standard/free, international, or one of the active venue pick-up slots)
-3. Backend creates order with `paymentStatus: pending`, `shippingMethod`, and `shippingRegion`
-4. Backend initiates Maya checkout session and redirects user to payment page
-5. User completes payment on Maya
-6. Maya sends webhook to backend → order updated to `paymentStatus: paid`; `ShippingEvent` written for analytics
-7. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment` (also writes `ShippingEvent`)
-8. User receives order confirmation email
-9. User is redirected to order confirmation page
+3. User selects the payment channel in PusoStore's own checkout UI (GCash / Maya / Card / Apple Pay / QR Ph) — the exact per-channel Xendit processing fee is disclosed here and included in the total before checkout locks in (ADR-010)
+4. Backend creates order with `paymentStatus: pending`, `shippingMethod`, `shippingRegion`, and the chosen `paymentChannel`
+5. Backend initiates the gateway checkout session, already scoped to that one channel, and redirects the user
+6. User completes payment on the gateway
+7. The gateway's webhook resolves the order → `paymentStatus: paid`; `ShippingEvent` written for analytics. Xendit's webhook is trusted directly once its `x-callback-token` is verified; Maya's is instead treated as a trigger and re-verified via an authenticated status pull
+8. User can also trigger manual verification via `POST /orders/:orderNumber/verify-payment` (also writes `ShippingEvent`)
+9. User receives order confirmation email
+10. User is redirected to order confirmation page
 
 ## Email Templates
 
@@ -535,7 +581,7 @@ Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and fronten
 1. Set all environment variables in the hosting platform, including `DATABASE_URL` (Postgres) — as a **secret**, not a plain-text **variable** (Railway UI has both; a secret is encrypted, a variable is shown in cleartext)
 2. Add the Redis plugin if you want persistent rate limiting (optional); Railway usually wires `REDIS_URL` automatically
 3. Update `FRONTEND_URL` to your production domain
-4. Set `MAYA_SANDBOX=false` and swap in production Maya keys
+4. Set production Xendit keys (`XENDIT_SECRET_KEY`, `XENDIT_WEBHOOK_TOKEN`) — Maya keys remain for the transition window only
 5. Set `NODE_ENV=production`
 6. Add `DATABASE_URL` as a GitHub Actions secret too (repo Settings → Secrets and variables → Actions → Secrets tab → Repository secrets) so CI can run the backend suite
 7. **After changing any environment variable, redeploy — a restart alone does not pick up the new value**
@@ -557,7 +603,7 @@ Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and fronten
 - CORS restricted to `FRONTEND_URL`
 - `trust proxy` enabled for Railway/Vercel reverse proxy compatibility
 - Superadmin-only hard-delete restricted by email check
-- Maya webhook payload is never trusted directly (Maya doesn't offer a documented signing scheme) — the POST is treated only as a trigger to re-confirm status via an authenticated pull against Maya's own API, the same mechanism the manual `/verify-payment` path already uses
+- No webhook payload is trusted at face value — verified per gateway's own mechanism. Xendit signs every webhook with a shared secret (`XENDIT_WEBHOOK_TOKEN`, compared via `crypto.timingSafeEqual`), so a verified payload is trusted directly, no re-pull. Maya offers no signing scheme, so its POST is treated only as a trigger to re-confirm status via an authenticated pull against Maya's own API (plus IP allowlisting), same as the manual `/verify-payment` path
 - Structured logging (Pino) + optional Sentry error tracking (`SENTRY_DSN`) — off by default to avoid cost, on by adding the DSN
 
 ## Design System

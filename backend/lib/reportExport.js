@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import { escapeCsvCell } from './csv.js';
 
 /**
  * Shared CSV/Excel/PDF writers for every admin report's export endpoint —
@@ -13,15 +14,6 @@ import PDFDocument from 'pdfkit';
  * confirmed decision, Reports Module Redesign Phase 3 plan. No headless
  * browser, no chart rasterization.
  */
-
-function escapeCsvCell(val) {
-  if (val === null || val === undefined) return '';
-  const str = String(val);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
 
 /** columns: [{ header, key }]; rows: array of plain objects keyed by column key. */
 export function toCSV(columns, rows) {

@@ -30,8 +30,25 @@ import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 import * as shipmentRepository from '../repositories/shipmentRepository.js';
 import * as shipmentEventRepository from '../repositories/shipmentEventRepository.js';
+import { escapeCsvCell } from '../lib/csv.js';
 
 const router = express.Router();
+
+/**
+ * Order ownership check shared by GET /:orderNumber, POST /:orderNumber/pay,
+ * and POST /:orderNumber/verify-payment. `userId` is read first so raw
+ * (non-serialized) orders work too  — withRelationFallback deletes `userId`
+ * and copies it into `user`. An ownerless (guest) order is always allowed:
+ * the order number is the bearer secret. A user-owned order needs an
+ * authenticated owner, or an admin.
+ */
+function canAccessOrder(order, req) {
+  const orderUserId = order.userId ?? order.user;
+  if (orderUserId) {
+    return Boolean(req.user) && (orderUserId.toString() === req.user._id.toString() || req.user.role === 'admin');
+  }
+  return true;
+}
 
 // Merchandise Quantity Validation (security remediation — a negative
 // quantity previously turned decrementStock's conditional UPDATE into a
@@ -887,15 +904,6 @@ router.get('/admin/export',
         return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       };
 
-      const escape = (val) => {
-        if (val === null || val === undefined) return '';
-        const str = String(val);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      };
-
       const reportStart = startDate ? fmt(startDate) : fmt(orders.length ? orders[orders.length - 1].createdAt : now);
       const reportEnd = fmt(now);
 
@@ -920,18 +928,18 @@ router.get('/admin/export',
           .map(i => `${i.name}${i.color ? ` (${i.color})` : ''} ${i.size} x${i.quantity}`)
           .join('; ');
         return [
-          escape(o.orderNumber),
-          escape(fmt(o.createdAt)),
-          escape(customer),
-          escape(email),
-          escape(items),
-          escape(o.subtotal?.toFixed(2)),
-          escape(o.shippingFee?.toFixed(2)),
-          escape(o.total?.toFixed(2)),
-          escape(o.paymentStatus),
-          escape(o.orderStatus),
-          escape(o.courier || ''),
-          escape(o.trackingNumber || '')
+          escapeCsvCell(o.orderNumber),
+          escapeCsvCell(fmt(o.createdAt)),
+          escapeCsvCell(customer),
+          escapeCsvCell(email),
+          escapeCsvCell(items),
+          escapeCsvCell(o.subtotal?.toFixed(2)),
+          escapeCsvCell(o.shippingFee?.toFixed(2)),
+          escapeCsvCell(o.total?.toFixed(2)),
+          escapeCsvCell(o.paymentStatus),
+          escapeCsvCell(o.orderStatus),
+          escapeCsvCell(o.courier || ''),
+          escapeCsvCell(o.trackingNumber || '')
         ].join(',');
       });
 
@@ -956,6 +964,10 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (!canAccessOrder(order, req)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     // Already resolved — no need to check again
@@ -992,14 +1004,8 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
       });
     }
 
-    // Check authorization
-    if (order.user && req.user) {
-      if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied'
-        });
-      }
+    if (!canAccessOrder(order, req)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     // Payment Platform Redesign, Phase 3 — the Pending Payment experience
@@ -1055,10 +1061,8 @@ router.post('/:orderNumber/pay', optionalAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (order.user && req.user) {
-      if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-        return res.status(403).json({ success: false, message: 'Access denied' });
-      }
+    if (!canAccessOrder(order, req)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     if (order.paymentStatus === 'paid') {
