@@ -99,6 +99,57 @@ describe('decrementStock / restoreStock — transaction-client requirement', () 
   });
 });
 
+// A non-integer or non-positive quantity must never reach the conditional
+// UPDATE inside decrementStock/restoreStock — `stock: { gte: quantity }`
+// is only a valid guard when quantity is a positive integer, since stock
+// is always >= 0. This is checked with a client object present (`{}`,
+// since the guard must throw before ever touching it), so a passing test
+// proves the quantity check itself, independent of the transaction-client
+// requirement above and of whatever the API boundary (routes/orders.js)
+// also validates.
+describe('decrementStock / restoreStock — quantity validation (defense in depth)', () => {
+  const baseArgs = { productId: 'p1', size: 'M' };
+  const untouchedClient = {};
+
+  it.each([-1, -1000, 0, 1.5, -0.5, NaN, Infinity, -Infinity, '3', null, undefined])(
+    'decrementStock rejects invalid quantity %p regardless of caller',
+    async (quantity) => {
+      await expect(
+        decrementStock({ ...baseArgs, quantity }, { client: untouchedClient })
+      ).rejects.toThrow(StockAdjustmentError);
+    }
+  );
+
+  it.each([-1, -1000, 0, 1.5, -0.5, NaN, Infinity, -Infinity, '3', null, undefined])(
+    'restoreStock rejects invalid quantity %p regardless of caller',
+    async (quantity) => {
+      await expect(
+        restoreStock({ ...baseArgs, quantity }, { client: untouchedClient })
+      ).rejects.toThrow(StockAdjustmentError);
+    }
+  );
+
+  it('decrementStock still accepts a valid positive integer quantity — the guard does not block legitimate calls', async () => {
+    const stubClient = {
+      productSize: { updateMany: async () => ({ count: 1 }) },
+      product: { update: async () => ({}) },
+    };
+    await expect(
+      decrementStock({ ...baseArgs, quantity: 1 }, { client: stubClient })
+    ).resolves.toBeUndefined();
+  });
+
+  it('restoreStock still accepts a valid positive integer quantity — the guard does not block legitimate calls', async () => {
+    const stubClient = {
+      productSize: { updateMany: async () => ({ count: 1 }) },
+      product: { update: async () => ({}) },
+    };
+    await expect(
+      restoreStock({ ...baseArgs, quantity: 3 }, { client: stubClient })
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('parseSort', () => {
   it('parses a leading-dash Mongoose-style token as descending', () => {
     expect(parseSort('-totalSold')).toEqual({ field: 'totalSold', direction: 'desc' });

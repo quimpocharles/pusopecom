@@ -1077,6 +1077,96 @@ function makeMinimalOrder(client, suffix) {
   });
 }
 
+describe('Quantity/inventory CHECK constraints (Finding #3 remediation, defense in depth)', () => {
+  // Each assertion below runs in its own withRollback transaction, not
+  // chained together — Postgres aborts the entire transaction on the
+  // first constraint violation ("current transaction is aborted, commands
+  // ignored until end of transaction block"), so a deliberately-failing
+  // statement can never be followed by another statement in the same
+  // transaction, matching the one-assertion-per-withRollback shape the
+  // existing 'rejects an invalid size value via the CHECK constraint'
+  // test above already uses.
+  async function makeCheckConstraintFixture(tx, label) {
+    const product = await productRepo.create(
+      {
+        name: `${label} ${Date.now()}`,
+        description: 'x',
+        price: 500,
+        category: 'jersey',
+        sport: 'basketball',
+        images: [],
+        sizes: [{ size: 'M', stock: 5 }],
+        colors: [{ color: 'Navy', sizes: [{ size: 'M', stock: 5 }] }],
+      },
+      { client: tx }
+    );
+    const order = await makeMinimalOrder(tx, `${label.toLowerCase()}-${Date.now()}`);
+    return { product, order };
+  }
+
+  it('order_items_quantity_check rejects a negative quantity inserted directly, bypassing the route and repository entirely', () =>
+    withRollback(async (tx) => {
+      const { product, order } = await makeCheckConstraintFixture(tx, 'CheckConstraintQtyNeg');
+      await expect(
+        tx.orderItem.create({
+          data: { orderId: order.id, productId: product._id, name: product.name, price: 500, quantity: -1, size: 'M', image: 'https://example.com/img.jpg' },
+        })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+
+  it('order_items_quantity_check rejects a zero quantity inserted directly', () =>
+    withRollback(async (tx) => {
+      const { product, order } = await makeCheckConstraintFixture(tx, 'CheckConstraintQtyZero');
+      await expect(
+        tx.orderItem.create({
+          data: { orderId: order.id, productId: product._id, name: product.name, price: 500, quantity: 0, size: 'M', image: 'https://example.com/img.jpg' },
+        })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+
+  it('order_items_quantity_check allows a valid positive quantity — the constraint does not block a legitimate insert', () =>
+    withRollback(async (tx) => {
+      const { product, order } = await makeCheckConstraintFixture(tx, 'CheckConstraintQtyValid');
+      await expect(
+        tx.orderItem.create({
+          data: { orderId: order.id, productId: product._id, name: product.name, price: 500, quantity: 1, size: 'M', image: 'https://example.com/img.jpg' },
+        })
+      ).resolves.toBeTruthy();
+    }, { timeout: 15000 }), 15000);
+
+  it('product_sizes_stock_check rejects negative stock written directly to the size row', () =>
+    withRollback(async (tx) => {
+      const { product } = await makeCheckConstraintFixture(tx, 'CheckConstraintSizeStock');
+      await expect(
+        tx.productSize.update({ where: { id: product.sizes[0]._id }, data: { stock: -1 } })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+
+  it('product_color_sizes_stock_check rejects negative stock written directly to the color-size row', () =>
+    withRollback(async (tx) => {
+      const { product } = await makeCheckConstraintFixture(tx, 'CheckConstraintColorStock');
+      await expect(
+        tx.productColorSize.update({ where: { id: product.colors[0].sizes[0]._id }, data: { stock: -1 } })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+
+  it('products_total_stock_check rejects a negative totalStock written directly', () =>
+    withRollback(async (tx) => {
+      const { product } = await makeCheckConstraintFixture(tx, 'CheckConstraintTotalStock');
+      await expect(
+        tx.product.update({ where: { id: product._id }, data: { totalStock: -1 } })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+
+  it('products_total_sold_check rejects a negative totalSold written directly', () =>
+    withRollback(async (tx) => {
+      const { product } = await makeCheckConstraintFixture(tx, 'CheckConstraintTotalSold');
+      await expect(
+        tx.product.update({ where: { id: product._id }, data: { totalSold: -1 } })
+      ).rejects.toThrow();
+    }, { timeout: 15000 }), 15000);
+});
+
 describe('paymentRepository — Payment Platform Redesign Phase 1', () => {
   it('findLatestForOrder returns the most recent attempt, not the first', () =>
     withRollback(async (tx) => {

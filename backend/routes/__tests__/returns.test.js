@@ -34,14 +34,16 @@ beforeAll(async () => {
   });
 }, 15000);
 
-async function makePaidOrder({ quantity = 2, startingStock = 10, shipmentStatus = 'delivered' } = {}) {
+async function makePaidOrder({ quantity = 2, itemQuantities, startingStock = 10, shipmentStatus = 'delivered' } = {}) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const quantities = itemQuantities ?? [quantity];
+  const purchasedQuantity = quantities.reduce((sum, itemQuantity) => sum + itemQuantity, 0);
   const product = await prisma.product.create({
     data: {
       name: `${MARKER} ${suffix}`, slug: `return-route-test-${suffix}`, description: 'x',
       price: 500, category: 'jersey', sport: 'basketball', images: [], active: true,
-      totalStock: startingStock - quantity,
-      sizes: { create: [{ size: 'M', stock: startingStock - quantity }] },
+      totalStock: startingStock - purchasedQuantity,
+      sizes: { create: [{ size: 'M', stock: startingStock - purchasedQuantity }] },
     },
   });
 
@@ -51,9 +53,9 @@ async function makePaidOrder({ quantity = 2, startingStock = 10, shipmentStatus 
       email: 'return-route-test@example.com',
       shipToFullName: 'Test Buyer', shipToPhone: '09171234567', shipToAddress: '1 St',
       shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
-      subtotal: 500 * quantity, total: 500 * quantity,
+      subtotal: 500 * purchasedQuantity, total: 500 * purchasedQuantity,
       paymentStatus: 'paid', orderStatus: 'delivered',
-      items: { create: [{ productId: product.id, name: product.name, price: 500, quantity, size: 'M', image: 'x.jpg' }] },
+      items: { create: quantities.map((itemQuantity) => ({ productId: product.id, name: product.name, price: 500, quantity: itemQuantity, size: 'M', image: 'x.jpg' })) },
     },
     include: { items: true },
   });
@@ -82,6 +84,23 @@ async function cleanup({ product, order, payment, shipment }) {
   await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
   await prisma.order.delete({ where: { id: order.id } });
   await prisma.product.delete({ where: { id: product.id } });
+}
+
+async function expectNoReturnSideEffects({ product, order, shipment }) {
+  const [returnRequests, returnItems, refunds, adjustments, size, currentShipment] = await Promise.all([
+    prisma.returnRequest.count({ where: { orderId: order.id } }),
+    prisma.returnItem.count({ where: { returnRequest: { orderId: order.id } } }),
+    prisma.refund.count({ where: { orderId: order.id } }),
+    prisma.stockAdjustment.count({ where: { relatedOrderId: order.id } }),
+    prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } }),
+    shipment ? prisma.shipment.findUnique({ where: { id: shipment.id } }) : null,
+  ]);
+  expect(returnRequests).toBe(0);
+  expect(returnItems).toBe(0);
+  expect(refunds).toBe(0);
+  expect(adjustments).toBe(0);
+  expect(size.stock).toBe(product.totalStock);
+  if (currentShipment) expect(currentShipment.status).toBe('delivered');
 }
 
 describe('POST /returns — customer-facing return request', () => {
@@ -142,6 +161,130 @@ describe('POST /returns — customer-facing return request', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['excessively large', Number.MAX_SAFE_INTEGER],
+  ])('rejects a %s return quantity without any return, stock, refund, or shipment side effect', async (_label, quantity) => {
+    const fixture = await makePaidOrder();
+    const { order } = fixture;
+    try {
+      const res = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[0].id, quantity }],
+      });
+      expect(res.status).toBe(400);
+      await expectNoReturnSideEffects(fixture);
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 20000);
+
+  it('rejects duplicate order item entries without creating a partial return request', async () => {
+    const fixture = await makePaidOrder();
+    const { order } = fixture;
+    try {
+      const res = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [
+          { orderItemId: order.items[0].id, quantity: 1 },
+          { orderItemId: order.items[0].id, quantity: 1 },
+        ],
+      });
+      expect(res.status).toBe(400);
+      await expectNoReturnSideEffects(fixture);
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 20000);
+
+  it('counts eligibility by product, size, and color across separate purchased order items', async () => {
+    const fixture = await makePaidOrder({ itemQuantities: [1, 1] });
+    const { order } = fixture;
+    try {
+      const first = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[0].id, quantity: 1 }],
+      });
+      expect(first.status).toBe(201);
+
+      const second = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[1].id, quantity: 2 }],
+      });
+      expect(second.status).toBe(400);
+      expect(await prisma.returnRequest.count({ where: { orderId: order.id } })).toBe(1);
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 30000);
+
+  it('serializes concurrent return requests so only one can reserve the remaining eligibility', async () => {
+    const fixture = await makePaidOrder();
+    const { order } = fixture;
+    try {
+      const payload = {
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[0].id, quantity: 2 }],
+      };
+      const [first, second] = await Promise.all([
+        request(app).post('/api/returns').send(payload),
+        request(app).post('/api/returns').send(payload),
+      ]);
+      expect([first.status, second.status].sort((a, b) => a - b)).toEqual([201, 400]);
+
+      const returnItems = await prisma.returnItem.findMany({ where: { returnRequest: { orderId: order.id } } });
+      expect(returnItems).toHaveLength(1);
+      expect(returnItems[0].quantity).toBe(2);
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 30000);
+
+  it('releases eligibility when a return request is rejected', async () => {
+    const fixture = await makePaidOrder();
+    const { order } = fixture;
+    try {
+      const first = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[0].id, quantity: 2 }],
+      });
+      expect(first.status).toBe(201);
+
+      const rejected = await request(app).patch(`/api/admin/returns/${first.body.data._id}/status`).send({ status: 'rejected' });
+      expect(rejected.status).toBe(200);
+
+      const second = await request(app).post('/api/returns').send({
+        orderNumber: order.orderNumber,
+        reason: 'Wrong size',
+        items: [{ orderItemId: order.items[0].id, quantity: 2 }],
+      });
+      expect(second.status).toBe(201);
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 30000);
+
+  it('return_items_quantity_check rejects a direct negative ReturnItem insert', async () => {
+    const fixture = await makePaidOrder();
+    const { order } = fixture;
+    try {
+      const returnRequest = await prisma.returnRequest.create({ data: { orderId: order.id, reason: 'Wrong size' } });
+      await expect(
+        prisma.returnItem.create({ data: { returnRequestId: returnRequest.id, orderItemId: order.items[0].id, quantity: -1 } })
+      ).rejects.toThrow();
+    } finally {
+      await cleanup(fixture);
+    }
+  }, 20000);
 });
 
 describe('PATCH /admin/returns/:id/status', () => {

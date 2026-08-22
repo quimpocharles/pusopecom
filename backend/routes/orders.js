@@ -33,6 +33,26 @@ import * as shipmentEventRepository from '../repositories/shipmentEventRepositor
 
 const router = express.Router();
 
+// Merchandise Quantity Validation (security remediation — a negative
+// quantity previously turned decrementStock's conditional UPDATE into a
+// silent stock/totalStock increase and let subtotal go negative, letting
+// an attacker pair a real item with a fabricated negative-quantity line to
+// zero out — or even clamp-to-zero — the order total). There is no
+// existing product/order business rule capping quantity anywhere in this
+// codebase (confirmed: no max on the admin stock input, no server-side
+// cap today) — the storefront's own quantity stepper already self-limits
+// to "never more than the variant's current stock"
+// (ProductDetail.jsx's `Math.min(selectedSizeStock, quantity + 1)`), which
+// is exactly what the atomic `stock: { gte: quantity }` check already
+// enforces correctly once quantity itself is a valid positive integer.
+// MAX_ITEM_QUANTITY is therefore not modeling a discovered business limit
+// — it's a generous technical sanity ceiling, set far above any
+// legitimate cart (real seeded stock per variant tops out in the
+// low tens/twenties — see seed.js/seed-100.js) so it never interferes
+// with a real purchase, while still bounding request payloads against
+// pathological/overflow-adjacent values.
+const MAX_ITEM_QUANTITY = 1000;
+
 // Every OrderStatus value an admin may set manually, via PATCH /:id/status —
 // deliberately excludes 'confirmed', the legacy value Payment Platform
 // Redesign Phase 2 superseded with 'paid'; nothing should set it again,
@@ -319,7 +339,14 @@ router.post('/',
     // first (Commerce Engine Stage 9) but reversed once Pass's own checkout
     // needed to stop looking like a shipment: see the ADR-011 addendum.
     body('items').isArray(),
+    body('items.*.product').isString().trim().notEmpty(),
+    body('items.*.size').isString().trim().notEmpty(),
+    body('items.*.quantity').isInt({ min: 1, max: MAX_ITEM_QUANTITY }).toInt(),
     body('passes').optional().isArray(),
+    body('passes.*.passTierId').isString().trim().notEmpty(),
+    body('passes.*.quantity').optional().isInt({ min: 1 }).toInt()
+      .custom((value) => Number.isSafeInteger(value))
+      .withMessage('Pass quantity must be a positive safe integer'),
     body().custom((value) => (value.items?.length ?? 0) + (value.passes?.length ?? 0) > 0)
       .withMessage('An order must contain at least one item or pass'),
     body().custom((value) => !((value.items?.length ?? 0) > 0 && (value.passes?.length ?? 0) > 0))
@@ -356,6 +383,46 @@ router.post('/',
 
       const { email, items, passes, shippingAddress, notes, shippingMethod, shippingRegion, slotId, promoCode, paymentChannel } = req.body;
 
+      // Normalization/deduplication — deterministic, before any pricing or
+      // reservation logic runs. Two request entries for the same
+      // (product, size, color) are merged into one line by summing their
+      // quantities, keyed in first-seen order, rather than reserved/priced
+      // as two separate lines — this is what closes the duplicate-line
+      // trick (submitting the same variant twice, once positive once
+      // negative, to cancel its price while netting zero stock change)
+      // independently of the positive-integer check above, since two
+      // *positive* duplicate entries need merging too (to reserve/price
+      // the combined quantity atomically as one line, not race two
+      // separate partial reservations against each other).
+      const normalizedItems = [];
+      const normalizedIndexByKey = new Map();
+      for (const item of items) {
+        const key = `${item.product}\u0000${item.size}\u0000${item.color || ''}`;
+        const existingIndex = normalizedIndexByKey.get(key);
+        if (existingIndex === undefined) {
+          normalizedIndexByKey.set(key, normalizedItems.length);
+          normalizedItems.push({ ...item });
+        } else {
+          normalizedItems[existingIndex].quantity += item.quantity;
+        }
+      }
+
+      // Re-validate the SAME bound the express-validator chain already
+      // applied per raw request line — merging can push a combined
+      // quantity above MAX_ITEM_QUANTITY even when every individual entry
+      // was within bounds (e.g. two entries of 600 each for the same
+      // variant), so the normalized quantity must be checked again here,
+      // strictly after normalization and strictly before pricing/
+      // reservation.
+      for (const item of normalizedItems) {
+        if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_ITEM_QUANTITY) {
+          return res.status(400).json({
+            success: false,
+            message: `Combined quantity for ${item.product}/${item.size}${item.color ? `/${item.color}` : ''} must be between 1 and ${MAX_ITEM_QUANTITY} after merging duplicate line items (got ${item.quantity})`
+          });
+        }
+      }
+
       // Pass 1 — structural validation and price/image resolution. Not
       // itself the stock-sufficiency check (that's the atomic
       // decrementStock call below); this only confirms the product and
@@ -364,7 +431,7 @@ router.post('/',
       const orderItems = [];
       const productNames = {};
 
-      for (const item of items) {
+      for (const item of normalizedItems) {
         const product = await productRepository.findById(item.product);
 
         if (!product || !product.active) {
@@ -425,19 +492,33 @@ router.post('/',
       // quantity so decrementTierCapacity never has to re-read it inside
       // the transaction (see that function's own comment for why).
       const tierDecrements = new Map();
+      const requestedPassQuantityByTierId = new Map();
 
       for (const p of passes || []) {
-        const tier = await passEventRepository.findTierById(p.passTierId);
+        const quantity = p.quantity ?? 1;
+        const combinedQuantity = (requestedPassQuantityByTierId.get(p.passTierId) || 0) + quantity;
+        if (!Number.isSafeInteger(combinedQuantity)) {
+          return res.status(400).json({ success: false, message: 'Combined Pass quantity must be a positive safe integer' });
+        }
+        requestedPassQuantityByTierId.set(p.passTierId, combinedQuantity);
+      }
+
+      for (const [passTierId, quantity] of requestedPassQuantityByTierId) {
+        const tier = await passEventRepository.findTierById(passTierId);
         if (!tier) {
-          return res.status(400).json({ success: false, message: `Pass tier not found: ${p.passTierId}` });
+          return res.status(400).json({ success: false, message: `Pass tier not found: ${passTierId}` });
+        }
+        if (tier.capacity == null) {
+          return res.status(400).json({ success: false, message: `Pass tier ${passTierId} has no capacity configured` });
+        }
+        if (quantity > tier.capacity - (tier.sold ?? 0)) {
+          return res.status(400).json({ success: false, message: `Insufficient capacity remaining on pass tier ${passTierId}` });
         }
 
-        const quantity = Math.max(1, Number(p.quantity) || 1);
         for (let i = 0; i < quantity; i++) {
           passUnits.push({ passEventId: tier.passEventId, passTierId: tier._id, price: tier.price });
         }
-        const existing = tierDecrements.get(tier._id);
-        tierDecrements.set(tier._id, { quantity: (existing?.quantity || 0) + quantity, capacity: tier.capacity });
+        tierDecrements.set(tier._id, { quantity, capacity: tier.capacity });
       }
 
       subtotal += passUnits.reduce((sum, unit) => sum + unit.price, 0);

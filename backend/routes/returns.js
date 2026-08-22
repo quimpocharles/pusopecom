@@ -8,6 +8,7 @@ import * as returnRequestRepository from '../repositories/returnRequestRepositor
 import * as refundRepository from '../repositories/refundRepository.js';
 import * as stockAdjustmentRepository from '../repositories/stockAdjustmentRepository.js';
 import * as shipmentRepository from '../repositories/shipmentRepository.js';
+import * as productRepository from '../repositories/productRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import { uploadToCloudinary } from './upload.js';
@@ -15,6 +16,17 @@ import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middl
 import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
+
+class ReturnRequestInputError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function variantKey({ productId, size, color }) {
+  return `${productId}\u0000${size}\u0000${color ?? ''}`;
+}
 
 /**
  * Enterprise Fulfillment Blueprint, Phase 2 — the customer-facing return
@@ -26,8 +38,9 @@ const router = express.Router();
  */
 
 function canAccessOrder(order, req) {
-  if (order.user && req.user) {
-    return order.user.toString() === req.user._id.toString() || req.user.role === 'admin';
+  const orderUserId = order.userId ?? order.user;
+  if (orderUserId) {
+    return Boolean(req.user) && (orderUserId.toString() === req.user._id.toString() || req.user.role === 'admin');
   }
   return true; // guest order — order number itself is the bearer secret
 }
@@ -70,38 +83,87 @@ router.post('/', optionalAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'orderNumber, reason, and at least one item are required' });
     }
 
-    const order = await orderRepository.findByOrderNumber(orderNumber, { include: { items: true } });
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    if (!canAccessOrder(order, req)) return res.status(403).json({ success: false, message: 'Access denied' });
-
-    if (order.paymentStatus !== 'paid') {
-      return res.status(400).json({ success: false, message: 'Only paid orders can be returned' });
-    }
-
-    // Every requested orderItemId must actually belong to this order —
-    // otherwise a customer could reference someone else's OrderItem id.
-    const orderItemIds = new Set(order.items.map((i) => i._id));
-    for (const { orderItemId } of items) {
-      if (!orderItemIds.has(orderItemId)) {
-        return res.status(400).json({ success: false, message: `Item ${orderItemId} does not belong to this order` });
+    const requestedItemIds = new Set();
+    for (const item of items) {
+      if (!item || typeof item.orderItemId !== 'string' || !item.orderItemId || !Number.isSafeInteger(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ success: false, message: 'Each return item requires an orderItemId and a positive integer quantity' });
       }
+      if (requestedItemIds.has(item.orderItemId)) {
+        return res.status(400).json({ success: false, message: `Item ${item.orderItemId} is listed more than once` });
+      }
+      requestedItemIds.add(item.orderItemId);
     }
 
-    const returnRequest = await returnRequestRepository.create({
-      orderId: order._id,
-      userId: order.user || null,
-      reason,
-      description,
-      photos,
-      items,
-    });
+    const { order, returnRequest } = await prisma.$transaction(async (tx) => {
+      const lockedOrders = await tx.$queryRaw`
+        SELECT id FROM orders
+        WHERE "orderNumber" = ${orderNumber}
+        FOR UPDATE
+      `;
+      if (lockedOrders.length === 0) throw new ReturnRequestInputError('Order not found', 404);
+
+      const lockedOrder = await tx.order.findUnique({ where: { id: lockedOrders[0].id }, include: { items: true } });
+      if (!canAccessOrder(lockedOrder, req)) throw new ReturnRequestInputError('Access denied', 403);
+      if (lockedOrder.paymentStatus !== 'paid') {
+        throw new ReturnRequestInputError('Only paid orders can be returned');
+      }
+
+      const orderItemById = new Map(lockedOrder.items.map((item) => [item.id, item]));
+      const purchasedByVariant = new Map();
+      const requestedByVariant = new Map();
+      for (const item of lockedOrder.items) {
+        const key = variantKey(item);
+        purchasedByVariant.set(key, (purchasedByVariant.get(key) || 0) + item.quantity);
+      }
+
+      for (const item of items) {
+        const orderItem = orderItemById.get(item.orderItemId);
+        if (!orderItem) {
+          throw new ReturnRequestInputError(`Item ${item.orderItemId} does not belong to this order`);
+        }
+        const key = variantKey(orderItem);
+        requestedByVariant.set(key, (requestedByVariant.get(key) || 0) + item.quantity);
+      }
+
+      const activeReturns = await tx.returnRequest.findMany({
+        where: { orderId: lockedOrder.id, status: { not: 'rejected' } },
+        include: { items: { include: { orderItem: true } } },
+      });
+      const reservedByVariant = new Map();
+      for (const activeReturn of activeReturns) {
+        for (const item of activeReturn.items) {
+          const key = variantKey(item.orderItem);
+          if (purchasedByVariant.has(key)) {
+            reservedByVariant.set(key, (reservedByVariant.get(key) || 0) + item.quantity);
+          }
+        }
+      }
+
+      for (const [key, requestedQuantity] of requestedByVariant) {
+        const remainingQuantity = (purchasedByVariant.get(key) || 0) - (reservedByVariant.get(key) || 0);
+        if (requestedQuantity > remainingQuantity) {
+          throw new ReturnRequestInputError('Requested return quantity exceeds the remaining eligible quantity for this variant');
+        }
+      }
+
+      const createdReturnRequest = await returnRequestRepository.create({
+        orderId: lockedOrder.id,
+        userId: lockedOrder.userId || null,
+        reason,
+        description,
+        photos,
+        items,
+      }, { client: tx });
+
+      return { order: lockedOrder, returnRequest: createdReturnRequest };
+    }, { timeout: 30000 });
 
     // Reflects into the same Shipment queue an operator already watches —
     // return_requested is a legal transition straight from 'delivered'
     // (shipmentRepository.SHIPMENT_TRANSITIONS).
     // shipmentRepository.transition already writes its own ShipmentEvent
     // row internally — no second one needed here.
-    const shipment = await shipmentRepository.findByOrderId(order._id);
+    const shipment = await shipmentRepository.findByOrderId(order.id);
     if (shipment && shipment.status === 'delivered') {
       await shipmentRepository.transition(shipment._id, 'return_requested', {
         actor: 'customer',
@@ -111,6 +173,9 @@ router.post('/', optionalAuth, async (req, res) => {
 
     res.status(201).json({ success: true, data: returnRequest });
   } catch (error) {
+    if (error instanceof ReturnRequestInputError) {
+      return res.status(error.status).json({ success: false, message: error.message });
+    }
     logger.error({ err: error }, 'Create return request error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to submit return request' });
@@ -292,7 +357,10 @@ adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE),
           refundAmount += orderItem.price * item.quantity;
 
           if (condition === 'sellable') {
-            await productRepositoryRestoreStock(tx, orderItem, item.quantity);
+            await productRepository.restoreStock(
+              { productId: orderItem.productId, size: orderItem.size, color: orderItem.color, quantity: item.quantity },
+              { client: tx }
+            );
           }
 
           // ReturnItemCondition (sellable|damaged|unsellable) and
@@ -358,18 +426,6 @@ async function resolveVariantIds(tx, orderItem) {
   }
   const sizeRow = await tx.productSize.findFirst({ where: { productId, size: orderItem.size } });
   return { productSizeId: sizeRow?.id || null, productColorSizeId: null };
-}
-
-async function productRepositoryRestoreStock(tx, orderItem, quantity) {
-  const productId = orderItem.productId;
-  if (orderItem.color) {
-    const colorRow = await tx.productColor.findFirst({ where: { productId, color: orderItem.color } });
-    if (!colorRow) return;
-    await tx.productColorSize.updateMany({ where: { colorId: colorRow.id, size: orderItem.size }, data: { stock: { increment: quantity } } });
-  } else {
-    await tx.productSize.updateMany({ where: { productId, size: orderItem.size }, data: { stock: { increment: quantity } } });
-  }
-  await tx.product.update({ where: { id: productId }, data: { totalStock: { increment: quantity } } });
 }
 
 export { router, adminRouter };

@@ -340,6 +340,25 @@ export async function deleteById(id, { client = prisma } = {}) {
 }
 
 /**
+ * Defense-in-depth guard shared by decrementStock/restoreStock — the real
+ * boundary validation lives at the API layer (routes/orders.js's
+ * express-validator chain), but these two functions are the last line of
+ * defense against a negative/zero/fractional/NaN quantity ever reaching
+ * the database, regardless of which caller reaches them (a future route,
+ * a script, a repository consumer that forgets to validate first). A
+ * negative quantity here previously turned `stock: { decrement: quantity }`
+ * into a silent increment — see InsufficientStockError above for the
+ * exact exploit this closes.
+ */
+function assertValidQuantity(quantity) {
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    throw new StockAdjustmentError(
+      `quantity must be a positive integer, got ${JSON.stringify(quantity)}`
+    );
+  }
+}
+
+/**
  * Atomically decrements stock for a plain-size or color+size variant,
  * failing the whole operation (via an all-or-nothing conditional UPDATE,
  * not a read-then-write) if insufficient stock remains. This is the direct
@@ -352,6 +371,7 @@ export async function deleteById(id, { client = prisma } = {}) {
  */
 export async function decrementStock({ productId, size, color, quantity }, { client }) {
   if (!client) throw new StockAdjustmentError('decrementStock must be called with a transaction client');
+  assertValidQuantity(quantity);
 
   if (color) {
     const colorRow = await client.productColor.findFirst({ where: { productId, color } });
@@ -383,6 +403,7 @@ export async function decrementStock({ productId, size, color, quantity }, { cli
  */
 export async function restoreStock({ productId, size, color, quantity }, { client }) {
   if (!client) throw new StockAdjustmentError('restoreStock must be called with a transaction client');
+  assertValidQuantity(quantity);
 
   if (color) {
     const colorRow = await client.productColor.findFirst({ where: { productId, color } });

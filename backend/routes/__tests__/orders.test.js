@@ -254,6 +254,122 @@ describe('POST /orders — structural validation', () => {
   });
 });
 
+describe('POST /orders — quantity validation (Finding #3 remediation)', () => {
+  it('400s a negative quantity, with zero side effects: no Order, no OrderItem, no payment session, no stock/totalStock/totalSold mutation', async () => {
+    const product = await makeProduct({ name: 'NegativeQuantity' });
+    const beforeSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    const beforeProduct = await prisma.product.findUnique({ where: { id: product.id } });
+
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product, { quantity: -1 }));
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+
+    const orderItems = await prisma.orderItem.findMany({ where: { productId: product.id } });
+    expect(orderItems).toHaveLength(0);
+
+    const afterSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(afterSize.stock).toBe(beforeSize.stock);
+    const afterProduct = await prisma.product.findUnique({ where: { id: product.id } });
+    expect(afterProduct.totalStock).toBe(beforeProduct.totalStock);
+    expect(afterProduct.totalSold).toBe(beforeProduct.totalSold);
+  });
+
+  it('400s a zero quantity', async () => {
+    const product = await makeProduct({ name: 'ZeroQuantity' });
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product, { quantity: 0 }));
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('400s a fractional quantity', async () => {
+    const product = await makeProduct({ name: 'FractionalQuantity' });
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product, { quantity: 1.5 }));
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('400s a quantity above the MAX_ITEM_QUANTITY technical ceiling', async () => {
+    const product = await makeProduct({ name: 'ExcessiveQuantity' });
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product, { quantity: 1001 }));
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid multi-unit quantity, decrementing stock and pricing the subtotal correctly', async () => {
+    const product = await makeProduct({ name: 'ValidMultiUnit', sizes: { create: [{ size: 'M', stock: 10 }] } });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_valid_multi', redirectUrl: 'https://pay.example/chk_valid_multi' });
+
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product, { quantity: 3 }));
+    expect(res.status).toBe(201);
+
+    const size = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(size.stock).toBe(7); // 10 - 3
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.subtotal).toBe(1500); // 500 * 3
+  }, 15000);
+
+  it('merges duplicate (product, size, color) line items into a single reservation, priced and decremented exactly once for the combined quantity', async () => {
+    const product = await makeProduct({ name: 'DuplicateLineMerge', sizes: { create: [{ size: 'M', stock: 10 }] } });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_dup', redirectUrl: 'https://pay.example/chk_dup' });
+
+    const payload = validOrderPayload(product);
+    payload.items = [
+      { product: product.id, name: product.name, quantity: 2, size: 'M' },
+      { product: product.id, name: product.name, quantity: 3, size: 'M' },
+    ];
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(201);
+
+    const size = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(size.stock).toBe(5); // 10 - (2 + 3), one atomic reservation, not two racing partial ones
+
+    const order = await prisma.order.findUnique({
+      where: { orderNumber: res.body.data.orderNumber },
+      include: { items: true },
+    });
+    expect(order.items).toHaveLength(1); // merged into a single OrderItem row
+    expect(order.items[0].quantity).toBe(5);
+    expect(order.subtotal).toBe(2500); // 500 * 5, priced once as the merged quantity
+  }, 15000);
+
+  it('the exploit from the security investigation: pairing a real quantity with a same-variant negative-quantity line is rejected outright, with zero side effects', async () => {
+    const product = await makeProduct({ name: 'PoCNegativeOffset', sizes: { create: [{ size: 'M', stock: 10 }] } });
+    const beforeSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    const beforeProduct = await prisma.product.findUnique({ where: { id: product.id } });
+
+    const payload = validOrderPayload(product);
+    payload.items = [
+      { product: product.id, name: product.name, quantity: 1, size: 'M' },
+      { product: product.id, name: product.name, quantity: -1, size: 'M' },
+    ];
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+
+    const orderItems = await prisma.orderItem.findMany({ where: { productId: product.id } });
+    expect(orderItems).toHaveLength(0);
+
+    const afterSize = await prisma.productSize.findFirst({ where: { productId: product.id, size: 'M' } });
+    expect(afterSize.stock).toBe(beforeSize.stock);
+    const afterProduct = await prisma.product.findUnique({ where: { id: product.id } });
+    expect(afterProduct.totalStock).toBe(beforeProduct.totalStock);
+    expect(afterProduct.totalSold).toBe(beforeProduct.totalSold);
+  });
+
+  it('400s when merging duplicate lines pushes the combined quantity above MAX_ITEM_QUANTITY, even though each individual line was within bounds', async () => {
+    const product = await makeProduct({ name: 'DuplicateOverflow' });
+    const payload = validOrderPayload(product);
+    payload.items = [
+      { product: product.id, name: product.name, quantity: 600, size: 'M' },
+      { product: product.id, name: product.name, quantity: 600, size: 'M' },
+    ];
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
   it('computes the gateway fee for the chosen channel and folds it into total, subtotal + shippingFee - discount + fee', async () => {
     const product = await makeProduct({ name: 'GatewayFeeCard' });
@@ -379,6 +495,92 @@ describe('POST /orders — Pass (event admission) checkout, always separate from
     });
     expect(res.status).toBe(400);
   });
+
+  it.each([
+    ['negative number', -1],
+    ['zero', 0],
+    ['fractional number', 1.5],
+    ['numeric Infinity string', 'Infinity'],
+    ['numeric NaN string', 'NaN'],
+    ['JSON Infinity value', Infinity],
+    ['JSON NaN value', NaN],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+    ['capacity-exceeding safe integer', 1000000],
+  ])('rejects a %s Pass quantity before creating Passes, reserving capacity, or starting payment', async (_label, quantity) => {
+    const { tier } = await makePassFixture();
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier, quantity));
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+
+    const [updatedTier, passes] = await Promise.all([
+      prisma.passTier.findUnique({ where: { id: tier.id } }),
+      prisma.pass.findMany({ where: { passTierId: tier.id } }),
+    ]);
+    expect(updatedTier.sold).toBe(0);
+    expect(passes).toHaveLength(0);
+  }, 15000);
+
+  it('accepts a numeric string Pass quantity after parsing it to a safe integer', async () => {
+    const { tier } = await makePassFixture();
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_pass_string_quantity', redirectUrl: 'https://pay.example/chk_pass_string_quantity' });
+
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier, '2'));
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    const [updatedTier, passes] = await Promise.all([
+      prisma.passTier.findUnique({ where: { id: tier.id } }),
+      prisma.pass.findMany({ where: { orderId: order.id } }),
+    ]);
+    expect(updatedTier.sold).toBe(2);
+    expect(passes).toHaveLength(2);
+    expect(order.subtotal).toBe(600);
+  }, 15000);
+
+  it('defaults an omitted Pass quantity to one', async () => {
+    const { tier } = await makePassFixture();
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_pass_default_quantity', redirectUrl: 'https://pay.example/chk_pass_default_quantity' });
+
+    const payload = passOnlyPayload(tier);
+    delete payload.passes[0].quantity;
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(await prisma.pass.count({ where: { orderId: order.id } })).toBe(1);
+  }, 15000);
+
+  it('aggregates duplicate tier lines before the capacity pre-check', async () => {
+    const { tier } = await makePassFixture();
+    const payload = passOnlyPayload(tier, 3);
+    payload.passes.push({ passTierId: tier.id, quantity: 3 });
+
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(400);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+    expect((await prisma.passTier.findUnique({ where: { id: tier.id } })).sold).toBe(0);
+  }, 15000);
+
+  it('merges two positive same-tier lines into one reservation, sold/capacity updated exactly once for the combined quantity', async () => {
+    const { tier } = await makePassFixture();
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_pass_dup_pos', redirectUrl: 'https://pay.example/chk_pass_dup_pos' });
+
+    const payload = passOnlyPayload(tier, 2);
+    payload.passes.push({ passTierId: tier.id, quantity: 3 });
+
+    const res = await request(app).post('/api/orders').send(payload);
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    const [updatedTier, passes] = await Promise.all([
+      prisma.passTier.findUnique({ where: { id: tier.id } }),
+      prisma.pass.findMany({ where: { orderId: order.id } }),
+    ]);
+    expect(updatedTier.sold).toBe(5); // 2 + 3, aggregated once, not two racing decrements
+    expect(updatedTier.capacity).toBe(5);
+    expect(passes).toHaveLength(5); // one Pass per unit of the aggregated quantity
+    expect(order.subtotal).toBe(1500); // 300 * 5, priced once as the merged quantity
+  }, 15000);
 
   it('releasing a failed order\'s payment restores tier capacity and cancels the Pass, same trigger as stock release', async () => {
     const { tier } = await makePassFixture();
