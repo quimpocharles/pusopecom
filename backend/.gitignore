@@ -25,6 +25,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.omo/
 
 # Build files
 dist/
