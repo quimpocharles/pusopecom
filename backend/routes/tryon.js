@@ -2,13 +2,13 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import multer from 'multer';
-import axios from 'axios';
 import cloudinary from '../config/cloudinary.js';
 import { generateTryOn as replicateGenerateTryOn } from '../services/replicateService.js';
 import { generateTryOn as wavespeedGenerateTryOn } from '../services/wavespeedService.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as accountCache from '../lib/accountCache.js';
+import { assertSafeRemoteImageUrl } from '../lib/remoteImageGuard.js';
 import * as fitCheckQuota from '../lib/fitCheckQuota.js';
 import * as bonusFitCheckGrantRepository from '../repositories/bonusFitCheckGrantRepository.js';
 import * as fitCheckCampaignRepository from '../repositories/fitCheckCampaignRepository.js';
@@ -142,6 +142,14 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
   try {
     const { productImageUrl, productName, productId, sessionId } = req.body;
 
+    // A guest is identified only by this client-supplied sessionId, which is
+    // also the daily-quota key — binding it to a real UUID (the frontend's
+    // crypto.randomUUID()) keeps garbage/oversized strings out and gives the
+    // quota a stable key. Authenticated users ignore sessionId entirely.
+    if (!req.user && sessionId && !UUID_RE.test(sessionId)) {
+      return res.status(400).json({ success: false, message: 'Invalid session identifier' });
+    }
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -153,6 +161,17 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Product image URL is required'
+      });
+    }
+
+    // SSRF guard — reject non-Cloudinary URLs before consuming quota or
+    // making any provider call. The product garment image is fetched
+    // server-side (Replicate path), so an unvalidated client URL is a
+    // server-side request forgery primitive against internal services.
+    if (!assertSafeRemoteImageUrl(productImageUrl, { logger })) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only Cloudinary image URLs are allowed for Fit Check'
       });
     }
 
@@ -196,10 +215,10 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
 
     // Replicate is faster in practice, so it's the primary path whenever
     // it's configured — WaveSpeed only runs at all if Replicate isn't
-    // configured, or if a configured Replicate attempt actually throws
-    // (including its own product-image fetch below, which WaveSpeed
-    // doesn't need — WaveSpeed passes productImageUrl straight through and
-    // lets its own API fetch it).
+    // configured, or if a configured Replicate attempt actually throws.
+    // Both providers receive the vetted Cloudinary product image URL
+    // directly (Replicate accepts public HTTPS URLs for file inputs), so
+    // the server never downloads or re-encodes the garment image.
     async function attemptReplicate() {
       provider = 'replicate';
       // Mirrors WaveSpeed's own aiModel labeling below — replicateService.js
@@ -213,10 +232,8 @@ router.post('/', optionalAuth, upload.single('userImage'), async (req, res) => {
       costUsd = null;
 
       const userImageBase64 = req.file.buffer.toString('base64');
-      const productImageResponse = await axios.get(productImageUrl, { responseType: 'arraybuffer' });
-      const productImageBase64 = Buffer.from(productImageResponse.data).toString('base64');
 
-      return replicateGenerateTryOn(userImageBase64, productImageBase64, productName || 'clothing item');
+      return replicateGenerateTryOn(userImageBase64, productImageUrl, productName || 'clothing item');
     }
 
     async function attemptWaveSpeed() {

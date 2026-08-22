@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma.js';
 import { serialize } from './serialize.js';
+import { canonicalEmail } from '../lib/email.js';
 
 /**
  * Mongoose did three things invisibly here that Prisma has no built-in
@@ -65,7 +66,7 @@ export async function findById(id, { include = DEFAULT_INCLUDE, client = prisma 
 }
 
 export async function findByEmail(email, { include = DEFAULT_INCLUDE, client = prisma } = {}) {
-  const user = await client.user.findUnique({ where: { email: email.toLowerCase().trim() }, include });
+  const user = await client.user.findUnique({ where: { email: canonicalEmail(email) }, include });
   return serialize(user);
 }
 
@@ -82,7 +83,7 @@ export async function findByFacebookId(facebookId, { include = DEFAULT_INCLUDE, 
 /** Matches the Google OAuth route's `User.findOne({ $or: [{ googleId }, { email }] })`. */
 export async function findByGoogleIdOrEmail(googleId, email, { include = DEFAULT_INCLUDE, client = prisma } = {}) {
   const user = await client.user.findFirst({
-    where: { OR: [{ googleId }, { email: email.toLowerCase().trim() }] },
+    where: { OR: [{ googleId }, { email: canonicalEmail(email) }] },
     include,
   });
   return serialize(user);
@@ -144,12 +145,31 @@ export async function updateById(id, data, { include = DEFAULT_INCLUDE, client =
 // rest of this file, just applied to the transaction itself rather than a
 // single statement.
 
+// Mass-assignment guard: Address.create/update must never let a client
+// supply row-level fields it doesn't own (`id`, `userId`) or arbitrary
+// unknown columns. `isDefault` is a genuinely client-settable flag
+// (promoting a default), so it stays in the allowlist; the server forces
+// `userId` on create. Only these columns are ever written through.
+const ADDRESS_ALLOWED_FIELDS = [
+  'fullName', 'phone', 'country', 'address', 'city', 'province',
+  'region', 'barangay', 'zipCode', 'isDefault',
+];
+
+function pickAddressFields(input) {
+  const result = {};
+  for (const key of ADDRESS_ALLOWED_FIELDS) {
+    if (input[key] !== undefined) result[key] = input[key];
+  }
+  return result;
+}
+
 export async function addAddress(userId, addressData, { client } = {}) {
+  const data = pickAddressFields(addressData);
   const run = async (tx) => {
-    if (addressData.isDefault) {
+    if (data.isDefault) {
       await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
     }
-    await tx.address.create({ data: { ...addressData, userId } });
+    await tx.address.create({ data: { ...data, userId } });
   };
   client ? await run(client) : await prisma.$transaction(run);
   return findById(userId, { client });
@@ -159,11 +179,12 @@ export async function updateAddress(userId, addressId, updates, { client } = {})
   const owned = await (client ?? prisma).address.findFirst({ where: { id: addressId, userId } });
   if (!owned) return null;
 
+  const data = pickAddressFields(updates);
   const run = async (tx) => {
-    if (updates.isDefault) {
+    if (data.isDefault) {
       await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
     }
-    await tx.address.update({ where: { id: addressId }, data: updates });
+    await tx.address.update({ where: { id: addressId }, data });
   };
   client ? await run(client) : await prisma.$transaction(run);
   return findById(userId, { client });

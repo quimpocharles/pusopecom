@@ -319,6 +319,39 @@ describe('routes/auth.js', () => {
       expect(res.body.addresses[0].city).toBe('Makati City');
     }, 15000);
 
+    it('mass-assignment guard: a client-supplied id/userId/unknown field is stripped and never persisted', async () => {
+      const email = uniqueEmail('massassign');
+      await request(app).post('/api/auth/register').send({ email, password: 'password123', firstName: 'Mass', lastName: 'Assign' });
+      const verifyToken = emailService.sendVerificationEmail.mock.calls.at(-1)[2];
+      await request(app).get(`/api/auth/verify-email?token=${verifyToken}`);
+      const login = await request(app).post('/api/auth/login').send({ email, password: 'password123' });
+      const ownToken = login.body.token;
+
+      const createRes = await request(app).post('/api/auth/addresses').set('Authorization', `Bearer ${ownToken}`).send(address);
+      expect(createRes.status).toBe(200);
+      const existingId = createRes.body.addresses[0]._id;
+
+      const forged = {
+        city: 'Manila City',
+        id: '00000000-0000-0000-0000-000000000000',
+        userId: '00000000-0000-0000-0000-000000000001',
+        user: '00000000-0000-0000-0000-000000000001',
+        role: 'admin',
+        notARealColumn: 'x',
+      };
+
+      const res = await request(app)
+        .put(`/api/auth/addresses/${existingId}`)
+        .set('Authorization', `Bearer ${ownToken}`)
+        .send(forged);
+      expect(res.status).toBe(200);
+      const updated = res.body.addresses[0];
+      expect(updated.city).toBe('Manila City');
+      expect(updated._id).toBe(existingId); // id is server-controlled, not overridden
+      expect(updated).not.toHaveProperty('role');
+      expect(updated).not.toHaveProperty('notARealColumn');
+    }, 15000);
+
     it('DELETE /addresses/:id from a different user 404s, then the real owner can delete it', async () => {
       const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
       const addressId = me.body.user.addresses[0]._id;

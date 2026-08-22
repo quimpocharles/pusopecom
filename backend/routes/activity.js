@@ -59,7 +59,7 @@ router.post('/search', optionalAuth, async (req, res) => {
       userId: req.user?._id || null,
       sessionId: req.user ? null : (sessionId || null),
       type: 'search',
-      query: query.trim()
+      query: query.trim().slice(0, 200)
     });
 
     res.json({ success: true });

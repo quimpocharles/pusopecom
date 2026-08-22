@@ -54,7 +54,7 @@ const cancelPrediction = async (apiToken, predictionId) => {
   logger.warn({ predictionId }, 'Failed to cancel Replicate prediction after retries');
 };
 
-export const generateTryOn = async (userImageBase64, productImageBase64, productName) => {
+export const generateTryOn = async (userImageBase64, productImageUrl, productName) => {
   const apiToken = process.env.REPLICATE_API_TOKEN;
 
   if (!apiToken) {
@@ -65,14 +65,17 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
   let predictionId = null;
 
   try {
-    // Ensure base64 images have proper data URL prefix
+    // The garment image is a vetted public Cloudinary HTTPS URL, passed
+    // straight through — Replicate accepts public HTTP(S) URLs for file
+    // inputs (preferred for anything over 256kb, per its docs), so there's
+    // no need for the server to download and re-encode it. The person image
+    // is the fan's own uploaded photo: it stays a base64 data URI so it's
+    // never exposed through a public URL.
     const personImage = userImageBase64.startsWith('data:')
       ? userImageBase64
       : `data:image/jpeg;base64,${userImageBase64}`;
 
-    const garmentImage = productImageBase64.startsWith('data:')
-      ? productImageBase64
-      : `data:image/png;base64,${productImageBase64}`;
+    const garmentImage = productImageUrl;
 
     // Craft a detailed prompt for virtual try-on
     const prompt = buildTryOnPrompt(productName, {
@@ -109,8 +112,10 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
       throw new Error('Failed to start try-on generation');
     }
 
-    // Poll for completion — 30 attempts × 2s = 60s max, well above every
-    // model above's observed real-world worst case (~14s).
+    // Poll for completion — adaptive backoff from 1s up to a 2s ceiling, so
+    // fast completions are picked up promptly while still bounding status
+    // calls for slow generations. 30 attempts across the backoff window
+    // comfortably exceeds every model's observed worst case (~14s).
     const maxAttempts = 30;
     let attempts = 0;
 
@@ -143,9 +148,11 @@ export const generateTryOn = async (userImageBase64, productImageBase64, product
         throw new Error('Try-on generation was canceled');
       }
 
-      // Status is 'starting' or 'processing'
+      // Status is 'starting' or 'processing' — wait, then poll again.
+      // 1s early avoids leaving the user waiting on a fast generation; 2s
+      // keeps the status-call rate low once the model is clearly mid-run.
       attempts++;
-      await sleep(2000);
+      await sleep(attempts <= 3 ? 1000 : 2000);
     }
 
     // Timed out — cancel the prediction on Replicate before throwing

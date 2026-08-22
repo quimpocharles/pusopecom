@@ -7,6 +7,7 @@ import { body, validationResult } from 'express-validator';
 import * as userRepository from '../repositories/userRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
+import { canonicalEmail } from '../lib/email.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { authenticate, isAdmin, AUTH_INCLUDE, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
@@ -248,18 +249,10 @@ router.post('/resend-verification',
       const { email } = req.body;
 
       const user = await userRepository.findByEmail(email);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-
-      if (user.emailVerified) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email already verified'
-        });
+      if (!user || user.emailVerified) {
+        // Uniform response whether the account doesn't exist or is already
+        // verified — avoids confirming which emails exist on the platform.
+        return res.status(400).json({ success: false, message: 'If this email needs verification, a new verification email has been sent.' });
       }
 
       const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -495,7 +488,7 @@ router.post('/google', async (req, res) => {
     } else {
       // Create new user
       user = await userRepository.create({
-        email,
+        email: canonicalEmail(email),
         firstName: given_name || 'User',
         lastName: family_name || '',
         googleId,

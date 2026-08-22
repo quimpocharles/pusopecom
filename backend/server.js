@@ -160,12 +160,40 @@ const tryonGlobalLimiter = rateLimit({
 
 app.use('/api/tryon', tryonGlobalLimiter);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Server is running',
-    timestamp: new Date().toISOString()
+// Readiness probe — verifies the dependencies a request actually needs
+// before reporting the process as healthy, so a load balancer / Railway
+// health check can't keep routing traffic to an instance that can't serve
+// it. POSTGRES is checked on every call (cheap `SELECT 1`); Redis is
+// optional, so it's only probed when REDIS_URL is configured. Returns 503
+// with a non-sensitive `status` when a critical dependency is unavailable.
+// A 200 means "ready", not merely "the Node process is alive" — that's the
+// distinction a readiness probe exists to provide.
+app.get('/health', async (req, res) => {
+  const checks = { postgres: 'ok' };
+  let ready = true;
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    checks.postgres = 'down';
+    ready = false;
+  }
+
+  if (redis) {
+    try {
+      await redis.ping();
+      checks.redis = 'ok';
+    } catch (error) {
+      checks.redis = 'down';
+      ready = false;
+    }
+  }
+
+  res.status(ready ? 200 : 503).json({
+    success: ready,
+    status: ready ? 'ok' : 'degraded',
+    checks,
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -409,6 +437,9 @@ cron.schedule('0 3 * * *', async () => {
 // mongoose entirely.)
 const PORT = process.env.PORT || 5000;
 
+let server;
+let shuttingDown = false;
+
 async function start() {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -420,7 +451,7 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     logger.info({ port: PORT, environment: process.env.NODE_ENV || 'development' }, 'Server is running');
   });
 }
@@ -443,19 +474,36 @@ process.on('unhandledRejection', async (reason) => {
   process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  await prisma.$disconnect();
-  if (redis) redis.disconnect();
-  process.exit(0);
-});
+// Graceful shutdown. `server.close()` stops accepting new connections and
+// lets in-flight requests finish (it does not disconnect established
+// keep-alive sockets that are idle — `server.closeIdleConnections()` trims
+// those), and `cron` is not itself awaitable, so we stop the scheduled jobs
+// first, then drain the HTTP server, then release the DB/Redis handles, then
+// exit. Without this ordering an in-flight checkout/payment request or an
+// hourly stock-release sweep is killed mid-transaction on a Railway
+// SIGTERM (the normal deploy/scale-down signal).
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, 'Starting graceful shutdown');
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT signal received: closing HTTP server');
+  cron.getTasks().forEach((task) => task.stop());
+
+  if (server) {
+    await new Promise((resolve) => {
+      server.close(resolve);
+      server.closeIdleConnections?.();
+    });
+  }
+
   await prisma.$disconnect();
   if (redis) redis.disconnect();
+
+  logger.info('Shutdown complete');
   process.exit(0);
-});
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

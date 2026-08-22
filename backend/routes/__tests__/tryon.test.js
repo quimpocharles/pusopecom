@@ -116,13 +116,30 @@ async function waitForLog(productName) {
 
 describe('POST /tryon — validation', () => {
   it('400s when no image file is attached', async () => {
-    const res = await request(app).post('/api/tryon').field('productImageUrl', 'https://example.com/p.jpg');
+    const res = await request(app).post('/api/tryon').field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg');
     expect(res.status).toBe(400);
   });
 
   it('400s when productImageUrl is missing', async () => {
     const res = await request(app).post('/api/tryon').attach('userImage', png, 'me.png');
     expect(res.status).toBe(400);
+  });
+
+  it('400s a non-Cloudinary productImageUrl before any provider is called (SSRF guard)', async () => {
+    // The SSRF guard sits in the Replicate path; force Replicate primary so
+    // the redirect URL is actually validated before any provider call.
+    process.env.REPLICATE_API_TOKEN = 'token';
+    delete process.env.WAVESPEED_API_KEY;
+
+    const res = await request(app)
+      .post('/api/tryon')
+      .field('productImageUrl', 'https://169.254.169.254/latest/meta-data/')
+      .field('productName', uniqueName('ssrf'))
+      .attach('userImage', png, 'me.png');
+    expect(res.status).toBe(400);
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(replicateService.generateTryOn).not.toHaveBeenCalled();
+    expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
   });
 });
 
@@ -153,7 +170,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .field('productId', product.id)
       .attach('userImage', png, 'me.png');
@@ -187,7 +204,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .field('productId', 'not-a-real-uuid')
       .attach('userImage', png, 'me.png');
@@ -203,7 +220,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
     expect(res.status).toBe(422);
@@ -223,7 +240,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
     expect(res.status).toBe(500);
@@ -241,7 +258,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
@@ -257,7 +274,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
@@ -279,7 +296,7 @@ describe('POST /tryon — WaveSpeed path', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
     expect(res.status).toBe(200); // the live response to the user is unaffected — upload is fire-and-forget
@@ -303,19 +320,24 @@ describe('POST /tryon — Replicate path (primary; REPLICATE_API_TOKEN set, no W
   });
 
   it('fetches the product image, calls the Replicate service, and logs provider "replicate" with its aiModel', async () => {
-    axios.get.mockResolvedValueOnce({ data: png });
     replicateService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
     const productName = uniqueName('replicate-path');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
     expect(res.status).toBe(200);
     expect(wavespeedService.generateTryOn).not.toHaveBeenCalled();
     expect(replicateService.generateTryOn).toHaveBeenCalled();
+    // The garment is handed to Replicate as the vetted Cloudinary HTTPS URL
+    // (no server download/re-encode); the person photo stays a data URI.
+    const replicateArgs = replicateService.generateTryOn.mock.calls[0];
+    expect(replicateArgs[0]).toBe(png.toString('base64'));
+    expect(replicateArgs[1]).toBe('https://res.cloudinary.com/demo/image/upload/v1/p.jpg');
+    expect(replicateArgs[2]).toBe(productName);
 
     const log = await waitForLog(productName);
     expect(log.provider).toBe('replicate');
@@ -332,13 +354,13 @@ describe('POST /tryon — Replicate path (primary; REPLICATE_API_TOKEN set, no W
     expect(log.generatedImageUrl).toBe('https://res.cloudinary.com/test/puso-shop/tryon-results/fake.jpg');
   }, 15000);
 
-  it('500s when the product image cannot be fetched and no WaveSpeed fallback is configured, logging provider "replicate"', async () => {
-    axios.get.mockRejectedValueOnce(new Error('network error'));
-    const productName = uniqueName('replicate-fetch-fails');
+  it('500s and logs provider "replicate" when Replicate itself fails and no WaveSpeed fallback is configured', async () => {
+    replicateService.generateTryOn.mockRejectedValueOnce(new Error('Replicate inference failed'));
+    const productName = uniqueName('replicate-fails');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
     expect(res.status).toBe(500);
@@ -359,13 +381,12 @@ describe('POST /tryon — Replicate-primary, WaveSpeed-fallback', () => {
   afterEach(() => { delete process.env.REPLICATE_API_TOKEN; });
 
   it('tries Replicate first and never touches WaveSpeed when Replicate succeeds', async () => {
-    axios.get.mockResolvedValueOnce({ data: png });
     replicateService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
     const productName = uniqueName('replicate-wins');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
@@ -377,14 +398,13 @@ describe('POST /tryon — Replicate-primary, WaveSpeed-fallback', () => {
   }, 15000);
 
   it('falls back to WaveSpeed and logs provider "wavespeed" when Replicate throws', async () => {
-    axios.get.mockResolvedValueOnce({ data: png });
     replicateService.generateTryOn.mockRejectedValueOnce(new Error('Replicate is down'));
     wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
     const productName = uniqueName('falls-back-to-wavespeed');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
@@ -399,33 +419,34 @@ describe('POST /tryon — Replicate-primary, WaveSpeed-fallback', () => {
     expect(log.aiModel).toBe('nano-banana-2');
   }, 15000);
 
-  it('falls back to WaveSpeed when fetching the product image for Replicate fails (WaveSpeed needs no local fetch)', async () => {
-    axios.get.mockRejectedValueOnce(new Error('network error'));
-    wavespeedService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
-    const productName = uniqueName('image-fetch-falls-back');
+  it('passes the vetted Cloudinary garment URL straight to Replicate without downloading it server-side', async () => {
+    replicateService.generateTryOn.mockResolvedValueOnce({ success: true, image: 'data:image/png;base64,xyz' });
+    const productName = uniqueName('no-image-fetch');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
     expect(res.status).toBe(200);
-    expect(wavespeedService.generateTryOn).toHaveBeenCalled();
-
-    const log = await waitForLog(productName);
-    expect(log.provider).toBe('wavespeed');
+    expect(replicateService.generateTryOn).toHaveBeenCalled();
+    // No server-side fetch of the garment image — Replicate gets the URL.
+    expect(axios.get).not.toHaveBeenCalled();
+    const replicateArgs = replicateService.generateTryOn.mock.calls[0];
+    expect(replicateArgs[1]).toBe('https://res.cloudinary.com/demo/image/upload/v1/p.jpg');
+    // The user's own photo is still passed as a data URI, never a public URL.
+    expect(replicateArgs[0]).toBe(png.toString('base64'));
   }, 15000);
 
   it('500s and logs provider "wavespeed" when both Replicate and the WaveSpeed fallback fail', async () => {
-    axios.get.mockResolvedValueOnce({ data: png });
     replicateService.generateTryOn.mockRejectedValueOnce(new Error('Replicate is down'));
     wavespeedService.generateTryOn.mockRejectedValueOnce(new Error('WaveSpeed is also down'));
     const productName = uniqueName('both-fail');
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', productName)
       .attach('userImage', png, 'me.png');
 
@@ -448,7 +469,7 @@ describe('POST /tryon — neither provider configured', () => {
   it('500s with a clear config error and never calls either service', async () => {
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', uniqueName('no-provider'))
       .attach('userImage', png, 'me.png');
 
@@ -471,7 +492,7 @@ describe('POST /tryon — daily allowance', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', uniqueName('quota-exceeded'))
       .attach('userImage', png, 'me.png');
 
@@ -485,13 +506,13 @@ describe('POST /tryon — daily allowance', () => {
 
     await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', uniqueName('guest-quota'))
-      .field('sessionId', 'test-guest-session-123')
+      .field('sessionId', '123e4567-e89b-12d3-a456-426614174000')
       .attach('userImage', png, 'me.png');
 
     expect(fitCheckQuota.consume).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: undefined, sessionId: 'test-guest-session-123' })
+      expect.objectContaining({ userId: undefined, sessionId: '123e4567-e89b-12d3-a456-426614174000' })
     );
   });
 });
@@ -571,7 +592,7 @@ describe('POST /tryon — sponsored campaigns (Phase 3)', () => {
 
     const res = await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productId', product.id)
       .field('productName', product.name)
       .attach('userImage', png, 'me.png');
@@ -594,7 +615,7 @@ describe('POST /tryon — sponsored campaigns (Phase 3)', () => {
 
     await request(app)
       .post('/api/tryon')
-      .field('productImageUrl', 'https://example.com/p.jpg')
+      .field('productImageUrl', 'https://res.cloudinary.com/demo/image/upload/v1/p.jpg')
       .field('productName', uniqueName('unsponsored'))
       .attach('userImage', png, 'me.png');
 
