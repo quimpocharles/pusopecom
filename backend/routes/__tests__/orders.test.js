@@ -794,6 +794,36 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
     expect(order.orderStatus).toBe('paid');
   }, 15000);
 
+  it('a duplicate token-verified payment_session.completed webhook is idempotent — one shipment, one confirmation email', async () => {
+    const product = await makeProduct({ name: 'XenditDuplicate' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xdup', redirectUrl: 'https://pay.example/chk_xdup' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+
+    const send = () => request(app)
+      .post('/api/orders/webhooks/xendit')
+      .set('x-callback-token', 'test-xendit-webhook-token')
+      .send({ event: 'payment_session.completed', data: { reference_id: orderNumber } });
+
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200); // Maya/Xendit retry/delivery duplicate
+
+    // tryResolvePayment only transitions from 'pending', so a re-delivery is a no-op.
+    const afterOrder = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(afterOrder.paymentStatus).toBe('paid');
+
+    const [shipments, shipmentsEvents] = await Promise.all([
+      prisma.shipment.count({ where: { orderId: order.id } }),
+      prisma.shipmentEvent.count({ where: { shipment: { orderId: order.id } } }),
+    ]);
+    expect(shipments).toBe(1); // not one per duplicate webhook
+    expect(shipmentsEvents).toBe(1);
+
+    // Confirmation email sent exactly once — the second delivery does not re-send.
+    expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
+  }, 20000);
+
   it('a payment_session.expired event marks the order failed and restores stock', async () => {
     const product = await makeProduct({ name: 'XenditExpired' });
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xexp', redirectUrl: 'https://pay.example/chk_xexp' });

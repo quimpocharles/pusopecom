@@ -8,6 +8,7 @@ import { RedisStore } from 'rate-limit-redis';
 import cron from 'node-cron';
 import pinoHttp from 'pino-http';
 import logger from './lib/logger.js';
+import { validateProductionConfig } from './lib/productionConfig.js';
 import prisma from './lib/prisma.js';
 import redis from './lib/redis.js';
 import * as productRepository from './repositories/productRepository.js';
@@ -81,12 +82,17 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration
-// Temporarily allows both localhost:5173 (what you actually browse) and
-// FRONTEND_URL (currently an ngrok tunnel, needed only because Xendit
-// requires an HTTPS success/cancel return URL) — collapse back to a single
-// origin once local Xendit testing is done and FRONTEND_URL reverts.
-const corsOrigins = [...new Set(['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean))];
+// CORS configuration. In development we allow the local vite dev origin
+// (http://localhost:5173) alongside FRONTEND_URL (which may be a temporary
+// ngrok tunnel for Xendit's HTTPS return URL). In production localhost is
+// intentionally NOT allowed — only the configured FRONTEND_URL origin(s).
+// Never add localhost to a production allowlist; if mail.pusostore.com ever
+// needs to call this API from its own origin, add it as an explicit
+// production origin (and to FRONTEND_URL) rather than re-opening localhost.
+const isProduction = process.env.NODE_ENV === 'production';
+const corsOrigins = isProduction
+  ? [...new Set([process.env.FRONTEND_URL].filter(Boolean))]
+  : [...new Set(['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean))];
 app.use(cors({
   origin: corsOrigins,
   credentials: true
@@ -441,6 +447,17 @@ let server;
 let shuttingDown = false;
 
 async function start() {
+  try {
+    // Fail fast on missing required production config BEFORE touching the DB
+    // or binding the port. Throws with variable NAMES only (never values).
+    validateProductionConfig();
+  } catch (configError) {
+    logger.fatal({ err: configError, missing: configError.missing }, 'Missing required production configuration');
+    Sentry.captureException(configError);
+    await Sentry.close(2000);
+    process.exit(1);
+  }
+
   try {
     await prisma.$queryRaw`SELECT 1`;
     logger.info('Connected to PostgreSQL');

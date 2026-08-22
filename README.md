@@ -586,6 +586,35 @@ Deploys are gated on CI: `.github/workflows/ci.yml` runs the backend and fronten
 6. Add `DATABASE_URL` as a GitHub Actions secret too (repo Settings → Secrets and variables → Actions → Secrets tab → Repository secrets) so CI can run the backend suite
 7. **After changing any environment variable, redeploy — a restart alone does not pick up the new value**
 
+#### Prisma migrations
+
+Migrations are applied automatically by the `prestart` npm hook: `prestart` runs `prisma migrate deploy` before `node server.js` starts. `package.json`'s `start` script is `node server.js`, and npm runs `prestart` before `start` on every deploy, so a fresh deployment always applies pending migrations before the server accepts traffic. `prisma migrate deploy` is idempotent and transactional — it only applies migrations not yet in the `_prisma_migrations` table, and a concurrent run is safe.
+
+For this to work:
+
+- **Deploy start command must be `npm start`** (keep Railway's default Node start command; do not point it at `node server.js` directly, which would skip `prestart`).
+- **The `prisma` CLI must be present in the installed dependencies on Railway.** It is currently a `devDependency`. Railway's Node/Nixpacks build runs `npm install` (installing devDependencies) by default, so the CLI is present. If you configure Railway with `npm install --omit=dev` (or `NODE_ENV=production` before install), the `prisma` CLI would be pruned and `prestart` would fail — in that case, ensure the build installs devDependencies, or move `prisma` to `dependencies`.
+- Railway deploys as a **single instance** by default; do not scale the backend to multiple replicas without adding a job-leader mechanism (see the scheduled-jobs note below), since the in-process `node-cron` jobs would otherwise run once per replica.
+
+Verify after a deploy with `npx prisma migrate status` — it should report "Database schema is up to date!".
+
+#### Scheduled jobs & scaling (single-instance required)
+
+The backend runs its scheduled jobs **in-process** (node-cron, registered at module load in `server.js`), so the backend must be deployed as **exactly one Railway instance**. Do not scale the backend to multiple replicas without a job-leader mechanism — the in-process jobs would otherwise run once per replica.
+
+Job-by-job duplicate-execution safety (single instance is required; these are the current guarantees):
+
+| Job (cron) | Idempotent under a re-run? |
+|---|---|
+| Daily/Weekly/Monthly/Quarterly business reports (`0 5 ...`) | **No** — `archiveRun` creates a `ReportRun` blindly; a re-run (or multi-instance) duplicates the report email and archive row. Manual regenerate via Admin > Reports is intentional and separate. |
+| `expireStaleOrders` (`0 * * * *`) | Yes — `tryResolvePayment` only transitions from `paymentStatus='pending'`. |
+| `sendPaymentReminders` (`5 * * * *`) | Yes — tracks `paymentReminderTiers`. |
+| `sweepFulfillmentSLA` (`10 * * * *`) | Yes — atomic `fromStatus` guard on transition. |
+| `sendRefundReminders` (`15 * * * *`) | Yes — deduped per refund per staffer. |
+| TryOnLog/UserActivity cleanup (`0 3 * * *`) | Yes — idempotent `deleteOlderThan`. |
+
+If you ever need >1 backend instance, either (a) move these jobs to a dedicated single job worker, or (b) add a distributed lock. Not done here — it would add infrastructure for a deployment that is single-instance today.
+
 ### Frontend Deployment (Vercel / Netlify)
 
 1. Set `VITE_API_URL` to your backend URL

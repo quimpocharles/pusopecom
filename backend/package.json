@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "prestart": "prisma migrate deploy",
     "dev": "nodemon server.js",
     "test": "vitest run",
     "test:watch": "vitest",

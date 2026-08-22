@@ -3,7 +3,7 @@ import axios from 'axios';
 
 vi.mock('axios');
 
-const { createCheckoutSession, getPaymentStatus } = await import('../xenditGateway.js');
+const { createCheckoutSession, getPaymentStatus, issueRefund } = await import('../xenditGateway.js');
 
 function makeOrder(overrides = {}) {
   return {
@@ -93,5 +93,34 @@ describe('xenditGateway.getPaymentStatus', () => {
     axios.get.mockResolvedValueOnce({ data: { status: 'ACTIVE' } });
     const result = await getPaymentStatus('sess_1');
     expect(result.status).toBe('pending');
+  });
+});
+
+// Provider-independent: axios is mocked, so this verifies how PusoStore maps
+// Xendit's raw refund response without a live call.
+describe('xenditGateway.issueRefund', () => {
+  it('normalizes a SUCCEEDED refund response to succeeded and returns the provider reference', async () => {
+    axios.post.mockResolvedValueOnce({ data: { id: 'refund-x1', status: 'SUCCEEDED' } });
+    const r = await issueRefund('pay-1', 500, 'REQUESTED_BY_CUSTOMER');
+    expect(r).toMatchObject({ providerRefundReference: 'refund-x1', status: 'succeeded' });
+  });
+
+  it('treats a non-terminal refund status as processing and maps an unknown reason to the customer default', async () => {
+    axios.post.mockResolvedValueOnce({ data: { id: 'refund-x2', status: 'PENDING' } });
+    const r = await issueRefund('pay-1', 500, 'SOME_UNKNOWN_REASON');
+    expect(r.status).toBe('processing');
+    // Unknown reason falls back to REQUESTED_BY_CUSTOMER (same default as Maya).
+    const body = axios.post.mock.calls[0][1];
+    expect(body.reason).toBe('REQUESTED_BY_CUSTOMER');
+  });
+
+  it('sends a unique reference_id per refund attempt', async () => {
+    axios.post
+      .mockResolvedValueOnce({ data: { id: 'r1', status: 'SUCCEEDED' } })
+      .mockResolvedValueOnce({ data: { id: 'r2', status: 'SUCCEEDED' } });
+    await issueRefund('pay-1', 500, 'REQUESTED_BY_CUSTOMER');
+    await issueRefund('pay-1', 500, 'REQUESTED_BY_CUSTOMER');
+    const [first, second] = axios.post.mock.calls.map((c) => c[1].reference_id);
+    expect(first).not.toBe(second);
   });
 });
