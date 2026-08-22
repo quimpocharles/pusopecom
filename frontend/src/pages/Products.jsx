@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { XMarkIcon, ChevronDownIcon, MagnifyingGlassIcon, EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
 import ProductCard from '../components/products/ProductCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import ProductCardSkeleton from '../components/products/ProductCardSkeleton';
 import Pagination from '../components/ui/Pagination';
 import useCartStore from '../store/cartStore';
 import productService from '../services/productService';
@@ -497,8 +497,10 @@ const Products = () => {
 
         {/* Products Grid */}
         {loading ? (
-          <div className="flex justify-center py-20">
-            <LoadingSpinner />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6" aria-busy="true" aria-label="Loading products">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
           </div>
         ) : products.length > 0 ? (
           <>

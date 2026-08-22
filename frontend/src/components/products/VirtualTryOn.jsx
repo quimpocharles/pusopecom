@@ -32,8 +32,6 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   const [userImage, setUserImage] = useState(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState('');
   const [ad, setAd] = useState({ videoUrl: '', buttonText: 'Visit Playtime.ph', buttonUrl: 'https://www.playtime.ph/' });
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
@@ -49,6 +47,9 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
   // ready. Generation itself is unaffected either way; this is purely
   // what's on screen while it's running.
   const [showAdOverlay, setShowAdOverlay] = useState(false);
+  // Blurred-preview-after-30s flag: shown during a long wait so the fan sees
+  // their own photo blurred (not a bare spinner) while the provider runs.
+  const [showPreview, setShowPreview] = useState(false);
 
   // Acquisition flow state — everything before an image is handed to
   // handleGenerate().
@@ -109,25 +110,11 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  // Simulate progress during loading
-  useEffect(() => {
-    let interval;
-    if (loading) {
-      setLoadingProgress(0);
-      interval = setInterval(() => {
-        setLoadingProgress(prev => {
-          if (prev < 30) return prev + 3;
-          if (prev < 60) return prev + 2;
-          if (prev < 85) return prev + 1;
-          if (prev < 95) return prev + 0.5;
-          return prev;
-        });
-      }, 500);
-    } else {
-      setLoadingProgress(100);
-    }
-    return () => clearInterval(interval);
-  }, [loading]);
+  // The provider call is a single synchronous request — the backend only
+  // exposes "pending" (no queued/percent progress), so the UI shows an
+  // honest indeterminate indicator instead of a fabricated percentage. We
+  // used to simulate a progress number that crept to 95% and stalled; that
+  // implied real progress the backend cannot report, so it was removed.
 
   // ── Acquisition handlers ──────────────────────────────────────────
 
@@ -300,33 +287,19 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
             </div>
           ) : (
           <div className="flex-none flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-4 h-36">
-            <div className="relative w-20 h-20 mb-2">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="50%" cy="50%" r="45%" stroke="#e5e7eb" strokeWidth="8" fill="none" />
-                <circle
-                  cx="50%"
-                  cy="50%"
-                  r="45%"
-                  stroke="url(#progressGradient)"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray="283"
-                  strokeDashoffset={283 * (1 - loadingProgress / 100)}
-                  className="transition-all duration-500"
-                />
+            <div className="relative w-20 h-20 mb-2 animate-spin">
+              <svg className="w-full h-full" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="#e5e7eb" strokeWidth="3" fill="none" />
+                <path d="M12 2 a10 10 0 0 1 10 10" stroke="url(#tryonGradient)" strokeWidth="3" fill="none" strokeLinecap="round" />
                 <defs>
-                  <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <linearGradient id="tryonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#7c3aed" />
                     <stop offset="100%" stopColor="#ec4899" />
                   </linearGradient>
                 </defs>
               </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-gray-800">{Math.round(loadingProgress)}%</span>
-              </div>
             </div>
-            <p className="text-gray-700 font-medium text-sm">Creating your look...</p>
+            <p className="text-gray-700 font-medium text-sm">Creating your look…</p>
           </div>
           )}
 
@@ -491,7 +464,7 @@ const VirtualTryOn = ({ product, isOpen, onClose }) => {
 
           <div className="absolute bottom-5 inset-x-0 flex justify-center">
             <p className="text-white/90 text-sm font-medium drop-shadow">
-              Creating your look… {Math.round(loadingProgress)}%
+              Creating your look…
             </p>
           </div>
         </div>

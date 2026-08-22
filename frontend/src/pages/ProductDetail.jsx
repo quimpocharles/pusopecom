@@ -12,7 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 import Layout from '../components/layout/Layout';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import ProductDetailSkeleton from '../components/products/ProductDetailSkeleton';
 import VirtualTryOn from '../components/products/VirtualTryOn';
 import ShareButton from '../components/products/ShareButton';
 import { TRYON_PRIMARY_BTN } from '../components/products/tryOn/tryOnButtonStyles';
@@ -324,7 +324,7 @@ const ProductDetail = () => {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center py-20"><LoadingSpinner /></div>
+        <ProductDetailSkeleton />
       </Layout>
     );
   }

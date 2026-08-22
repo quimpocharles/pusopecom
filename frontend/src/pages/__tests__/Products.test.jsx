@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Products from '../Products';
+import productService from '../../services/productService';
 
 // Layout pulls in Header/Footer/CartDrawer/QuickAddModal/AnnouncementBar,
 // each with their own store dependencies unrelated to this test — passthrough.
 vi.mock('../../components/layout/Layout', () => ({ default: ({ children }) => <div>{children}</div> }));
 vi.mock('../../components/common/SEO', () => ({ default: () => null }));
 vi.mock('../../components/products/ProductCard', () => ({ default: () => <div>card</div> }));
+vi.mock('../../components/products/ProductCardSkeleton', () => ({ default: () => <div data-testid="card-skeleton" /> }));
 vi.mock('../../components/ui/Pagination', () => ({ default: () => null }));
 vi.mock('../../components/common/LoadingSpinner', () => ({ default: () => <div>loading</div> }));
 
@@ -140,5 +142,22 @@ describe('Products — top tabs are global collection navigation', () => {
     // The search box auto-opens (URL has ?search=) and the input reflects it.
     const input = await screen.findByLabelText(/Search products/i);
     expect(input).toHaveValue('jersey');
+  });
+
+  it('shows a skeleton card grid (not a blank page) while products are loading', async () => {
+    // Hold the products request open so the grid stays in its loading state.
+    vi.mocked(productService.getProducts).mockImplementationOnce(() => new Promise(() => {}));
+
+    render(
+      <MemoryRouter initialEntries={['/products']}>
+        <Routes><Route path="/products" element={<Products />} /></Routes>
+      </MemoryRouter>
+    );
+
+    // The top tabs render immediately, and the grid shows skeletons —
+    // an immediate, stable structure rather than a blank page + spinner.
+    await waitFor(() => expect(screen.getByTestId('product-top-tabs')).toBeInTheDocument());
+    const skeletons = screen.getAllByTestId('card-skeleton');
+    expect(skeletons.length).toBe(8); // matches the rendered grid count
   });
 });
