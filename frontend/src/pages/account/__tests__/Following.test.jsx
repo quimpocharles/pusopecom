@@ -39,7 +39,7 @@ describe('Following — kind-aware shop links', () => {
     await renderFollowing([
       { _id: 'f1', organization: { _id: 'o1', name: 'UAAP', kind: 'league' } },
     ]);
-    const link = screen.getByRole('link', { name: 'UAAP' });
+    const link = await screen.findByRole('link', { name: 'UAAP' });
     expect(link.getAttribute('href')).toBe('/products?league=UAAP');
   });
 
@@ -47,7 +47,7 @@ describe('Following — kind-aware shop links', () => {
     await renderFollowing([
       { _id: 'f4', organization: { _id: 'o4', name: 'Team Pilipinas', kind: 'league' } },
     ]);
-    const link = screen.getByRole('link', { name: 'Team Pilipinas' });
+    const link = await screen.findByRole('link', { name: 'Team Pilipinas' });
     expect(link.getAttribute('href')).toBe('/products?league=Team%20Pilipinas');
   });
 
@@ -55,7 +55,7 @@ describe('Following — kind-aware shop links', () => {
     await renderFollowing([
       { _id: 'f2', organization: { _id: 'o2', name: 'Gilas Pilipinas', kind: 'institution' } },
     ]);
-    const link = screen.getByRole('link', { name: 'Gilas Pilipinas' });
+    const link = await screen.findByRole('link', { name: 'Gilas Pilipinas' });
     expect(link.getAttribute('href')).toBe('/products?team=Gilas%20Pilipinas');
   });
 
@@ -63,7 +63,7 @@ describe('Following — kind-aware shop links', () => {
     await renderFollowing([
       { _id: 'f3', organization: { _id: 'o3', name: 'Carlos Yulo', kind: 'athlete' } },
     ]);
-    const link = screen.getByRole('link', { name: 'Carlos Yulo' });
+    const link = await screen.findByRole('link', { name: 'Carlos Yulo' });
     expect(link.getAttribute('href')).toBe('/products');
   });
 });
