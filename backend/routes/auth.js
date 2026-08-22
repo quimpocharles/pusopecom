@@ -7,6 +7,7 @@ import { body, validationResult } from 'express-validator';
 import * as userRepository from '../repositories/userRepository.js';
 import * as tryOnLogRepository from '../repositories/tryOnLogRepository.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
+import { normalizePagination } from '../lib/pagination.js';
 import { canonicalEmail } from '../lib/email.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { authenticate, isAdmin, AUTH_INCLUDE, requirePermission } from '../middleware/auth.js';
@@ -656,8 +657,6 @@ router.get('/admin/users',
   async (req, res) => {
     try {
       const {
-        page = 1,
-        limit = 20,
         search,
         role
       } = req.query;
@@ -672,14 +671,14 @@ router.get('/admin/users',
         ];
       }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page, limit, skip } = normalizePagination(req.query, 20);
 
       const [users, total] = await Promise.all([
         userRepository.find({
           where,
           orderBy: { createdAt: 'desc' },
           skip,
-          take: Number(limit)
+          take: limit
           // addresses come back too, via find()'s default include — matches
           // the original, which never excluded them (they were embedded).
         }),
@@ -690,10 +689,10 @@ router.get('/admin/users',
         success: true,
         data: users.map(userRepository.sanitize),
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page,
+          limit,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limit)
         }
       });
     } catch (error) {

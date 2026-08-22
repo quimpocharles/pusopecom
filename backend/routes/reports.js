@@ -12,6 +12,7 @@ import * as dashboardWidgetRepository from '../repositories/dashboardWidgetRepos
 import * as paymentRepository from '../repositories/paymentRepository.js';
 import { sendReportExport } from '../lib/reportExport.js';
 import { getDateFilter, getGranularity, dateKey, groupBy, sortByDateKey, exportFormat } from '../lib/reportQueryHelpers.js';
+import { normalizePagination } from '../lib/pagination.js';
 import { computeSalesReport, salesReportToExportShape } from '../services/reportQueries/sales.js';
 import { computeProductsReport, productsReportToExportShape } from '../services/reportQueries/products.js';
 import { computeOrdersReport } from '../services/reportQueries/orders.js';
@@ -131,14 +132,14 @@ router.delete('/recipients/:id', async (req, res) => {
 
 router.get('/archive', async (req, res) => {
   try {
-    const { page = 1, limit = 20, type, status } = req.query;
+    const { type, status } = req.query;
     const where = {};
     if (type) where.type = type;
     if (status) where.status = status;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { page, limit, skip } = normalizePagination(req.query, 20);
 
     const [runs, total] = await Promise.all([
-      reportRunRepository.find({ where, skip, take: Number(limit) }),
+      reportRunRepository.find({ where, skip, take: limit }),
       reportRunRepository.count({ where }),
     ]);
     // `data` can be a sizeable JSON blob — the list view only needs enough
@@ -148,7 +149,7 @@ router.get('/archive', async (req, res) => {
     res.json({
       success: true,
       data: summaries,
-      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (error) {
     logger.error({ err: error }, 'List report archive error');

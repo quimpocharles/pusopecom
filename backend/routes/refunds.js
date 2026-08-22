@@ -9,6 +9,7 @@ import * as notificationRepository from '../repositories/notificationRepository.
 import * as paymentService from '../services/paymentService.js';
 import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
+import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
 router.use(authenticate, isAdmin);
@@ -23,14 +24,14 @@ router.use(authenticate, isAdmin);
 
 router.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
     const where = status ? { status } : undefined;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { page, limit, skip } = normalizePagination(req.query, 20);
     const [rows, total] = await Promise.all([
-      refundRepository.find({ where, skip, take: Number(limit) }),
+      refundRepository.find({ where, skip, take: limit }),
       refundRepository.count({ where }),
     ]);
-    res.json({ success: true, data: rows, pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) } });
+    res.json({ success: true, data: rows, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     logger.error({ err: error }, 'List refunds error');
     Sentry.captureException(error);

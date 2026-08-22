@@ -402,6 +402,22 @@ const ProductDetail = () => {
               </Link>
             </>
           )}
+          {product.league && (
+            <>
+              <ChevronRightIcon className="w-3 h-3" />
+              <Link to={`/products?league=${encodeURIComponent(product.league)}`} className="hover:text-gray-600">
+                {product.league}
+              </Link>
+            </>
+          )}
+          {product.team && (
+            <>
+              <ChevronRightIcon className="w-3 h-3" />
+              <Link to={`/products?team=${encodeURIComponent(product.team)}`} className="hover:text-gray-600">
+                {product.team}
+              </Link>
+            </>
+          )}
           <ChevronRightIcon className="w-3 h-3" />
           <span className="text-gray-600 truncate">{toTitleCase(product.name)}</span>
         </nav>

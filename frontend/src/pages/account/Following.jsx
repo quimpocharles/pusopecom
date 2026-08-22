@@ -68,21 +68,35 @@ const Following = () => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {items.map((item) => (
+        {items.map((item) => {
+          // A followed Organization is a League, an institution (team/school),
+          // or an individual athlete. The product listing only filters by the
+          // free-text `league` / `team` fields, so map kind to the right query
+          // param — following a league must not produce a `?team=` link that
+          // returns nothing. Athletes have no product filter today, so they
+          // land on the full catalog.
+          const org = item.organization;
+          const shopHref =
+            org.kind === 'league'
+              ? `/products?league=${encodeURIComponent(org.name)}`
+              : org.kind === 'institution'
+                ? `/products?team=${encodeURIComponent(org.name)}`
+                : '/products';
+          return (
           <Panel key={item._id} className="flex items-center gap-4">
-            {item.organization.logoUrl ? (
-              <img src={item.organization.logoUrl} alt="" className="w-12 h-12 rounded-full object-cover bg-gray-100 flex-shrink-0" />
+            {org.logoUrl ? (
+              <img src={org.logoUrl} alt="" className="w-12 h-12 rounded-full object-cover bg-gray-100 flex-shrink-0" />
             ) : (
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 font-semibold flex-shrink-0">
-                {item.organization.name?.[0]}
+                {org.name?.[0]}
               </div>
             )}
             <div className="flex-1 min-w-0">
               <Link
-                to={`/products?team=${encodeURIComponent(item.organization.name)}`}
+                to={shopHref}
                 className="font-semibold text-gray-900 hover:text-primary-600 truncate block"
               >
-                {item.organization.name}
+                {org.name}
               </Link>
               <p className="text-xs text-gray-500">Following since {new Date(item.createdAt).toLocaleDateString('en-PH')}</p>
             </div>
@@ -94,7 +108,8 @@ const Following = () => {
               Unfollow
             </button>
           </Panel>
-        ))}
+          );
+        })}
       </div>
 
       <Pagination

@@ -63,6 +63,7 @@ const Products = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+
   const filtersRef = useRef(null);
   const sortRef = useRef(null);
   const searchRef = useRef(null);
@@ -99,10 +100,27 @@ const Products = () => {
   const page = searchParams.get('page') || '1';
   const sort = searchParams.get('sort') || 'newest';
 
+  // Keep the search input/box in sync with the URL's `search` param. The
+  // initial useState reads only run once, so browser Back/forward and direct
+  // ?search= links would otherwise leave a stale term (or a closed box) while
+  // the grid already reflects the new URL. Syncing here means the input never
+  // disagrees with the URL.
+  useEffect(() => {
+    setSearchTerm(search);
+    setShowSearchBox(Boolean(search));
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSelectedIndex(-1);
+  }, [search]);
+
   // Helper to get array of selected values from a comma-separated param
   const getSelectedValues = (param) => param ? param.split(',') : [];
 
-  const hasFilters = gender || sport || category || sale;
+  // Tracks whether any filter is active for the "Clear Filters" controls and
+  // the Filters-button highlight. league/team are included (they can arrive
+  // via a league/team nav link or a followed-organization hop) so a user in
+  // that context sees an in-page way to reset, not just the top tabs.
+  const hasFilters = gender || sport || category || sale || league || team;
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -164,8 +182,9 @@ const Products = () => {
   };
 
   const clearFilters = () => {
-    const newParams = new URLSearchParams();
-    if (search) newParams.set('search', search);
+    const newParams = new URLSearchParams(searchParams);
+    ['gender', 'sport', 'league', 'team', 'category', 'sale'].forEach((k) => newParams.delete(k));
+    newParams.set('page', '1');
     setSearchParams(newParams);
   };
 
@@ -173,10 +192,16 @@ const Products = () => {
   // one source of truth so the URL and the tab row can never disagree.
   const activeTab = sale ? 'sale' : ['men', 'women', 'youth'].includes(gender) ? gender : 'all';
 
+  // Top tabs are global collection navigation, not additional filters on the
+  // currently selected league/team. Clicking one replaces any existing
+  // league/team/sport context (mirroring the search handler below): entering
+  // "Men" from a UAAP page means "all men's products", not "UAAP men's
+  // products". Only gender/sale are set here — the sidebar league/team
+  // filters (and direct /products?league=UAAP&gender=men URLs) continue to
+  // AND with gender for an explicitly combined filter.
   const setTopTab = (key) => {
     const newParams = new URLSearchParams(searchParams);
-    newParams.delete('gender');
-    newParams.delete('sale');
+    ['gender', 'sport', 'league', 'team', 'category', 'sale'].forEach((k) => newParams.delete(k));
     if (key === 'men' || key === 'women' || key === 'youth') {
       newParams.set('gender', key);
     } else if (key === 'sale') {
@@ -272,7 +297,7 @@ const Products = () => {
 
         {/* Top tabs — replaces the old navbar's Shop All/Men/Women/Youth/Sale
             links; lives in the landing area it governs instead of a global bar. */}
-        <div className="flex items-center gap-6 mb-8 md:mb-12 border-b-2 border-ink-200 overflow-x-auto scrollbar-hide">
+        <div data-testid="product-top-tabs" className="flex items-center gap-6 mb-8 md:mb-12 border-b-2 border-ink-200 overflow-x-auto scrollbar-hide">
           {topTabs.map((tab) => (
             <button
               key={tab.key}

@@ -14,6 +14,7 @@ import * as notificationRepository from '../repositories/notificationRepository.
 import { uploadToCloudinary } from './upload.js';
 import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
+import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
 
@@ -219,14 +220,14 @@ const GENERIC_TRANSITIONS = new Set(['under_review', 'approved', 'rejected', 're
 
 adminRouter.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
     const where = status ? { status } : undefined;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { page, limit, skip } = normalizePagination(req.query, 20);
     const [rows, total] = await Promise.all([
-      returnRequestRepository.find({ where, skip, take: Number(limit) }),
+      returnRequestRepository.find({ where, skip, take: limit }),
       returnRequestRepository.count({ where }),
     ]);
-    res.json({ success: true, data: rows, pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) } });
+    res.json({ success: true, data: rows, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     logger.error({ err: error }, 'List admin return requests error');
     Sentry.captureException(error);

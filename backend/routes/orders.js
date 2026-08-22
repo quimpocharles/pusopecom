@@ -31,6 +31,7 @@ import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 import * as shipmentRepository from '../repositories/shipmentRepository.js';
 import * as shipmentEventRepository from '../repositories/shipmentEventRepository.js';
 import { escapeCsvCell } from '../lib/csv.js';
+import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
 
@@ -1373,8 +1374,6 @@ router.get('/admin/all',
   async (req, res) => {
     try {
       const {
-        page = 1,
-        limit = 20,
         status,
         paymentStatus
       } = req.query;
@@ -1383,14 +1382,14 @@ router.get('/admin/all',
       if (status) where.orderStatus = status;
       if (paymentStatus) where.paymentStatus = paymentStatus;
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page, limit, skip } = normalizePagination(req.query, 20);
 
       const [orders, total] = await Promise.all([
         orderRepository.find({
           where,
           orderBy: { createdAt: 'desc' },
           skip,
-          take: Number(limit),
+          take: limit,
           include: { user: true, items: { include: { product: true } } },
         }),
         orderRepository.count({ where }),
@@ -1400,10 +1399,10 @@ router.get('/admin/all',
         success: true,
         data: orders,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page,
+          limit,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limit)
         }
       });
     } catch (error) {

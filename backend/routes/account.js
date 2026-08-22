@@ -10,6 +10,7 @@ import * as organizationRepository from '../repositories/organizationRepository.
 import * as followRepository from '../repositories/followRepository.js';
 import * as accountRepository from '../repositories/accountRepository.js';
 import * as accountCache from '../lib/accountCache.js';
+import { normalizePagination } from '../lib/pagination.js';
 import * as recommendationService from '../services/recommendationService.js';
 
 const router = express.Router();
@@ -22,9 +23,8 @@ const router = express.Router();
 // to guard against manually on every request.
 
 const paginationParams = (req, defaultLimit = 10) => {
-  const page = Math.max(1, Number(req.query.page) || 1);
-  const limit = Math.max(1, Number(req.query.limit) || defaultLimit);
-  return { page, limit, skip: (page - 1) * limit };
+  const { page, limit, skip } = normalizePagination(req.query, defaultLimit);
+  return { page, limit, skip };
 };
 
 const paginationMeta = (page, limit, total) => ({

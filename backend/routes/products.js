@@ -6,6 +6,7 @@ import * as productRepository from '../repositories/productRepository.js';
 import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 import { escapeCsvCell } from '../lib/csv.js';
+import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
 
@@ -21,12 +22,12 @@ router.get('/', async (req, res) => {
   try {
     const {
       sport, team, league, category, gender, sale, minPrice, maxPrice,
-      search, featured, page = 1, limit = 12, sort = '-createdAt'
+      search, featured, sort = '-createdAt'
     } = req.query;
 
     const resolvedSort = sortMap[sort] || sort;
     const { field, direction } = productRepository.parseSort(resolvedSort);
-    const skip = (Number(page) - 1) * Number(limit);
+    const { page, limit, skip } = normalizePagination(req.query, 12);
 
     let products;
     let total;
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
     if (search) {
       const result = await productRepository.search({
         query: search, active: true, sport, team, league, category, gender, sale, minPrice, maxPrice, featured,
-        sortField: field, sortDirection: direction, skip, take: Number(limit),
+        sortField: field, sortDirection: direction, skip, take: limit,
       });
       products = result.products;
       total = result.total;
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
         active: true, sport, team, league, category, gender, sale, minPrice, maxPrice, featured,
       });
       [products, total] = await Promise.all([
-        productRepository.find({ where, orderBy: { [field]: direction }, skip, take: Number(limit) }),
+        productRepository.find({ where, orderBy: { [field]: direction }, skip, take: limit }),
         productRepository.count({ where }),
       ]);
     }
@@ -52,10 +53,10 @@ router.get('/', async (req, res) => {
       success: true,
       data: products,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / Number(limit))
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
@@ -123,8 +124,6 @@ router.get('/admin/all',
   async (req, res) => {
     try {
       const {
-        page = 1,
-        limit = 20,
         search,
         category,
         sport
@@ -140,10 +139,10 @@ router.get('/admin/all',
         ];
       }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const { page, limit, skip } = normalizePagination(req.query, 20);
 
       const [products, total] = await Promise.all([
-        productRepository.find({ where, orderBy: { createdAt: 'desc' }, skip, take: Number(limit) }),
+        productRepository.find({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
         productRepository.count({ where }),
       ]);
 
@@ -151,10 +150,10 @@ router.get('/admin/all',
         success: true,
         data: products,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page,
+          limit,
           total,
-          pages: Math.ceil(total / Number(limit))
+          pages: Math.ceil(total / limit)
         }
       });
     } catch (error) {
@@ -210,7 +209,11 @@ const COMPLEMENTARY_CATEGORIES = {
 
 router.get('/recommendations/cart', async (req, res) => {
   try {
-    const { cartProductIds, limit = 4 } = req.query;
+    const { cartProductIds } = req.query;
+    // Clamp the upsell page size; recommendations also subtract from it, so an
+    // unbounded client-supplied limit would inflate the query (and a value
+    // below the recommendations count could mathematically go negative).
+    const { limit } = normalizePagination(req.query, 4);
 
     if (!cartProductIds) {
       return res.json({ success: true, data: [] });

@@ -16,6 +16,7 @@ import * as accountCache from '../lib/accountCache.js';
 import { sendOrderStatusEmail } from '../services/emailService.js';
 import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
+import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
 
@@ -105,19 +106,19 @@ async function syncOrderStatus(order, toShipmentStatus, actorUserId) {
 // GET / — the queue view. ?status=picking&warehouseId=&assignedToUserId=&mine=true
 router.get('/', async (req, res) => {
   try {
-    const { status, warehouseId, assignedToUserId, page = 1, limit = 20 } = req.query;
+    const { status, warehouseId, assignedToUserId } = req.query;
     const where = {
       ...(status && { status }),
       ...(warehouseId && { warehouseId }),
       ...(assignedToUserId && { assignedToUserId }),
     };
-    const skip = (Number(page) - 1) * Number(limit);
+    const { page, limit, skip } = normalizePagination(req.query, 20);
 
     const [shipments, total] = await Promise.all([
       shipmentRepository.find({
         where,
         skip,
-        take: Number(limit),
+        take: limit,
         include: { order: { select: { orderNumber: true, email: true, total: true, shippingMethod: true, user: { select: { firstName: true, lastName: true } } } } },
       }),
       shipmentRepository.count({ where }),
@@ -126,7 +127,7 @@ router.get('/', async (req, res) => {
     res.json({
       success: true,
       data: shipments,
-      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   } catch (error) {
     logger.error({ err: error }, 'List shipments error');

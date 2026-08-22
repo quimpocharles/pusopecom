@@ -42,7 +42,7 @@ const leagues = [
     ]
   },
   {
-    name: 'National Team',
+    name: 'Team Pilipinas',
     sports: ['basketball', 'volleyball', 'football'],
     teams: ['Gilas Pilipinas', 'Alas Pilipinas', 'Philippine Azkals']
   },
