@@ -218,6 +218,60 @@ export async function findStalePending({ cutoff, client = prisma } = {}) {
   return serialize(orders.map(withOrderFallbacks)).map(reshapeOrder);
 }
 
+export async function claimConfirmationEmailDelivery(id, { claimedAt, staleBefore, client = prisma } = {}) {
+  const result = await client.order.updateMany({
+    where: {
+      id,
+      paymentStatus: 'paid',
+      confirmationEmailSentAt: null,
+      OR: [
+        { confirmationEmailClaimedAt: null },
+        { confirmationEmailClaimedAt: { lt: staleBefore } },
+      ],
+    },
+    data: { confirmationEmailClaimedAt: claimedAt },
+  });
+  return result.count > 0;
+}
+
+export async function releaseConfirmationEmailClaim(id, { claimedAt, client = prisma } = {}) {
+  const result = await client.order.updateMany({
+    where: { id, confirmationEmailClaimedAt: claimedAt },
+    data: { confirmationEmailClaimedAt: null },
+  });
+  return result.count > 0;
+}
+
+export async function markConfirmationEmailSent(id, { claimedAt, client = prisma } = {}) {
+  const result = await client.order.updateMany({
+    where: {
+      id,
+      confirmationEmailSentAt: null,
+      confirmationEmailClaimedAt: claimedAt,
+    },
+    data: { confirmationEmailSentAt: new Date(), confirmationEmailClaimedAt: null },
+  });
+  return result.count > 0;
+}
+
+export async function findPaidWithoutConfirmationEmail({ cutoff, staleBefore, take = 25, client = prisma } = {}) {
+  const orders = await client.order.findMany({
+    where: {
+      paymentStatus: 'paid',
+      confirmationEmailSentAt: null,
+      updatedAt: { lt: cutoff },
+      OR: [
+        { confirmationEmailClaimedAt: null },
+        { confirmationEmailClaimedAt: { lt: staleBefore } },
+      ],
+    },
+    orderBy: { updatedAt: 'asc' },
+    take,
+    include: DEFAULT_INCLUDE,
+  });
+  return serialize(orders.map(withOrderFallbacks)).map(reshapeOrder);
+}
+
 /** Replaces the revenue $group aggregations behind admin order stats. */
 export async function getRevenueStats({ client = prisma } = {}) {
   const now = new Date();
@@ -310,6 +364,10 @@ export default {
   updateById,
   tryResolvePayment,
   findStalePending,
+  claimConfirmationEmailDelivery,
+  releaseConfirmationEmailClaim,
+  markConfirmationEmailSent,
+  findPaidWithoutConfirmationEmail,
   getRevenueStats,
   getTopSellingProducts,
   getOrdersByStatus,

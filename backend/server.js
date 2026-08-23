@@ -25,6 +25,7 @@ import { expireStaleOrders } from './lib/expireStaleOrders.js';
 import { sendPaymentReminders } from './lib/sendPaymentReminders.js';
 import { sweepFulfillmentSLA } from './lib/sweepFulfillmentSLA.js';
 import { sendRefundReminders } from './lib/sendRefundReminders.js';
+import { retryUnsentConfirmationEmails } from './lib/retryUnsentConfirmationEmails.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -420,6 +421,18 @@ cron.schedule('15 * * * *', async () => {
   }
 }, { timezone: 'Asia/Manila' });
 
+cron.schedule('20 * * * *', async () => {
+  try {
+    const result = await retryUnsentConfirmationEmails();
+    if (result.sentCount > 0 || result.errors.length > 0) {
+      logger.info(result, 'Unsent confirmation email sweep completed');
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Unsent confirmation email sweep failed');
+    Sentry.captureException(error);
+  }
+}, { timezone: 'Asia/Manila' });
+
 // Replaces MongoDB's TTL indexes on TryOnLog/UserActivity (both had
 // `expireAfterSeconds: 90 days`) — Postgres has no equivalent, so this
 // deletes what the TTL indexes used to. Scheduled outside the sales
@@ -470,6 +483,10 @@ async function start() {
 
   server = app.listen(PORT, () => {
     logger.info({ port: PORT, environment: process.env.NODE_ENV || 'development' }, 'Server is running');
+    retryUnsentConfirmationEmails().catch((error) => {
+      logger.error({ err: error }, 'Startup confirmation email sweep failed');
+      Sentry.captureException(error);
+    });
   });
 }
 

@@ -487,6 +487,14 @@ model Order {
   // reminders already went out for this same underlying deadline.
   paymentReminderTiers String[] @default([])
 
+  // Set only after the confirmation email's SMTP send resolves. A null value
+  // on a paid order means delivery is still owed and the retry sweep may
+  // attempt it again.
+  confirmationEmailSentAt DateTime?
+  // Short-lived lease for one confirmation-email attempt. A stale claim is
+  // reclaimable after the retry lease window; SMTP remains at-least-once.
+  confirmationEmailClaimedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -516,6 +524,7 @@ model Order {
   // New — closes platform-audit finding High #7 for Order's admin
   // stats/listing/report queries.
   @@index([paymentStatus, orderStatus, userId, createdAt])
+  @@index([paymentStatus, confirmationEmailSentAt, updatedAt])
   @@index([promoCodeId])
   @@map("orders")
 }

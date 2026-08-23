@@ -33,10 +33,14 @@ vi.mock('../../services/emailService.js', () => ({
   sendPaymentFailedEmail: vi.fn().mockResolvedValue(undefined),
   sendOrderStatusEmail: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../lib/orderConfirmationEmail.js', () => ({
+  sendOrderConfirmation: vi.fn().mockResolvedValue(undefined),
+}));
 
 const { default: ordersRouter } = await import('../orders.js');
 const paymentService = await import('../../services/paymentService.js');
 const emailService = await import('../../services/emailService.js');
+const confirmationEmail = await import('../../lib/orderConfirmationEmail.js');
 
 const app = express();
 app.use(express.json());
@@ -677,7 +681,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     expect(order.paymentStatus).toBe('failed'); // driven by the real Maya check, not the forged claim
     expect(order.orderStatus).toBe('failed_payment'); // Payment Platform Redesign, Phase 2 — previously left untouched
-    expect(emailService.sendOrderConfirmationEmail).not.toHaveBeenCalled();
+    expect(confirmationEmail.sendOrderConfirmation).not.toHaveBeenCalled();
     // Payment Platform Redesign, Phase 6 — 'failed', not 'expired' — a real
     // gateway rejection, not a lapsed session.
     expect(emailService.sendPaymentFailedEmail).toHaveBeenCalledWith(
@@ -699,7 +703,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     expect(order.paymentStatus).toBe('paid');
     expect(order.orderStatus).toBe('paid'); // Payment Platform Redesign, Phase 2 — was 'confirmed'
-    expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
+    expect(confirmationEmail.sendOrderConfirmation).toHaveBeenCalledTimes(1);
 
     const shippingEvent = await prisma.shippingEvent.findFirst({ where: { orderId: orderNumber } });
     expect(shippingEvent).not.toBeNull();
@@ -708,7 +712,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     // behavior, or a race with /verify-payment) must not re-send the email
     const second = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_SUCCESS' });
     expect(second.status).toBe(200);
-    expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
+    expect(confirmationEmail.sendOrderConfirmation).toHaveBeenCalledTimes(1);
   }, 20000);
 
   it('a confirmation-email failure does not change the paid outcome (email is fire-and-forget)', async () => {
@@ -721,7 +725,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     // Phase 6's confirmation email is fire-and-forget with a .catch: an SMTP
     // failure must never roll back the payment or fail the webhook ack. The
     // email throwing here is exactly the case the .catch exists for.
-    emailService.sendOrderConfirmationEmail.mockRejectedValueOnce(new Error('SMTP down'));
+    confirmationEmail.sendOrderConfirmation.mockRejectedValueOnce(new Error('SMTP down'));
 
     const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_SUCCESS' });
     expect(res.status).toBe(200);
@@ -841,7 +845,7 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
     expect(shipmentsEvents).toBe(1);
 
     // Confirmation email sent exactly once — the second delivery does not re-send.
-    expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
+    expect(confirmationEmail.sendOrderConfirmation).toHaveBeenCalledTimes(1);
   }, 20000);
 
   it('a payment_session.expired event marks the order failed and restores stock', async () => {

@@ -20,11 +20,8 @@ import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js'
 import { xenditWebhookVerify } from '../middleware/xenditWebhookVerify.js';
 import * as paymentService from '../services/paymentService.js';
 import { calculateGatewayFee, isValidChannel } from '../lib/payments/xenditFees.js';
-import {
-  sendOrderConfirmationEmail,
-  sendPaymentPendingEmail,
-  sendPaymentFailedEmail,
-} from '../services/emailService.js';
+import { sendPaymentPendingEmail, sendPaymentFailedEmail } from '../services/emailService.js';
+import { sendOrderConfirmation } from '../lib/orderConfirmationEmail.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as fitCheckBonus from '../lib/fitCheckBonus.js';
@@ -236,29 +233,19 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
           Sentry.captureException(shipmentError);
         });
 
-      // Confirmation email + QR generation are fire-and-forget, matching the
-      // Shipment/notification/bonus side effects above. A customer's
-      // verify-payment response (and therefore the confirmation page's first
-      // paint) must not block on SMTP round-trips plus per-Pass Cloudinary
-      // uploads — that's the blank-screen wait after returning from checkout.
-      // The QR is still ensured on the order GET (GET /:orderNumber below),
-      // so the ticket renders a scannable QR regardless of whether this
-      // detached work has finished.
-      Promise.resolve()
-        .then(async () => {
-          let passesForEmail = [];
-          if (order.passes?.length) {
-            passesForEmail = await passRepository.findByOrderId(order._id);
-            const qrCodeUrls = await Promise.all(passesForEmail.map((pass) => ensurePassQrCode(pass)));
-            passesForEmail = passesForEmail.map((pass, i) => ({ ...pass, qrCodeUrl: qrCodeUrls[i] }));
-          }
-          await sendOrderConfirmationEmail(order.email, { ...order, passes: passesForEmail });
-          logger.info(logContext, 'Confirmation email sent');
-        })
-        .catch((emailError) => {
-          logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
-          Sentry.captureException(emailError);
-        });
+      // The frontend renders from its order read before reconciliation, so
+      // this bounded post-payment side effect can be awaited here. Keeping
+      // the request open prevents a sleeping host from dropping the SMTP
+      // attempt, while the delivery marker and retry sweep cover failures.
+      try {
+        const delivery = await sendOrderConfirmation(order);
+        logger.info({ ...logContext, delivery }, delivery === 'sent'
+          ? 'Confirmation email sent'
+          : 'Confirmation email skipped — already claimed or sent');
+      } catch (emailError) {
+        logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
+        Sentry.captureException(emailError);
+      }
 
       // Guest checkouts have no account to grant against. orderRepository's
       // Mongoose-compatibility layer (withRelationFallback) collapses the
