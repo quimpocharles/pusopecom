@@ -711,6 +711,26 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     expect(emailService.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
   }, 20000);
 
+  it('a confirmation-email failure does not change the paid outcome (email is fire-and-forget)', async () => {
+    const product = await makeProduct({ name: 'EmailFailIsolation' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_iso', redirectUrl: 'https://pay.example/chk_iso' });
+    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
+    const { orderNumber } = createRes.body.data;
+
+    paymentService.getPaymentStatus.mockResolvedValue({ status: 'succeeded' });
+    // Phase 6's confirmation email is fire-and-forget with a .catch: an SMTP
+    // failure must never roll back the payment or fail the webhook ack. The
+    // email throwing here is exactly the case the .catch exists for.
+    emailService.sendOrderConfirmationEmail.mockRejectedValueOnce(new Error('SMTP down'));
+
+    const res = await request(app).post('/api/orders/webhooks/maya').send({ requestReferenceNumber: orderNumber, status: 'PAYMENT_SUCCESS' });
+    expect(res.status).toBe(200);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    expect(order.paymentStatus).toBe('paid'); // unchanged by the email failure
+    expect(order.orderStatus).toBe('paid');
+  }, 30000);
+
   it('webhook PAYMENT_FAILED restores stock', async () => {
     const product = await makeProduct({ name: 'WebhookFailRestore' });
     paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fail', redirectUrl: 'https://pay.example/chk_fail' });

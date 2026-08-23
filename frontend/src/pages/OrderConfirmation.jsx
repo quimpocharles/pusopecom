@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, DocumentArrowDownIcon, ClipboardDocumentIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardDocumentIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
-import PusoLogo from '../assets/images/Logo.png';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import PassTicket from '../components/locker/PassTicket';
 import OrderTimeline from '../components/orders/OrderTimeline';
 import CompletePaymentButton from '../components/orders/CompletePaymentButton';
 import orderService from '../services/orderService';
@@ -11,9 +11,7 @@ import useCartStore from '../store/cartStore';
 import usePassCartStore from '../store/passCartStore';
 import { toTitleCase } from '../utils/text';
 import { orderStatusLabel } from '../utils/orderStatus';
-import { passStatusLabel, passStatusStyle } from '../utils/passStatus';
 import { downloadOrderSummaryPdf } from '../utils/orderPdf';
-import { downloadTicketImage } from '../utils/ticketImage';
 import usePaymentCountdown from '../hooks/usePaymentCountdown';
 
 const SUPPORT_EMAIL = 'support@pusopilipinas.com';
@@ -71,36 +69,57 @@ const OrderConfirmation = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  // Keyed by pass._id — an order can hold more than one Pass, each needs
-  // its own captured node for downloadTicketImage.
-  const ticketRefs = useRef({});
+  // A carousel shows one Pass at a time (an order can hold several); the
+  // visible ticket owns the ref downloadTicketImage snapshots.
+  const [activePassIndex, setActivePassIndex] = useState(0);
+  const ticketRef = useRef(null);
 
   useEffect(() => {
+    let active = true;
+
+    const applyOrder = (data) => {
+      if (!active) return;
+      setOrder(data);
+
+      if (paymentStatusParam === 'success' || data.paymentStatus === 'paid') {
+        useCartStore.getState().clearCart();
+        usePassCartStore.getState().clear();
+      }
+    };
+
     const fetchOrder = async () => {
       try {
-        // If returning from Maya with success, verify payment status first
-        if (paymentStatusParam === 'success') {
-          await orderService.verifyPayment(orderNumber).catch(() => {});
-        }
-
         const response = await orderService.getOrderByNumber(orderNumber);
-        setOrder(response.data);
+        applyOrder(response.data);
 
-        // Clear cart after successful payment
-        if (paymentStatusParam === 'success' || response.data.paymentStatus === 'paid') {
-          useCartStore.getState().clearCart();
-          usePassCartStore.getState().clear();
+        // Payment verification is a reconciliation backstop, not a reason
+        // to hold the customer's first render. If the initial read was still
+        // pending and verification resolves it, refresh once after the
+        // state transition completes.
+        if (paymentStatusParam === 'success' && response.data.paymentStatus !== 'paid') {
+          orderService.verifyPayment(orderNumber)
+            .then(async (verification) => {
+              if (!active || verification?.data?.paymentStatus === response.data.paymentStatus) return;
+              const refreshed = await orderService.getOrderByNumber(orderNumber);
+              applyOrder(refreshed.data);
+            })
+            .catch(() => {});
         }
       } catch (err) {
-        setError('Order not found');
+        if (active) setError('Order not found');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     if (orderNumber) {
+      setActivePassIndex(0);
       fetchOrder();
     }
+
+    return () => {
+      active = false;
+    };
   }, [orderNumber, paymentStatusParam]);
 
   const paymentExpiresAt = order?.payment?.status === 'pending' ? order.payment.expiresAt : null;
@@ -210,97 +229,63 @@ const OrderConfirmation = () => {
           )}
 
           {isPassOrder ? (
-            /* Styled like an actual mobile ticket — a narrow vertical
-               stub, not a full-width panel. Only the photo hero stays dark
-               (text needs to sit over the event image); the QR/details
-               body below it is off-white, matching the platform's `paper`
-               token, not a continuation of the dark header. Same
-               qrCodeUrl/qrToken the confirmation email and My PUSO Locker
-               already render (backend/lib/passQrCode.js). */
+            /* A digital ticket wallet, one Pass at a time. An order can hold
+               several Passes (e.g. 4 tickets for a group), so the ticket is
+               presented as a carousel — never a tall stack that scatters the
+               QRs. Tapping through shows each ticket full-size (gate-scan
+               QR), with a "Ticket X of Y" pager and prev/next controls. */
             <div className="space-y-4">
-              {order.passes.map((pass) => (
-                <div key={pass._id} className="max-w-sm mx-auto">
-                  <div
-                    ref={(el) => { ticketRefs.current[pass._id] = el; }}
-                    className="border-2 border-ink-900 overflow-hidden"
-                  >
-                    <div
-                      className="relative bg-cover bg-center bg-ink-900"
-                      style={pass.passEvent?.images?.[0] ? { backgroundImage: `url(${pass.passEvent.images[0]})` } : undefined}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/70 to-ink-900" />
-                      <div className="relative px-6 pt-4 pb-10 text-center text-white">
-                        {pass.passEvent?.organization?.name && (
-                          <p className="text-xs uppercase tracking-wide text-white/60 mb-3">
-                            {pass.passEvent.organization.name}
-                          </p>
-                        )}
-                        <p className="text-xl font-bold">{pass.passEvent?.name}</p>
-                        {pass.passEvent?.startsAt && (
-                          <p className="text-sm text-white/80 mt-1">
-                            {new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
-                          </p>
-                        )}
-                        {pass.passEvent?.venue?.name && <p className="text-sm text-white/80">{pass.passEvent.venue.name}</p>}
-                      </div>
-                    </div>
+              <div className="relative max-w-sm mx-auto">
+                <PassTicket
+                  pass={order.passes[activePassIndex]}
+                  large
+                  ticketRef={ticketRef}
+                  orderNumber={order.orderNumber}
+                  position={{ index: activePassIndex, total: order.passes.length }}
+                />
 
-                    <div className="bg-black py-3 flex items-center justify-center">
-                      <img src={PusoLogo} alt="Puso Pilipinas" className="h-6 w-auto" />
-                    </div>
-
-                    <div className="bg-paper px-6 py-6 flex flex-col items-center text-center">
-                      {/* "Ready" (the issued label) is the default, expected
-                          state — showing it adds nothing; the other statuses
-                          (checked in/cancelled/refunded) are the ones worth
-                          a customer actually seeing. */}
-                      {pass.status !== 'issued' && (
-                        <span className={`text-xs font-semibold uppercase tracking-wide mb-3 ${passStatusStyle(pass.status)}`}>
-                          {passStatusLabel(pass.status)}
-                        </span>
-                      )}
-                      {pass.status === 'issued' ? (
-                        <>
-                          <p className="text-xs text-gray-500 mb-3">Show this code at the gate</p>
-                          {pass.qrCodeUrl ? (
-                            <img src={pass.qrCodeUrl} alt="Pass QR code" className="w-44 h-44 bg-white border border-ink-200 p-3" />
-                          ) : (
-                            <p className="font-mono text-sm bg-white border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-sm text-gray-500">This pass isn't ready to show yet.</p>
-                      )}
-                    </div>
-
-                    <div className="bg-paper px-6 pb-6 pt-4 border-t border-ink-200">
-                      <p className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-3">Ticket Details</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                        <div>
-                          <p className="text-gray-500">Ticket Type</p>
-                          <p className="font-semibold text-ink-900">{pass.passTier?.name}</p>
-                        </div>
-                        {pass.passTier?.venueSection?.name && (
-                          <div>
-                            <p className="text-gray-500">Section</p>
-                            <p className="font-semibold text-ink-900">{pass.passTier.venueSection.name}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {pass.status === 'issued' && (
+                {/* Carousel controls — flanking chevrons on desktop, but on
+                    mobile they'd translate outside the viewport (the ticket
+                    nearly fills a 375px screen), so they stack full-width
+                    below instead. */}
+                {order.passes.length > 1 && (
+                  <>
                     <button
-                      onClick={() => downloadTicketImage(ticketRefs.current[pass._id], `${pass.passEvent?.name || 'ticket'}-${pass.passTier?.name || ''}.png`)}
-                      className="btn-outline w-full mt-3 inline-flex items-center justify-center gap-1.5"
+                      onClick={() => setActivePassIndex((i) => (i - 1 + order.passes.length) % order.passes.length)}
+                      className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-14 p-2.5 border-2 border-ink-900 bg-white text-ink-900 hover:bg-ink-900 hover:text-white transition-colors"
+                      aria-label="Previous ticket"
                     >
-                      <DocumentArrowDownIcon className="w-4 h-4" />
-                      Download Ticket
+                      <ChevronLeftIcon className="w-5 h-5" />
                     </button>
-                  )}
-                </div>
-              ))}
+                    <button
+                      onClick={() => setActivePassIndex((i) => (i + 1) % order.passes.length)}
+                      className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-14 p-2.5 border-2 border-ink-900 bg-white text-ink-900 hover:bg-ink-900 hover:text-white transition-colors"
+                      aria-label="Next ticket"
+                    >
+                      <ChevronRightIcon className="w-5 h-5" />
+                    </button>
+                    <div className="sm:hidden mt-3 flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => setActivePassIndex((i) => (i - 1 + order.passes.length) % order.passes.length)}
+                        className="flex items-center gap-1 px-5 py-2.5 border-2 border-ink-900 bg-white text-ink-900 hover:bg-ink-900 hover:text-white transition-colors"
+                        aria-label="Previous ticket"
+                      >
+                        <ChevronLeftIcon className="w-5 h-5" />
+                        Prev
+                      </button>
+                      <button
+                        onClick={() => setActivePassIndex((i) => (i + 1) % order.passes.length)}
+                        className="flex items-center gap-1 px-5 py-2.5 border-2 border-ink-900 bg-white text-ink-900 hover:bg-ink-900 hover:text-white transition-colors"
+                        aria-label="Next ticket"
+                      >
+                        Next
+                        <ChevronRightIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="max-w-sm mx-auto flex justify-between items-center px-1 text-sm text-gray-500">
                 <span>Order {order.orderNumber}</span>
                 <span className="font-bold text-lg text-ink-900">₱{order.total.toFixed(2)}</span>

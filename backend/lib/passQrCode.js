@@ -2,6 +2,10 @@ import QRCode from 'qrcode';
 import { uploadToCloudinary } from '../routes/upload.js';
 import * as passRepository from '../repositories/passRepository.js';
 
+export async function getPassQrCodeDataUrl(pass) {
+  return QRCode.toDataURL(pass.qrToken, { errorCorrectionLevel: 'H', width: 300 });
+}
+
 /**
  * Generates and persists a Pass's QR image, if it doesn't have one yet.
  * Encodes the plain qrToken string, not a URL — the same reasoning proven

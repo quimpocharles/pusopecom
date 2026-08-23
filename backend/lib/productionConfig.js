@@ -1,3 +1,5 @@
+import { isDevHost } from './appUrl.js';
+
 // Startup validation for production config. Fail fast with the VARIABLE NAME
 // only — never the value — so a misconfigured deployment stops loudly instead
 // of booting into a half-working state (e.g. marking orders paid it can't
@@ -28,6 +30,22 @@ export function validateProductionConfig(env = process.env) {
     const value = env[name];
     return value === undefined || value === null || value.trim() === '' || value === 'your-...-value';
   });
+
+  // FRONTEND_URL is what every email link, the pass QR/logo assets, the
+  // sitemap, and the gateway return URLs are built from. A production value
+  // pointing at localhost or an ngrok tunnel would send customers to a dev
+  // host — fail fast (naming only the variable) rather than ship it, same
+  // reason the missing-variable check above refuses to start.
+  if (!missing.includes('FRONTEND_URL') && isDevHost(env.FRONTEND_URL)) {
+    missing.push('FRONTEND_URL');
+    const err = new Error(
+      'FRONTEND_URL in production points at a development host (localhost/ngrok). ' +
+      'Set it to the production storefront domain before deploying. ' +
+      'Values are not shown here.'
+    );
+    err.missing = ['FRONTEND_URL'];
+    throw err;
+  }
 
   if (missing.length > 0) {
     const names = missing.join(', ');

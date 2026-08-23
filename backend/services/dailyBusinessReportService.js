@@ -7,6 +7,7 @@ import * as organizationRepository from '../repositories/organizationRepository.
 import * as reportRecipientRepository from '../repositories/reportRecipientRepository.js';
 import * as reportRunRepository from '../repositories/reportRunRepository.js';
 import { sendDailyBusinessReportEmail, sendScheduledReportEmail } from './emailService.js';
+import { productionBaseUrl } from '../lib/appUrl.js';
 import { buildFulfillmentSection } from '../lib/fulfillmentSnapshot.js';
 import { buildReportAttachments } from '../lib/reportExport.js';
 import { computeExecutiveReport, executiveReportToExportShape } from './reportQueries/executive.js';
@@ -620,7 +621,7 @@ export const generateAndSendDailyBusinessReport = async () => {
         title: def.title,
         dateStr,
         keyStats: shape.summary,
-        dashboardLink: `${process.env.FRONTEND_URL}${def.dashboardPath}`,
+        dashboardLink: `${productionBaseUrl()}${def.dashboardPath}`,
         attachments,
       });
       await archiveRun({ type: def.type, status: 'sent', reportDate: start, data, recipients });

@@ -10,7 +10,7 @@ import * as productRepository from '../repositories/productRepository.js';
 import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
 import * as passEventRepository from '../repositories/passEventRepository.js';
 import * as passRepository from '../repositories/passRepository.js';
-import { ensurePassQrCode } from '../lib/passQrCode.js';
+import { ensurePassQrCode, getPassQrCodeDataUrl } from '../lib/passQrCode.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
@@ -236,27 +236,29 @@ export async function applyPaymentResolution(order, gatewayStatus, source = 'sys
           Sentry.captureException(shipmentError);
         });
 
-      try {
-        // Passes need their event/tier/venue names and a real QR image for
-        // the email — order.passes (DEFAULT_INCLUDE) only carries scalars,
-        // so re-fetch enriched rows here rather than widening that shared
-        // include for every other caller. QR generation is lazy and
-        // idempotent (ensurePassQrCode no-ops if qrCodeUrl is already set)
-        // and deliberately happens here, not inside the order-creation
-        // transaction — Cloudinary upload is I/O-bound and has no business
-        // holding a DB transaction open.
-        let passesForEmail = [];
-        if (order.passes?.length) {
-          passesForEmail = await passRepository.findByOrderId(order._id);
-          const qrCodeUrls = await Promise.all(passesForEmail.map((pass) => ensurePassQrCode(pass)));
-          passesForEmail = passesForEmail.map((pass, i) => ({ ...pass, qrCodeUrl: qrCodeUrls[i] }));
-        }
-        await sendOrderConfirmationEmail(order.email, { ...order, passes: passesForEmail });
-        logger.info(logContext, 'Confirmation email sent');
-      } catch (emailError) {
-        logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
-        Sentry.captureException(emailError);
-      }
+      // Confirmation email + QR generation are fire-and-forget, matching the
+      // Shipment/notification/bonus side effects above. A customer's
+      // verify-payment response (and therefore the confirmation page's first
+      // paint) must not block on SMTP round-trips plus per-Pass Cloudinary
+      // uploads — that's the blank-screen wait after returning from checkout.
+      // The QR is still ensured on the order GET (GET /:orderNumber below),
+      // so the ticket renders a scannable QR regardless of whether this
+      // detached work has finished.
+      Promise.resolve()
+        .then(async () => {
+          let passesForEmail = [];
+          if (order.passes?.length) {
+            passesForEmail = await passRepository.findByOrderId(order._id);
+            const qrCodeUrls = await Promise.all(passesForEmail.map((pass) => ensurePassQrCode(pass)));
+            passesForEmail = passesForEmail.map((pass, i) => ({ ...pass, qrCodeUrl: qrCodeUrls[i] }));
+          }
+          await sendOrderConfirmationEmail(order.email, { ...order, passes: passesForEmail });
+          logger.info(logContext, 'Confirmation email sent');
+        })
+        .catch((emailError) => {
+          logger.error({ err: emailError, ...logContext }, 'Failed to send confirmation email');
+          Sentry.captureException(emailError);
+        });
 
       // Guest checkouts have no account to grant against. orderRepository's
       // Mongoose-compatibility layer (withRelationFallback) collapses the
@@ -1031,7 +1033,18 @@ router.get('/:orderNumber', optionalAuth, async (req, res) => {
     // overwhelming majority of orders are Merchandise with none, and were
     // paying for that unconditionally until this fix — a real, avoidable
     // latency hit on every single order confirmation page load.
-    const passes = order.passes?.length ? await passRepository.findByOrderId(order._id) : [];
+    let passes = order.passes?.length ? await passRepository.findByOrderId(order._id) : [];
+
+    // A customer read must not wait for Cloudinary. Existing persisted URLs
+    // remain preferred; a new pass gets a transient local QR data URL for
+    // this response while the payment side effect persists the Cloudinary
+    // copy for email and later reads.
+    if (passes.length) {
+      passes = await Promise.all(passes.map(async (pass) => ({
+        ...pass,
+        qrCodeUrl: pass.qrCodeUrl || await getPassQrCodeDataUrl(pass),
+      })));
+    }
 
     res.json({
       success: true,

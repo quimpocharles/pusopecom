@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { productionBaseUrl } from '../lib/appUrl.js';
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -16,7 +17,20 @@ const DARK      = '#1a1a1a';
 const WHITE     = '#ffffff';
 const MUTED     = 'rgba(255,255,255,0.55)';
 const BORDER    = 'rgba(255,255,255,0.10)';
-const LOGO_URL  = `${process.env.FRONTEND_URL}/puso-white.png`;
+// The email logo is a public asset served by the storefront, but it must NOT
+// inherit FRONTEND_URL: in a dev/ngrok workflow FRONTEND_URL is a dev host,
+// and the logo must still resolve in production mail clients regardless.
+// EMAIL_LOGO_URL overrides it outright (e.g. a Cloudinary-hosted asset); the
+// default is the canonical storefront asset. Evaluated lazily, per send —
+// the same per-call contract appUrl below already follows, so a process
+// whose env changes between sends never keeps rendering a stale host. The
+// pass-card logo strip uses the same image.
+const logoUrl = () => process.env.EMAIL_LOGO_URL || `${productionBaseUrl()}/puso-white.png`;
+
+// Every customer-facing URL inside an email goes through this, so a
+// production send can never point at a localhost/ngrok host even if
+// FRONTEND_URL was left misconfigured (see lib/appUrl.js).
+const appUrl = (path) => `${productionBaseUrl()}${path}`;
 
 // ── Shared wrapper ─────────────────────────────────────────────────────────────
 const getEmailTemplate = (content) => `
@@ -60,7 +74,7 @@ const getEmailTemplate = (content) => `
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
                 <tr>
                   <td style="background:#ffffff;border-radius:10px;padding:10px 18px;line-height:0;">
-                    <img src="${LOGO_URL}" alt="Puso Pilipinas" width="120" height="auto"
+                    <img src="${logoUrl()}" alt="Puso Pilipinas" width="120" height="auto"
                          style="display:block;" />
                   </td>
                 </tr>
@@ -137,7 +151,7 @@ const value = (text) =>
 
 // ── Verification email ─────────────────────────────────────────────────────────
 export const sendVerificationEmail = async (email, firstName, verificationToken) => {
-  const url = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+  const url = appUrl(`/verify-email?token=${verificationToken}`);
 
   const content = `
     ${h2(`Welcome, ${firstName}!`)}
@@ -158,7 +172,7 @@ export const sendVerificationEmail = async (email, firstName, verificationToken)
 
 // ── Password reset email ───────────────────────────────────────────────────────
 export const sendPasswordResetEmail = async (email, firstName, resetToken) => {
-  const url = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  const url = appUrl(`/reset-password?token=${resetToken}`);
 
   const content = `
     ${h2('Reset Your Password')}
@@ -272,7 +286,7 @@ const passCards = (order) => (order.passes || []).map((pass) => {
         </tr>
         <tr>
           <td align="center" style="background:#000000;padding:12px;">
-            <img src="${LOGO_URL}" alt="Puso Pilipinas" height="22" style="display:inline-block;height:22px;width:auto;" />
+            <img src="${logoUrl()}" alt="Puso Pilipinas" height="22" style="display:inline-block;height:22px;width:auto;" />
           </td>
         </tr>
         <tr>
@@ -316,7 +330,7 @@ const passCards = (order) => (order.passes || []).map((pass) => {
 
 // ── Order confirmation email ───────────────────────────────────────────────────
 export const sendOrderConfirmationEmail = async (email, order) => {
-  const orderUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const orderUrl = appUrl(`/order/${order.orderNumber}`);
   const itemsRows = orderItemsRows(order);
   const addressBlock = orderAddressBlock(order);
   const shippingLabel = orderShippingLabel(order);
@@ -404,7 +418,7 @@ export const sendOrderConfirmationEmail = async (email, order) => {
 // (checkout always starts a payment session) — sending two emails back to
 // back for one moment would just be noise. One honest email covering both.
 export const sendPaymentPendingEmail = async (email, order) => {
-  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const payUrl = appUrl(`/order/${order.orderNumber}`);
   const itemsRows = orderItemsRows(order);
   const addressBlock = orderAddressBlock(order);
   const shippingLabel = orderShippingLabel(order);
@@ -462,7 +476,7 @@ export const sendPaymentPendingEmail = async (email, order) => {
 // order's own retention deadline, not the 1-hour Maya session — see that
 // file's comment for why).
 export const sendPaymentReminderEmail = async (email, order, timeRemainingLabel) => {
-  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const payUrl = appUrl(`/order/${order.orderNumber}`);
   const content = `
     ${h2('Your Order Is Waiting')}
     ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong> still needs payment — you have <strong style="color:${WHITE};">${timeRemainingLabel}</strong> left before your reserved items are released.`)}
@@ -485,7 +499,7 @@ export const sendPaymentReminderEmail = async (email, order, timeRemainingLabel)
 // OrderConfirmation.jsx's own pending-state copy (Phase 3) — never a dead
 // end, the order and its reserved items are still there to pay for.
 export const sendPaymentFailedEmail = async (email, order, reason) => {
-  const payUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const payUrl = appUrl(`/order/${order.orderNumber}`);
   const isExpired = reason === 'expired';
 
   const content = `
@@ -525,7 +539,7 @@ export const sendOrderStatusEmail = async (email, order, status) => {
   const copy = ORDER_STATUS_EMAIL_COPY[status];
   if (!copy) return; // not a status this email covers — caller already guards, this is defense in depth
 
-  const orderUrl = `${process.env.FRONTEND_URL}/order/${order.orderNumber}`;
+  const orderUrl = appUrl(`/order/${order.orderNumber}`);
   const trackingLine = status === 'shipped' && order.trackingNumber
     ? p(`Tracking: <strong style="color:${WHITE};">${order.trackingNumber}</strong>${order.courier ? ` via ${order.courier}` : ''}`, 'font-size:13px;')
     : '';

@@ -1,27 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { XMarkIcon } from '@heroicons/react/24/outline';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import ProductCard from '../../components/products/ProductCard';
-import { Panel, Pagination, EmptyState, ErrorState } from '../../components/ui';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ShoppingBagIcon, TicketIcon } from '@heroicons/react/24/outline';
+import { Pagination, EmptyState, ErrorState } from '../../components/ui';
+import MerchandiseCard from '../../components/locker/MerchandiseCard';
+import MerchandiseCardSkeleton from '../../components/locker/MerchandiseCardSkeleton';
+import PassCard from '../../components/locker/PassCard';
+import PassCardSkeleton from '../../components/locker/PassCardSkeleton';
+import PassTicket from '../../components/locker/PassTicket';
+import Modal from '../../components/ui/Modal';
 import accountService from '../../services/accountService';
 import passEventService from '../../services/passEventService';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_FILTER_OPTIONS, orderStatusLabel } from '../../utils/orderStatus';
-import { passStatusLabel, passStatusStyle } from '../../utils/passStatus';
+import { ORDER_STATUS_LABELS, ORDER_STATUS_FILTER_OPTIONS } from '../../utils/orderStatus';
 
-// docs/MY_PUSO_MANIFESTO.md: Locker is one destination — what's mine, plus
-// a lighter Saved section for what a fan is thinking about adding — not a
-// second top-level concept. Passes is a peer of My Gear, not folded into
-// it: an Order-centric list and a Pass-credential-centric list (each with
-// its own scannable status) are genuinely different shapes to browse, the
-// same way Pass itself isn't forced into OrderItem/Shipment's shape on the
-// backend (see the schema comment on the Pass model, ADR-011). Only the
-// active section fetches; switching sections is a URL param, not a route,
-// so all three stay bookmarkable.
+// The Locker is a consumer wallet with two sections — MY GEAR (merchandise)
+// and PASSES (event tickets) — not a transaction history plus a wishlist.
+// Only the active section fetches; switching is a URL param, not a route.
 const SECTIONS = [
-  { key: 'mine', label: 'My Gear' },
-  { key: 'passes', label: 'Passes' },
-  { key: 'saved', label: 'Saved' },
+  { key: 'mine', label: 'My Gear', caption: 'Merch', subtitle: 'Your merchandise purchases', icon: ShoppingBagIcon },
+  { key: 'passes', label: 'Passes', subtitle: 'Your event passes & tickets', icon: TicketIcon },
 ];
 
 const Locker = () => {
@@ -39,27 +35,50 @@ const Locker = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-6 border-b-2 border-ink-200">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSection(s.key)}
-            className={`pb-3 text-editorial-label font-semibold uppercase tracking-wide whitespace-nowrap transition-colors duration-150 border-b-2 -mb-0.5 ${
-              section === s.key
-                ? 'text-ink-900 border-ink-900'
-                : 'text-ink-500 border-transparent hover:text-ink-900'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+        {SECTIONS.map((s) => {
+          const active = section === s.key;
+          const Icon = s.icon;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setSection(s.key)}
+              aria-pressed={active}
+              className={`flex items-center gap-4 p-5 border-2 bg-white text-left transition-colors duration-150 ${
+                active ? 'border-ink-900' : 'border-ink-200 hover:border-ink-500'
+              }`}
+            >
+              <span className={`flex-shrink-0 w-11 h-11 flex items-center justify-center border-2 ${
+                active ? 'border-ink-900 text-ink-900' : 'border-ink-200 text-ink-500'
+              }`}>
+                <Icon className="w-5 h-5" />
+              </span>
+              <span className="min-w-0">
+                <span className={`block text-editorial-label font-bold uppercase tracking-wide ${
+                  active ? 'text-ink-900' : 'text-ink-500'
+                }`}>
+                  {s.label}{s.caption ? ` (${s.caption})` : ''}
+                </span>
+                <span className="block text-editorial-caption text-ink-500 mt-0.5">
+                  {s.subtitle}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {section === 'mine' ? <LockerMine /> : section === 'passes' ? <LockerPasses /> : <LockerSaved />}
+      {section === 'mine' ? <LockerMine /> : <LockerPasses />}
     </div>
   );
 };
 
+// MY GEAR — merchandise wallet, not transaction history. Each card answers
+// "what did I buy?" (line items, name-led) then "where is it?" (delivery),
+// with order number/date/total/payment secondary. Pass orders are excluded
+// here: /account/orders returns every order, but a Pass order has items: [],
+// so filtering to orders with a real item keeps this merchandise-only
+// without inventing a backend flag.
 const LockerMine = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Number(searchParams.get('page')) || 1;
@@ -75,7 +94,10 @@ const LockerMine = () => {
     setError(false);
     try {
       const res = await accountService.getOrders({ page, limit: 10, ...(status && { status }) });
-      setOrders(res.data);
+      // Merchandise-only: keep orders that have at least one item. A Pass
+      // order has no OrderItems (its fulfillment unit is the Pass itself,
+      // ADR-011) and lives in the Passes section instead.
+      setOrders((res.data || []).filter((o) => (o.items?.length || 0) > 0));
       setPagination(res.pagination);
     } catch {
       setError(true);
@@ -98,11 +120,26 @@ const LockerMine = () => {
     setSearchParams(next);
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState description="Failed to load your Locker." onRetry={load} />;
+  if (loading) {
+    return (
+      <div className="space-y-4" aria-busy="true" aria-label="Loading your gear">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <MerchandiseCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
+  if (error) return <ErrorState description="Failed to load your Gear." onRetry={load} />;
+
   if (orders.length === 0) {
     return (
-      <EmptyState title="Your Locker is empty" actionLabel="Start Shopping" onAction={() => (window.location.href = '/products')} />
+      <EmptyState
+        title="No merchandise orders yet."
+        description="When you buy apparel or gear, it'll show up here with its delivery status."
+        actionLabel="Shop Now"
+        onAction={() => (window.location.href = '/products')}
+      />
     );
   }
 
@@ -114,7 +151,7 @@ const LockerMine = () => {
           onChange={(e) => updateParams({ status: e.target.value, page: null })}
           className="input-field w-auto"
         >
-          <option value="">All Statuses</option>
+          <option value="">All Orders</option>
           {ORDER_STATUS_FILTER_OPTIONS.map((s) => (
             <option key={s} value={s}>
               {ORDER_STATUS_LABELS[s]}
@@ -125,63 +162,7 @@ const LockerMine = () => {
 
       <div className="space-y-4">
         {orders.map((order) => (
-          <Panel key={order._id}>
-            {/* Fans remember products, not order numbers — thumbnails lead. */}
-            {order.items?.length > 0 && (
-              <div className="flex gap-2 mb-4">
-                {order.items.slice(0, 4).map((item, i) => (
-                  <img
-                    key={i}
-                    src={item.image}
-                    alt=""
-                    className="w-14 h-14 object-cover bg-ink-200 border border-ink-200"
-                  />
-                ))}
-                {order.items.length > 4 && (
-                  <div className="w-14 h-14 bg-paper border border-ink-200 flex items-center justify-center text-xs font-medium text-ink-500">
-                    +{order.items.length - 4}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-sm text-gray-600">Order Number</p>
-                <p className="font-bold text-lg">{order.orderNumber}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-600">Order Date</p>
-                <p className="font-semibold">{new Date(order.createdAt).toLocaleDateString('en-PH')}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <p className="text-sm text-gray-600">Payment Status</p>
-                <p className={`font-semibold capitalize ${order.paymentStatus === 'paid' ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {order.paymentStatus}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Order Status</p>
-                <p className="font-semibold">{orderStatusLabel(order.orderStatus)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total</p>
-                <p className="font-bold text-ink-900">₱{order.total?.toFixed(2)}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-4 border-t">
-              <p className="text-sm text-gray-600">
-                {order.items?.length || 0} item{order.items?.length === 1 ? '' : 's'}
-              </p>
-              <Link to={`/order/${order.orderNumber}`} className="text-primary-600 hover:text-primary-700 font-semibold">
-                View Details →
-              </Link>
-            </div>
-          </Panel>
+          <MerchandiseCard key={order._id} order={order} />
         ))}
       </div>
 
@@ -195,99 +176,16 @@ const LockerMine = () => {
   );
 };
 
-// The remove button is a sibling of ProductCard, not a child — ProductCard
-// is itself a full-card <Link>, so a button nested inside it would be an
-// interactive element inside an interactive element.
-const LockerSaved = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const page = Number(searchParams.get('page')) || 1;
-
-  const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState({ pages: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [removingId, setRemovingId] = useState(null);
-
-  const load = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const res = await accountService.getWishlist({ page, limit: 12 });
-      setItems(res.data);
-      setPagination(res.pagination);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-
-  const handleRemove = async (productId) => {
-    setRemovingId(productId);
-    try {
-      await accountService.removeWishlistItem(productId);
-      setItems((prev) => prev.filter((item) => item.product._id !== productId));
-    } catch {
-      // leave the item in place — the user can retry the remove action
-    } finally {
-      setRemovingId(null);
-    }
-  };
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState description="Failed to load Saved." onRetry={load} />;
-  if (items.length === 0) {
-    return (
-      <EmptyState
-        title="Nothing saved yet"
-        description="Save products you're interested in to find them here later."
-        actionLabel="Browse Products"
-        onAction={() => (window.location.href = '/products')}
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
-        {items.map((item) => (
-          <div key={item._id} className="relative">
-            <ProductCard product={item.product} />
-            <button
-              onClick={() => handleRemove(item.product._id)}
-              disabled={removingId === item.product._id}
-              className="absolute top-2 right-2 z-20 bg-white/90 hover:bg-white rounded-full p-1.5 shadow disabled:opacity-50"
-              aria-label={`Remove ${item.product.name} from Saved`}
-            >
-              <XMarkIcon className="w-4 h-4 text-ink-900" />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <Pagination
-        page={page}
-        totalPages={pagination.pages || 0}
-        onPageChange={(p) => {
-          const next = new URLSearchParams(searchParams);
-          next.set('page', String(p));
-          setSearchParams(next);
-        }}
-        className="mt-8"
-      />
-    </div>
-  );
-};
-
+// PASSES — a digital ticket wallet. Not an order list: the primary intent
+// is "find my ticket and present it at the venue", so the QR is shown right
+// in the card and one "View Ticket" tap opens the gate-optimised ticket
+// with a large, scannable QR.
 const LockerPasses = () => {
   const [passes, setPasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [activePass, setActivePass] = useState(null);
+  const activeTicketRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -306,53 +204,49 @@ const LockerPasses = () => {
     load();
   }, []);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6" aria-busy="true" aria-label="Loading your passes">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <PassCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
   if (error) return <ErrorState description="Failed to load your Passes." onRetry={load} />;
+
   if (passes.length === 0) {
     return (
       <EmptyState
-        title="No Passes yet"
-        description="Buy a Pass to a game or event to see it here."
-        actionLabel="Browse Events"
+        title="No passes yet."
+        description="Buy a Pass to a game or event and your ticket will be ready here."
+        actionLabel="Explore Events"
         onAction={() => (window.location.href = '/events')}
       />
     );
   }
 
   return (
-    <div className="space-y-4">
-      {passes.map((pass) => (
-        <Panel key={pass._id}>
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <p className="font-bold text-lg">{pass.passEvent?.name}</p>
-              <p className="text-sm text-gray-600">
-                {pass.passEvent?.venue?.name} · {pass.passEvent?.startsAt && new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
-              </p>
-            </div>
-            <span className={`font-semibold text-sm ${passStatusStyle(pass.status)}`}>
-              {passStatusLabel(pass.status)}
-            </span>
-          </div>
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+        {passes.map((pass) => (
+          <PassCard key={pass._id} pass={pass} onViewTicket={setActivePass} />
+        ))}
+      </div>
 
-          <div className="mb-4 text-sm">
-            <p className="text-gray-600">Tier</p>
-            <p className="font-semibold">{pass.passTier?.name}</p>
+      {/* Gate view — large, scannable QR, minimal chrome around it. */}
+      <Modal open={!!activePass} onClose={() => setActivePass(null)} size="md">
+        {activePass && (
+          <div className="bg-paper p-4">
+            <PassTicket pass={activePass} large ticketRef={activeTicketRef} orderNumber={activePass.order?.orderNumber} />
+            <p className="text-center text-editorial-caption text-ink-500 mt-3">
+              Present this QR at the venue entrance. Turn your screen brightness up.
+            </p>
           </div>
-
-          {pass.status === 'issued' && (
-            <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-2">Show this code at the gate</p>
-              {pass.qrCodeUrl ? (
-                <img src={pass.qrCodeUrl} alt="Pass QR code" className="w-32 h-32 border border-ink-200" />
-              ) : (
-                <p className="font-mono text-sm bg-paper border border-ink-200 px-3 py-2 break-all">{pass.qrToken}</p>
-              )}
-            </div>
-          )}
-        </Panel>
-      ))}
-    </div>
+        )}
+      </Modal>
+    </>
   );
 };
 

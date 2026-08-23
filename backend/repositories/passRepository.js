@@ -61,6 +61,9 @@ export async function restoreTierCapacity({ passTierId, quantity }, { client } =
 const DEFAULT_INCLUDE = {
   passEvent: { include: { venue: true, organization: { select: { id: true, name: true, slug: true } } } },
   passTier: { include: { venueSection: true } },
+  // Order number is shown on the ticket (the fan scans for "which order is
+  // this") — only the number, never the order's user/contact details.
+  order: { select: { orderNumber: true } },
 };
 
 export async function findById(id, { include = DEFAULT_INCLUDE, client = prisma } = {}) {

@@ -42,6 +42,29 @@ describe('validateProductionConfig — production fail-fast (names only, never v
     }
   );
 
+  it('fails fast when FRONTEND_URL points at a development host (localhost/ngrok)', () => {
+    let err;
+    try {
+      validateProductionConfig(makeEnv({ FRONTEND_URL: 'https://isolated-old-crayon.ngrok-free.dev' }));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toContain('FRONTEND_URL');
+    expect(err.missing).toEqual(['FRONTEND_URL']);
+  });
+
+  it('fails fast when FRONTEND_URL is localhost in production', () => {
+    let err;
+    try {
+      validateProductionConfig(makeEnv({ FRONTEND_URL: 'http://localhost:5173' }));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toContain('FRONTEND_URL');
+  });
+
   it('does not fail in non-production environments', () => {
     const env = makeEnv({ NODE_ENV: 'development', XENDIT_SECRET_KEY: undefined });
     expect(validateProductionConfig(env)).toEqual({ ok: true, missing: [] });
