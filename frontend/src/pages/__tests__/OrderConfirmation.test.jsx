@@ -56,4 +56,21 @@ describe('OrderConfirmation', () => {
 
     resolveVerification({ data: { paymentStatus: 'paid' } });
   });
+
+  it('renders a paid Merchandise confirmation without a runtime render error', async () => {
+    orderService.getOrderByNumber.mockResolvedValue({
+      data: {
+        ...paidPassOrder,
+        items: [{ name: 'Jersey', size: 'M', quantity: 1, price: 500, image: 'https://example.com/jersey.png' }],
+        passes: [],
+        subtotal: 500,
+        shippingFee: 0,
+        shippingAddress: { fullName: 'Maria Santos', phone: '0917', address: '1 Rizal', city: 'QC', province: 'NCR', zipCode: '1000' },
+      },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Order Confirmed!' })).toBeTruthy();
+  });
 });
