@@ -57,6 +57,22 @@ describe('xenditGateway.createCheckoutSession', () => {
     expect(body.allowed_payment_channels).toEqual(['GCASH']);
   });
 
+  it('sends the required Payment Sessions item fields for Merchandise', async () => {
+    axios.post.mockResolvedValueOnce({ data: { payment_session_id: 'sess_1', payment_link_url: 'https://checkout.xendit.co/sess_1' } });
+
+    await createCheckoutSession(makeOrder());
+
+    const [, body] = axios.post.mock.calls[0];
+    expect(body.items).toEqual([{
+      reference_id: 'prod-1',
+      name: 'Jersey',
+      quantity: 1,
+      net_unit_amount: 999,
+      type: 'PHYSICAL_PRODUCT',
+      category: 'Merchandise',
+    }]);
+  });
+
   it('rejects an order with no recognized payment channel rather than falling back to "all channels"', async () => {
     await expect(createCheckoutSession(makeOrder({ paymentChannel: 'BITCOIN' }))).rejects.toThrow();
     expect(axios.post).not.toHaveBeenCalled();
