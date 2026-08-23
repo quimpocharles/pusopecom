@@ -1384,7 +1384,12 @@ async function makeReminderTestOrder(hoursAgo, extra = {}) {
 describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
   it('sends the 24h tier for an order that just crossed 24h remaining (default 48h retention), and records it', async () => {
     // 25h old under a 48h window = 23h remaining — past the 24h threshold.
-    const order = await makeReminderTestOrder(25);
+    // Pending-Payment Email UX Revision — pre-seeded as already past the
+    // checkout-relative initial_30m tier (realistic: a real order this old
+    // would have crossed that 30-minute grace period on an earlier sweep
+    // long before ever reaching 24h remaining), so this test isolates just
+    // the 24h deadline tier's own behavior, same as before this tier existed.
+    const order = await makeReminderTestOrder(25, { paymentReminderTiers: ['initial_30m'] });
 
     try {
       const result = await sendPaymentReminders();
@@ -1392,14 +1397,19 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
       expect(result.remindersSent).toBeGreaterThanOrEqual(1);
 
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
-      expect(updated.paymentReminderTiers).toEqual(['24h']);
+      expect(updated.paymentReminderTiers).toEqual(['initial_30m', '24h']);
     } finally {
       await prisma.order.delete({ where: { id: order.id } });
     }
   }, 20000);
 
   it('sends nothing for an order still well inside every tier window', async () => {
-    const order = await makeReminderTestOrder(5); // 43h remaining — under no threshold yet
+    // Pending-Payment Email UX Revision — genuinely inside every tier's
+    // window now means under the initial_30m tier's 30-minute grace period
+    // too, not just the old 24h/6h/2h deadline tiers. 6 minutes old keeps
+    // this test's original meaning intact rather than accepting a
+    // partially-fired result.
+    const order = await makeReminderTestOrder(0.1); // 6 minutes old — inside every tier, including the new 30-minute one
 
     try {
       await sendPaymentReminders();
@@ -1411,25 +1421,32 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
   }, 15000);
 
   it('never re-sends a tier that was already recorded — idempotent across runs', async () => {
-    const order = await makeReminderTestOrder(25, { paymentReminderTiers: ['24h'] });
+    // Both tiers pre-seeded as already sent — this order is old enough
+    // (25h) to otherwise also be a candidate for initial_30m, so it has to
+    // be excluded here too for the test to actually isolate "nothing new
+    // fires," not just "the 24h tier specifically doesn't re-fire."
+    const order = await makeReminderTestOrder(25, { paymentReminderTiers: ['24h', 'initial_30m'] });
 
     try {
       await sendPaymentReminders();
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
-      expect(updated.paymentReminderTiers).toEqual(['24h']); // unchanged — not appended again
+      expect(updated.paymentReminderTiers).toEqual(['24h', 'initial_30m']); // unchanged — not appended again
     } finally {
       await prisma.order.delete({ where: { id: order.id } });
     }
   }, 15000);
 
   it('a cron gap that skips past multiple tiers sends only the most urgent, but records all of them', async () => {
-    // 47h old under a 48h window = 1h remaining — past 24h, 6h, AND 2h at once.
-    const order = await makeReminderTestOrder(47);
+    // 47h old under a 48h window = 1h remaining — past 24h, 6h, AND 2h at
+    // once. Pre-seeded past initial_30m for the same reason as the 24h
+    // test above — isolates this test to the deadline-tier "most urgent
+    // wins, all get recorded" behavior it's actually about.
+    const order = await makeReminderTestOrder(47, { paymentReminderTiers: ['initial_30m'] });
 
     try {
       await sendPaymentReminders();
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
-      expect(updated.paymentReminderTiers).toEqual(['24h', '6h', '2h']);
+      expect(updated.paymentReminderTiers).toEqual(['initial_30m', '24h', '6h', '2h']);
     } finally {
       await prisma.order.delete({ where: { id: order.id } });
     }
