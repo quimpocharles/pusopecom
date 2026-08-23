@@ -26,6 +26,43 @@ const ORG_KIND_GROUPS = [
 // datetime-local inputs need "YYYY-MM-DDTHH:mm", ISO strings have seconds/Z
 const toDateTimeLocal = (iso) => (iso ? iso.slice(0, 16) : '');
 
+// Start-of-day "today" in the same reference frame the browser's
+// datetime-local value and `new Date(value)` already use — comparing by
+// calendar day, not exact instant, so an event starting later today is
+// still valid (only a start strictly before today is rejected). Also used
+// as the <input min> so the native picker can't select a past date at all.
+const startOfTodayDateTimeLocal = () => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00`;
+};
+
+// `originalStartsAt` is the event's persisted value at the moment Edit was
+// opened (unset when creating). An edit that leaves the start date exactly
+// as it already was is exempt from the "not before today" rule — an
+// existing historical event must stay editable (e.g. to fix its
+// description, or deactivate it) without forcing its start date forward
+// just to pass validation. The moment the admin actually changes it to a
+// *different* value, that new value is held to the normal rule like any
+// other start date — including a different past date, which is still
+// rejected.
+function validateStartsAt(startsAt, originalStartsAt) {
+  if (!startsAt) return '';
+  if (originalStartsAt && startsAt === originalStartsAt) return '';
+  const start = new Date(startsAt);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  if (start < startOfToday) return 'Start date cannot be before today.';
+  return '';
+}
+
+function validateEndsAt(startsAt, endsAt) {
+  if (!endsAt || !startsAt) return '';
+  if (new Date(endsAt) < new Date(startsAt)) return 'End date must be on or after the start date.';
+  return '';
+}
+
 const AdminPassEvents = () => {
   const [events, setEvents] = useState([]);
   const [venues, setVenues] = useState([]);
@@ -38,7 +75,19 @@ const AdminPassEvents = () => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({ startsAt: '', endsAt: '' });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  // The raw event being hydrated into the edit form, and whether reference
+  // data (leagues, in particular) has finished loading — see the hydration
+  // effect below for why these are split from `form` instead of resolving
+  // organizationId/leagueId synchronously inside openEdit.
+  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  // The event's own persisted start date, snapshotted when Edit opens — see
+  // validateStartsAt's comment for why this needs to be tracked separately
+  // from `form.startsAt` (which changes as the admin edits).
+  const [originalStartsAt, setOriginalStartsAt] = useState('');
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -54,22 +103,60 @@ const AdminPassEvents = () => {
 
   useEffect(() => {
     fetchEvents();
-    venueService.getAll().then((res) => setVenues(res.data)).catch((err) => console.error('Failed to load venues:', err));
-    organizationService.getAll().then((res) => setOrganizations(res.data)).catch((err) => console.error('Failed to load organizations:', err));
-    leagueService.getLeagues().then((res) => setLeagues(res.data)).catch((err) => console.error('Failed to load leagues:', err));
+    const venuesLoaded = venueService.getAll().then((res) => setVenues(res.data)).catch((err) => console.error('Failed to load venues:', err));
+    const orgsLoaded = organizationService.getAll().then((res) => setOrganizations(res.data)).catch((err) => console.error('Failed to load organizations:', err));
+    const leaguesLoaded = leagueService.getLeagues().then((res) => setLeagues(res.data)).catch((err) => console.error('Failed to load leagues:', err));
+    Promise.all([venuesLoaded, orgsLoaded, leaguesLoaded]).then(() => setReferenceDataLoaded(true));
   }, [fetchEvents]);
 
   const selectedLeague = leagues.find((l) => l._id === form.leagueId);
 
+  // Edit-form hydration for Organization/League — deliberately NOT done
+  // synchronously inside openEdit, because matching a League-sourced
+  // event's Organization back to its League picker option requires
+  // `leagues` to already be loaded (a name lookup, not just a stable id —
+  // see the comment on the League optgroup below). If openEdit ran that
+  // match immediately, a admin opening Edit before the mount-time
+  // leagues fetch resolves would permanently see "Select..." (the exact
+  // organization/team persistence bug this fixes). Waiting for
+  // `referenceDataLoaded` and re-running once it flips true fixes that
+  // race without guessing at a fetch-completion order. This effect never
+  // touches `form.teamNames` — that's set directly in openEdit and must
+  // survive this hydration untouched (see openEdit's own comment).
+  useEffect(() => {
+    if (!editingEvent || !referenceDataLoaded) return;
+    const matchedLeague = editingEvent.organization?.kind === 'league'
+      ? leagues.find((l) => l.name === editingEvent.organization.name)
+      : null;
+    setForm((prev) => ({
+      ...prev,
+      organizationId: matchedLeague ? '' : (editingEvent.organizationId || editingEvent.organization?._id || ''),
+      leagueId: matchedLeague?._id || '',
+    }));
+    // Hydration is a one-time thing per edit session — clearing this
+    // prevents a later leagues/organizations refetch from re-running the
+    // match and clobbering a subsequent intentional org change the admin
+    // made via handleOrgPickerChange.
+    setEditingEvent(null);
+  }, [editingEvent, referenceDataLoaded, leagues]);
+
   // Institution/Athlete-sourced events pick from real Team rows. League-
   // sourced ones use league.teams directly (see handleOrgPickerChange's own
-  // comment) — this fetch only ever matters for the former.
+  // comment) — this fetch only ever matters for the former. teamsLoading
+  // gates the "No teams available" message so it never renders as a false
+  // negative while this request is still in flight (including right after
+  // openEdit sets organizationId during hydration).
   useEffect(() => {
     if (!form.organizationId) {
       setTeams([]);
+      setTeamsLoading(false);
       return;
     }
-    organizationService.getTeams(form.organizationId).then((res) => setTeams(res.data)).catch(() => setTeams([]));
+    setTeamsLoading(true);
+    organizationService.getTeams(form.organizationId)
+      .then((res) => setTeams(res.data))
+      .catch(() => setTeams([]))
+      .finally(() => setTeamsLoading(false));
   }, [form.organizationId]);
 
   // League-sourced options are the flat League.teams roster (the same data
@@ -80,6 +167,15 @@ const AdminPassEvents = () => {
   const teamNameOptions = form.leagueId ? (selectedLeague?.teams || []) : teams.map((t) => t.name);
 
   const orgPickerValue = form.leagueId ? `league:${form.leagueId}` : form.organizationId ? `org:${form.organizationId}` : '';
+
+  // The <input min> floor: normally today, but relaxed down to the event's
+  // own original start date when that's earlier — so the browser's native
+  // range check doesn't flag an unchanged historical value as invalid and
+  // block submission before validateStartsAt ever gets a chance to allow
+  // it. The picker still can't go any earlier than that.
+  const minStartsAt = originalStartsAt && originalStartsAt < startOfTodayDateTimeLocal()
+    ? originalStartsAt
+    : startOfTodayDateTimeLocal();
 
   const handleOrgPickerChange = (e) => {
     const [kind, id] = e.target.value.split(':');
@@ -100,32 +196,42 @@ const AdminPassEvents = () => {
     }));
   };
 
+  const closeModal = () => {
+    setModalOpen(false);
+    // Prevents a still-in-flight hydration (referenceDataLoaded flipping
+    // true after this edit session was abandoned) from later applying
+    // this event's organization/league onto whatever the admin opens next.
+    setEditingEvent(null);
+  };
+
   const openAdd = () => {
     setEditingId(null);
+    setEditingEvent(null);
+    setOriginalStartsAt('');
     setForm(emptyForm);
     setError('');
+    setFieldErrors({ startsAt: '', endsAt: '' });
     setModalOpen(true);
   };
 
   const openEdit = (event) => {
     setEditingId(event._id);
-    // The stored organization is always what's real (the League bridge
-    // target) — if it's a league-kind Organization, match it back to its
-    // League by name (the bridge always sets Organization.name =
-    // League.name exactly, see ensureLeagueOrganization) so the picker
-    // preselects the League option, not the underlying Organization one.
-    const matchedLeague = event.organization?.kind === 'league'
-      ? leagues.find((l) => l.name === event.organization.name)
-      : null;
+    // Organization/League matching is deferred to the hydration effect
+    // above (it needs `leagues` loaded first) — everything else, including
+    // teamNames, is the event's own persisted data and can be applied
+    // immediately, independent of that race.
+    setEditingEvent(event);
+    const startsAt = toDateTimeLocal(event.startsAt);
+    setOriginalStartsAt(startsAt);
     setForm({
       name: event.name,
       slug: event.slug,
       description: event.description || '',
-      organizationId: matchedLeague ? '' : (event.organizationId || event.organization?._id || ''),
-      leagueId: matchedLeague?._id || '',
+      organizationId: '',
+      leagueId: '',
       teamNames: event.teamNames || [],
       venueId: event.venueId || event.venue?._id || '',
-      startsAt: toDateTimeLocal(event.startsAt),
+      startsAt,
       endsAt: toDateTimeLocal(event.endsAt),
       salesStartAt: toDateTimeLocal(event.salesStartAt),
       salesEndAt: toDateTimeLocal(event.salesEndAt),
@@ -133,6 +239,7 @@ const AdminPassEvents = () => {
       image: event.images?.[0] || '',
     });
     setError('');
+    setFieldErrors({ startsAt: '', endsAt: '' });
     setModalOpen(true);
   };
 
@@ -141,9 +248,37 @@ const AdminPassEvents = () => {
     setForm((prev) => ({ ...prev, name, ...(editingId ? {} : { slug: generateSlug(name) }) }));
   };
 
+  const handleStartsAtChange = (e) => {
+    const startsAt = e.target.value;
+    setForm((prev) => ({ ...prev, startsAt }));
+    setFieldErrors((prev) => ({
+      ...prev,
+      startsAt: validateStartsAt(startsAt, originalStartsAt),
+      // The start date changed — re-check whatever end date is already
+      // selected against it, rather than leaving a now-stale error (or lack
+      // of one) in place. The end date value itself is never touched here.
+      endsAt: validateEndsAt(startsAt, form.endsAt),
+    }));
+  };
+
+  const handleEndsAtChange = (e) => {
+    const endsAt = e.target.value;
+    setForm((prev) => ({ ...prev, endsAt }));
+    setFieldErrors((prev) => ({ ...prev, endsAt: validateEndsAt(form.startsAt, endsAt) }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const startsAtError = validateStartsAt(form.startsAt, originalStartsAt);
+    const endsAtError = validateEndsAt(form.startsAt, form.endsAt);
+    if (startsAtError || endsAtError) {
+      setFieldErrors({ startsAt: startsAtError, endsAt: endsAtError });
+      setError('Please fix the highlighted date fields before saving.');
+      return;
+    }
+
     setSaving(true);
     try {
       const { image, ...rest } = form;
@@ -158,7 +293,7 @@ const AdminPassEvents = () => {
       } else {
         await passEventService.create(payload);
       }
-      setModalOpen(false);
+      closeModal();
       fetchEvents();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save event');
@@ -270,7 +405,7 @@ const AdminPassEvents = () => {
           <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">{editingId ? 'Edit Event' : 'Add Event'}</h3>
-              <button onClick={() => setModalOpen(false)} className="p-1.5 hover:bg-ink-200">
+              <button onClick={closeModal} className="p-1.5 hover:bg-ink-200">
                 <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
@@ -344,10 +479,18 @@ const AdminPassEvents = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Teams (optional)</label>
-                  {teamNameOptions.length === 0 ? (
-                    <p className="text-xs text-gray-400 border border-ink-200 px-3 py-2">
-                      {orgPickerValue ? 'No teams available' : 'Select an organization first'}
-                    </p>
+                  {!orgPickerValue ? (
+                    <p className="text-xs text-gray-400 border border-ink-200 px-3 py-2">Select an organization first</p>
+                  ) : !form.leagueId && teamsLoading ? (
+                    // League-sourced options come from `leagues` (already
+                    // loaded by now) with no extra request, so this only
+                    // ever applies to the real Team-row fetch below —
+                    // without it, this briefly (and wrongly) read as "No
+                    // teams available" while that fetch was still in
+                    // flight, including right after edit-form hydration.
+                    <p className="text-xs text-gray-400 border border-ink-200 px-3 py-2">Loading teams…</p>
+                  ) : teamNameOptions.length === 0 ? (
+                    <p className="text-xs text-gray-400 border border-ink-200 px-3 py-2">No teams available</p>
                   ) : (
                     <div className="border border-ink-200 max-h-32 overflow-y-auto px-3 py-2 space-y-1.5">
                       {teamNameOptions.map((name) => (
@@ -387,20 +530,26 @@ const AdminPassEvents = () => {
                   <input
                     type="datetime-local"
                     value={form.startsAt}
-                    onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+                    onChange={handleStartsAtChange}
+                    min={minStartsAt}
                     required
+                    aria-invalid={!!fieldErrors.startsAt}
                     className="input-field text-sm"
                   />
+                  {fieldErrors.startsAt && <p className="text-red-600 text-sm mt-1">{fieldErrors.startsAt}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Ends</label>
                   <input
                     type="datetime-local"
                     value={form.endsAt}
-                    onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+                    onChange={handleEndsAtChange}
+                    min={form.startsAt || startOfTodayDateTimeLocal()}
                     required
+                    aria-invalid={!!fieldErrors.endsAt}
                     className="input-field text-sm"
                   />
+                  {fieldErrors.endsAt && <p className="text-red-600 text-sm mt-1">{fieldErrors.endsAt}</p>}
                 </div>
               </div>
 
@@ -440,7 +589,7 @@ const AdminPassEvents = () => {
                 <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
                   {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
                 </button>
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary">
+                <button type="button" onClick={closeModal} className="btn-secondary">
                   Cancel
                 </button>
               </div>

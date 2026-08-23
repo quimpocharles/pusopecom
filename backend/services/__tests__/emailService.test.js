@@ -106,6 +106,23 @@ describe('transactional email URLs — production-safe by construction', () => {
     expect(html).toContain('<img src="https://res.cloudinary.com/dzps2jbk3/image/upload/puso-shop/pass-qr/tok-1.png"');
   });
 
+  it('each Pass ticket card in the order confirmation shows its Order Number and Ticket Number', async () => {
+    await sendOrderConfirmationEmail('fan@example.com', baseOrder({
+      orderNumber: 'PS-20260901-ABCD',
+      passes: [{
+        _id: 'pass-1', status: 'issued', qrToken: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        qrCodeUrl: 'https://res.cloudinary.com/dzps2jbk3/image/upload/puso-shop/pass-qr/tok-1.png',
+        passEvent: { name: 'UAAP Finals', images: [] },
+        passTier: { name: 'GA' },
+      }],
+    }));
+    const html = sent[0].html;
+    expect(html).toContain('Order Number');
+    expect(html).toContain('PS-20260901-ABCD');
+    expect(html).toContain('Ticket Number');
+    expect(html).toContain('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+  });
+
   it('8. subject is passed through unchanged', async () => {
     await sendPaymentReminderEmail('fan@example.com', baseOrder(), '6 hours');
     expect(sent[0].subject).toBe('Reminder: Complete Payment (6 hours left) - PS-20260901-ABCD');

@@ -100,8 +100,58 @@ async function resolveOrganizationId(body) {
   return rest;
 }
 
+// Same minute-granularity round-trip AdminPassEvents.jsx's own
+// toDateTimeLocal/datetime-local input already uses — comparing at this
+// granularity (not exact milliseconds) is what makes "did the admin
+// actually change the start date" a meaningful question at all, since the
+// form itself can't express anything finer than a minute.
+function toMinuteLocalString(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Mirrors the admin Event form's own date rules (AdminPassEvents.jsx) so an
+// invalid create/update can't reach the database by calling the API
+// directly, bypassing the UI's <input min> constraints and JS validation.
+// Comparison is by calendar day (start-of-day), not exact instant — an
+// event starting later today is still valid, matching the form's own
+// "today" semantics. `startsAt`/`endsAt` here are whatever this form always
+// sends (a datetime-local string, e.g. "2026-09-01T10:00"), parsed with the
+// same `new Date(value)` call normalizeDateFields uses for storage, so this
+// validates against exactly the instant that will actually be persisted —
+// no separate timezone interpretation to drift out of sync with it.
+//
+// `existingStartsAt` (edit only, undefined on create) is the event's
+// currently-persisted start date. An edit that leaves it unchanged is
+// exempt from the "not before today" rule — an already-historical event
+// must stay editable (fixing unrelated fields, deactivating it, etc.)
+// without being forced to move its start date forward. The moment the
+// incoming value actually differs from what's stored, it's held to the
+// normal rule like any other start date, including a different past date.
+function validateEventDates({ startsAt, endsAt }, { existingStartsAt } = {}) {
+  if (startsAt === undefined && endsAt === undefined) return null;
+
+  const start = startsAt !== undefined ? new Date(startsAt) : null;
+  const end = endsAt !== undefined ? new Date(endsAt) : null;
+  if (start && Number.isNaN(start.getTime())) return 'Event start date is invalid.';
+  if (end && Number.isNaN(end.getTime())) return 'Event end date is invalid.';
+
+  if (start) {
+    const unchanged = existingStartsAt && toMinuteLocalString(start) === toMinuteLocalString(new Date(existingStartsAt));
+    if (!unchanged) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (start < startOfToday) return 'Event start date cannot be before today.';
+    }
+  }
+  if (start && end && end < start) return 'Event end date must be on or after the start date.';
+  return null;
+}
+
 router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MANAGE), async (req, res) => {
   try {
+    const dateError = validateEventDates(req.body);
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
     const data = await resolveOrganizationId(req.body);
     const event = await passEventRepository.create(data);
     res.status(201).json({ success: true, message: 'Event created successfully', data: event });
@@ -117,6 +167,9 @@ router.post('/', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MAN
 
 router.put('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.PASSES_MANAGE), async (req, res) => {
   try {
+    const existing = await passEventRepository.findById(req.params.id);
+    const dateError = validateEventDates(req.body, { existingStartsAt: existing?.startsAt });
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
     const data = await resolveOrganizationId(req.body);
     const event = await passEventRepository.updateById(req.params.id, data);
     res.json({ success: true, message: 'Event updated successfully', data: event });

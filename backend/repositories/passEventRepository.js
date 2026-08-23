@@ -6,7 +6,12 @@ const DATE_FIELDS = ['startsAt', 'endsAt', 'salesStartAt', 'salesEndAt'];
 
 const DEFAULT_INCLUDE = {
   venue: true,
-  organization: { select: { id: true, name: true, slug: true, logoUrl: true } },
+  // `kind` is required by the admin Event form (AdminPassEvents.jsx) to
+  // tell a League-bridge Organization (ensureLeagueOrganization) apart from
+  // a real Institution/Athlete one when re-hydrating the edit form's
+  // Organization picker — without it every league-sourced event's edit
+  // form silently fails to preselect its organization/teams.
+  organization: { select: { id: true, name: true, slug: true, logoUrl: true, kind: true } },
   tiers: { include: { venueSection: true } },
 };
 

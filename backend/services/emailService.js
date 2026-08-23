@@ -351,15 +351,25 @@ const passCards = (order) => (order.passes || []).map((pass) => {
             <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#d97706;">Ticket Details</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td width="50%" style="vertical-align:top;">
+                <td width="50%" style="vertical-align:top;padding-bottom:12px;">
                   <p style="margin:0;font-size:11px;color:#767676;">Ticket Type</p>
-                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;color:#0a0a0a;">${pass.passTier?.name || ''}</p>
+                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(pass.passTier?.name || '')}</p>
                 </td>
                 ${pass.passTier?.venueSection?.name ? `
-                <td width="50%" style="vertical-align:top;">
+                <td width="50%" style="vertical-align:top;padding-bottom:12px;">
                   <p style="margin:0;font-size:11px;color:#767676;">Section</p>
-                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;color:#0a0a0a;">${pass.passTier.venueSection.name}</p>
-                </td>` : '<td width="50%"></td>'}
+                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;color:#0a0a0a;">${escapeHtml(pass.passTier.venueSection.name)}</p>
+                </td>` : '<td width="50%" style="padding-bottom:12px;"></td>'}
+              </tr>
+              <tr>
+                <td width="50%" style="vertical-align:top;">
+                  <p style="margin:0;font-size:11px;color:#767676;">Order Number</p>
+                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;font-family:monospace;letter-spacing:0.02em;color:#0a0a0a;word-break:break-all;">${escapeHtml(order.orderNumber)}</p>
+                </td>
+                <td width="50%" style="vertical-align:top;">
+                  <p style="margin:0;font-size:11px;color:#767676;">Ticket Number</p>
+                  <p style="margin:2px 0 0;font-size:13px;font-weight:700;font-family:monospace;letter-spacing:0.02em;color:#0a0a0a;word-break:break-all;">${escapeHtml(pass.qrToken)}</p>
+                </td>
               </tr>
             </table>
           </td>
