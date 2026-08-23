@@ -705,6 +705,11 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
     expect(order.orderStatus).toBe('paid'); // Payment Platform Redesign, Phase 2 — was 'confirmed'
     expect(confirmationEmail.sendOrderConfirmation).toHaveBeenCalledTimes(1);
 
+    // Pending-Payment Email UX Revision — the normal-purchase scenario:
+    // checkout immediately followed by payment must produce exactly one
+    // email (confirmation), never "Complete Your Payment" too.
+    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
+
     const shippingEvent = await prisma.shippingEvent.findFirst({ where: { orderId: orderNumber } });
     expect(shippingEvent).not.toBeNull();
 
@@ -985,11 +990,13 @@ describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => 
     const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
     const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
     expect(order.orderStatus).toBe('awaiting_payment');
-    // Payment Platform Redesign, Phase 6 — the only email that used to fire
-    // was on success; a still-pending order (the normal case) got silence.
-    expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledWith(
-      order.email, expect.objectContaining({ orderNumber: order.orderNumber })
-    );
+    // Pending-Payment Email UX Revision — "Complete Your Payment" no
+    // longer fires synchronously at checkout (that's what produced the
+    // back-to-back pending+confirmed emails for a customer who paid
+    // immediately). It's now sent only by the delayed reminder sweep, once
+    // an order has genuinely stalled — see
+    // lib/__tests__/sendPaymentReminders.test.js.
+    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
   }, 15000);
 
   it('an expired checkout session marks the order expired, distinct from a failed one', async () => {

@@ -485,6 +485,13 @@ model Order {
   // checkout session's ephemeral 1-hour Maya expiry. Regenerating a
   // session (Phase 3) creates a new Payment row but must never reset which
   // reminders already went out for this same underlying deadline.
+  //
+  // Pending-Payment Email UX Revision — also holds sendPaymentReminders.js's
+  // checkout-relative INITIAL_TIER_KEY ('initial_30m'), the delayed
+  // replacement for the "Complete Your Payment" email that used to send
+  // unconditionally at checkout. Same array, same idempotency mechanism;
+  // that tier's threshold is just measured from createdAt directly instead
+  // of from the retention deadline.
   paymentReminderTiers String[] @default([])
 
   // Set only after the confirmation email's SMTP send resolves. A null value

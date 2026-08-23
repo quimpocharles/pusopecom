@@ -20,7 +20,7 @@ import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js'
 import { xenditWebhookVerify } from '../middleware/xenditWebhookVerify.js';
 import * as paymentService from '../services/paymentService.js';
 import { calculateGatewayFee, isValidChannel } from '../lib/payments/xenditFees.js';
-import { sendPaymentPendingEmail, sendPaymentFailedEmail } from '../services/emailService.js';
+import { sendPaymentFailedEmail } from '../services/emailService.js';
 import { sendOrderConfirmation } from '../lib/orderConfirmationEmail.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as accountCache from '../lib/accountCache.js';
@@ -760,16 +760,18 @@ router.post('/',
           'Order created'
         );
 
-        // Payment Platform Redesign, Phase 6 — the only email a customer
-        // used to get was on success; a still-pending order (the normal
-        // case right after redirect to Maya) got silence. Fire-and-forget,
-        // same as the dual-write Payment create above — this is the
-        // customer's checkout-redirect response, the one path on the whole
-        // payment lifecycle where SMTP latency actually costs something.
-        sendPaymentPendingEmail(order.email, order).catch((emailError) => {
-          logger.error({ err: emailError, orderNumber: order.orderNumber }, 'Failed to send payment-pending email');
-          Sentry.captureException(emailError);
-        });
+        // Payment Platform Redesign, Phase 6 originally sent a "Complete
+        // Your Payment" email unconditionally right here, immediately after
+        // this response — but that fires before the customer's browser has
+        // even redirected to the gateway, so a customer who pays in one
+        // sitting got it and "Order Confirmed" seconds apart. Pending-
+        // Payment Email UX Revision moved this to a delayed reminder
+        // instead: lib/sendPaymentReminders.js's hourly sweep now sends the
+        // same "Complete Your Payment" content (sendPaymentPendingEmail),
+        // but only to an order still genuinely `awaiting_payment` 30+
+        // minutes after this moment — never to one that already resolved.
+        // The `payment_pending` OrderEvent above still records this moment
+        // for the audit trail regardless of whether any email follows it.
 
         res.status(201).json({
           success: true,

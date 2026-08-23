@@ -417,11 +417,19 @@ export const sendOrderConfirmationEmail = async (email, order) => {
 };
 
 // ── Payment Platform Redesign, Phase 6 ──────────────────────────────────────────
-// Payment Pending — sent once, immediately at order creation. The original
-// spec listed "Order Created" and "Payment Pending" as separate emails, but
-// for every real order today those two events happen in the same request
-// (checkout always starts a payment session) — sending two emails back to
-// back for one moment would just be noise. One honest email covering both.
+// Payment Pending. The original spec listed "Order Created" and "Payment
+// Pending" as separate emails, but for every real order today those two
+// events happen in the same request (checkout always starts a payment
+// session) — sending two emails back to back for one moment would just be
+// noise. One honest email covering both.
+//
+// Pending-Payment Email UX Revision — this used to be called unconditionally
+// from routes/orders.js the instant a checkout session was created, before
+// the customer had even redirected to the gateway. That meant a customer
+// who paid within seconds got this AND "Order Confirmed" back to back. The
+// only caller now is lib/sendPaymentReminders.js's hourly sweep, which sends
+// this exact content (unchanged) to an order only once it's been genuinely
+// `awaiting_payment` for 30+ minutes — never to one that already resolved.
 export const sendPaymentPendingEmail = async (email, order) => {
   const payUrl = appUrl(`/order/${order.orderNumber}`);
   const itemsRows = orderItemsRows(order);
