@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, DocumentArrowDownIcon, ClipboardDocumentIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, ExclamationTriangleIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, DocumentArrowDownIcon, ClipboardDocumentIcon, EnvelopeIcon, ClockIcon } from '@heroicons/react/24/outline';
 import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import PassTicket from '../components/locker/PassTicket';
@@ -53,10 +53,89 @@ const HERO_CONTENT = {
 // is what actually communicates further progress.
 const heroFor = (order) => HERO_CONTENT[order.orderStatus] || HERO_CONTENT.paid;
 
+// Post-Payment Processing UX — a customer who just redirected back with
+// ?payment=success has already paid; the only thing genuinely pending is
+// our own confirmation catching up (webhook delivery / gateway sync),
+// typically seconds, not minutes. POLL_INTERVAL_MS/MAX_POLL_ATTEMPTS give
+// that a real chance to resolve (~20s total) before falling back to a
+// neutral "taking longer" state — reusing the existing verify-payment
+// endpoint (a real authenticated pull against the gateway, same one
+// /verify-payment already made available for this exact reconciliation)
+// rather than inventing a new one or a fake progress indicator.
+const POLL_INTERVAL_MS = 2500;
+const MAX_POLL_ATTEMPTS = 8;
+
 const InfoRow = ({ label, value }) => (
   <div className="flex justify-between gap-4 text-sm">
     <dt className="text-gray-500">{label}</dt>
     <dd className="font-medium text-gray-900 text-right">{value}</dd>
+  </div>
+);
+
+// Substitutes for the hero card while a just-completed payment is still
+// being confirmed — deliberately calm/blue, never the yellow "act now"
+// tone the same card uses for a genuinely unpaid order. role="status" +
+// aria-live/aria-busy so assistive tech announces the state without
+// depending on the spinner being visually noticed; the step list is
+// itself the "meaningful status text," not just decoration.
+const ProcessingCard = () => (
+  <div
+    className="card p-8 text-center bg-blue-50"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+    aria-label="Payment processing status"
+  >
+    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-blue-100">
+      <span
+        className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"
+        aria-hidden="true"
+      />
+    </div>
+    <h1 className="text-2xl font-bold mb-2">Processing Your Payment</h1>
+    <p className="text-gray-600">We&rsquo;re confirming your payment. This may take a few moments.</p>
+
+    <ul className="mt-6 max-w-xs mx-auto space-y-3 text-left">
+      <li className="flex items-center gap-3 text-sm">
+        <CheckIcon className="w-5 h-5 text-green-600 flex-shrink-0" aria-hidden="true" />
+        <span className="text-gray-700">Payment submitted <span className="text-gray-400">&mdash; Received</span></span>
+      </li>
+      <li className="flex items-center gap-3 text-sm">
+        <span
+          className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin flex-shrink-0"
+          aria-hidden="true"
+        />
+        <span className="text-gray-900 font-medium">Verifying payment <span className="text-gray-400 font-normal">&mdash; Please wait</span></span>
+      </li>
+      <li className="flex items-center gap-3 text-sm">
+        <span className="w-5 h-5 rounded-full border-2 border-gray-300 flex-shrink-0" aria-hidden="true" />
+        <span className="text-gray-400">Order confirmation &mdash; Almost done</span>
+      </li>
+    </ul>
+
+    <p className="text-sm text-gray-500 mt-6">
+      Please don&rsquo;t close this page. We&rsquo;ll update your order automatically.
+    </p>
+  </div>
+);
+
+// The bounded-poll fallback. Neutral, not a failure state — a delayed
+// webhook is not the same fact as a declined payment, and this card must
+// never conflate the two.
+const VerificationTimeoutCard = ({ onCheckStatus, checking }) => (
+  <div className="card p-8 text-center bg-blue-50" role="status" aria-live="polite">
+    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-blue-100">
+      <ClockIcon className="w-8 h-8 text-blue-600" aria-hidden="true" />
+    </div>
+    <h1 className="text-2xl font-bold mb-2">Payment Confirmation Is Taking Longer</h1>
+    <p className="text-gray-600">
+      We&rsquo;ve received your payment response, but confirmation is taking longer than usual. You don&rsquo;t need to pay again.
+    </p>
+    <div className="mt-6">
+      <button onClick={onCheckStatus} disabled={checking} className="btn-primary disabled:opacity-60">
+        {checking ? 'Checking…' : 'Check Order Status'}
+      </button>
+    </div>
   </div>
 );
 
@@ -74,8 +153,19 @@ const OrderConfirmation = () => {
   const [activePassIndex, setActivePassIndex] = useState(0);
   const ticketRef = useRef(null);
 
+  // Post-Payment Processing UX — true only during the bounded window right
+  // after a ?payment=success redirect, while the order is still (as far as
+  // we've read) awaiting_payment. Drives the ProcessingCard substituting
+  // for the normal hero so a customer who already paid is never told to
+  // "Complete Your Payment." verificationTimedOut is the fallback once
+  // MAX_POLL_ATTEMPTS is exhausted — a neutral state, not a failure one.
+  const [verifying, setVerifying] = useState(false);
+  const [verificationTimedOut, setVerificationTimedOut] = useState(false);
+  const [manualRechecking, setManualRechecking] = useState(false);
+
   useEffect(() => {
     let active = true;
+    let pollTimer;
 
     const applyOrder = (data) => {
       if (!active) return;
@@ -87,23 +177,53 @@ const OrderConfirmation = () => {
       }
     };
 
+    // Polls the existing verify-payment endpoint — a real authenticated
+    // pull against the gateway, the same mechanism a single reconciliation
+    // check already used — instead of leaving the customer looking at
+    // "Complete Your Payment" for a payment they already made. Stops the
+    // moment the order resolves either way (paid or failed); falls back to
+    // a neutral "taking longer" state after MAX_POLL_ATTEMPTS rather than
+    // polling indefinitely.
+    const pollVerification = async (attempt) => {
+      if (!active) return;
+      try {
+        const verification = await orderService.verifyPayment(orderNumber);
+        if (!active) return;
+        if (verification?.data?.paymentStatus && verification.data.paymentStatus !== 'pending') {
+          const refreshed = await orderService.getOrderByNumber(orderNumber);
+          if (!active) return;
+          applyOrder(refreshed.data);
+          setVerifying(false);
+          return;
+        }
+      } catch {
+        // A transient network/gateway hiccup is not the same fact as a
+        // failed payment — stay within the poll budget rather than
+        // surfacing an error for one missed attempt.
+      }
+
+      if (!active) return;
+      if (attempt >= MAX_POLL_ATTEMPTS) {
+        setVerifying(false);
+        setVerificationTimedOut(true);
+        return;
+      }
+      pollTimer = setTimeout(() => pollVerification(attempt + 1), POLL_INTERVAL_MS);
+    };
+
     const fetchOrder = async () => {
       try {
         const response = await orderService.getOrderByNumber(orderNumber);
         applyOrder(response.data);
 
-        // Payment verification is a reconciliation backstop, not a reason
-        // to hold the customer's first render. If the initial read was still
-        // pending and verification resolves it, refresh once after the
-        // state transition completes.
-        if (paymentStatusParam === 'success' && response.data.paymentStatus !== 'paid') {
-          orderService.verifyPayment(orderNumber)
-            .then(async (verification) => {
-              if (!active || verification?.data?.paymentStatus === response.data.paymentStatus) return;
-              const refreshed = await orderService.getOrderByNumber(orderNumber);
-              applyOrder(refreshed.data);
-            })
-            .catch(() => {});
+        // Only a genuinely still-unresolved order (still awaiting_payment)
+        // after a successful-looking redirect gets the processing/poll
+        // treatment — an order already paid or already failed/expired by
+        // the first read goes straight to its normal, permanent hero.
+        if (paymentStatusParam === 'success' && response.data.orderStatus === 'awaiting_payment') {
+          setVerifying(true);
+          setVerificationTimedOut(false);
+          pollVerification(1);
         }
       } catch (err) {
         if (active) setError('Order not found');
@@ -114,13 +234,35 @@ const OrderConfirmation = () => {
 
     if (orderNumber) {
       setActivePassIndex(0);
+      setVerifying(false);
+      setVerificationTimedOut(false);
       fetchOrder();
     }
 
     return () => {
       active = false;
+      clearTimeout(pollTimer);
     };
   }, [orderNumber, paymentStatusParam]);
+
+  // Manual fallback offered by VerificationTimeoutCard — one more check
+  // against the same safe endpoints, not a new polling loop and not a new
+  // payment session.
+  const handleCheckOrderStatus = async () => {
+    setManualRechecking(true);
+    try {
+      const verification = await orderService.verifyPayment(orderNumber);
+      const refreshed = await orderService.getOrderByNumber(orderNumber);
+      setOrder(refreshed.data);
+      if (verification?.data?.paymentStatus && verification.data.paymentStatus !== 'pending') {
+        setVerificationTimedOut(false);
+      }
+    } catch {
+      // Stays in the "taking longer" state — the customer can press again.
+    } finally {
+      setManualRechecking(false);
+    }
+  };
 
   const paymentExpiresAt = order?.payment?.status === 'pending' ? order.payment.expiresAt : null;
   const { formatted: timeRemaining, isExpired: countdownExpired } = usePaymentCountdown(paymentExpiresAt);
@@ -170,26 +312,35 @@ const OrderConfirmation = () => {
     <Layout>
       <div className="container-custom py-12">
         <div className="max-w-3xl mx-auto space-y-8">
-          {/* Hero + primary CTA */}
-          <div className={`card p-8 text-center ${
-            hero.tone === 'success' ? 'bg-green-50' : hero.tone === 'cancelled' ? 'bg-red-50' : 'bg-yellow-50'
-          }`}>
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-              hero.tone === 'success' ? 'bg-green-100' : hero.tone === 'cancelled' ? 'bg-red-100' : 'bg-yellow-100'
+          {/* Hero + primary CTA — a customer mid-verification (or timed out
+              waiting on it) sees the calm processing/taking-longer card
+              instead of the normal hero, never the "act now" tone the same
+              slot uses for a genuinely unpaid order. */}
+          {verifying ? (
+            <ProcessingCard />
+          ) : verificationTimedOut ? (
+            <VerificationTimeoutCard onCheckStatus={handleCheckOrderStatus} checking={manualRechecking} />
+          ) : (
+            <div className={`card p-8 text-center ${
+              hero.tone === 'success' ? 'bg-green-50' : hero.tone === 'cancelled' ? 'bg-red-50' : 'bg-yellow-50'
             }`}>
-              {hero.tone === 'success' && <CheckIcon className="w-8 h-8 text-green-600" />}
-              {hero.tone === 'cancelled' && <XMarkIcon className="w-8 h-8 text-red-600" />}
-              {hero.tone === 'pending' && <ExclamationTriangleIcon className="w-8 h-8 text-yellow-600" />}
-            </div>
-            <h1 className="text-2xl font-bold mb-2">{hero.title}</h1>
-            <p className="text-gray-600">{hero.body}</p>
-
-            {canPay && (
-              <div className="mt-6 flex flex-col items-center">
-                <CompletePaymentButton orderNumber={order.orderNumber} payment={order.payment} />
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                hero.tone === 'success' ? 'bg-green-100' : hero.tone === 'cancelled' ? 'bg-red-100' : 'bg-yellow-100'
+              }`}>
+                {hero.tone === 'success' && <CheckIcon className="w-8 h-8 text-green-600" />}
+                {hero.tone === 'cancelled' && <XMarkIcon className="w-8 h-8 text-red-600" />}
+                {hero.tone === 'pending' && <ExclamationTriangleIcon className="w-8 h-8 text-yellow-600" />}
               </div>
-            )}
-          </div>
+              <h1 className="text-2xl font-bold mb-2">{hero.title}</h1>
+              <p className="text-gray-600">{hero.body}</p>
+
+              {canPay && (
+                <div className="mt-6 flex flex-col items-center">
+                  <CompletePaymentButton orderNumber={order.orderNumber} payment={order.payment} />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Payment Information + Order Timeline — Merchandise only. A
               Pass has no fulfillment pipeline to track (Preparing Order/
