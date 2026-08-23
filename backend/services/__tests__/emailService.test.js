@@ -43,6 +43,14 @@ describe('transactional email URLs — production-safe by construction', () => {
 
   afterEach(() => vi.unstubAllEnvs());
 
+  it('configures bounded SMTP connection and socket timeouts', () => {
+    const options = mailer.default.createTransport.mock.calls[0][0];
+
+    expect(options.connectionTimeout).toBe(10_000);
+    expect(options.greetingTimeout).toBe(10_000);
+    expect(options.socketTimeout).toBe(30_000);
+  });
+
   it('order confirmation "View Order" link uses an absolute HTTPS production URL, not the dev FRONTEND_URL', async () => {
     await sendOrderConfirmationEmail('fan@example.com', baseOrder());
     const html = sent[0].html;

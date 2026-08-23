@@ -29,7 +29,7 @@ const upload = multer({
 // upload mechanics for customer-submitted return photos (routes/returns.js),
 // with its own folder rather than a second copy of the stream-upload logic
 // and its documented Cloudinary SDK unhandled-rejection workaround below.
-export const uploadToCloudinary = (buffer, folder = 'puso-shop/products') => {
+export const uploadToCloudinary = (buffer, folder = 'puso-shop/products', { timeoutMs } = {}) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -37,6 +37,7 @@ export const uploadToCloudinary = (buffer, folder = 'puso-shop/products') => {
         transformation: [
           { width: 1200, height: 1200, crop: 'limit', quality: 'auto', fetch_format: 'auto' },
         ],
+        ...(timeoutMs ? { timeout: timeoutMs } : {}),
         // cloudinary@1.41.3's call_api() creates an internal Q deferred for
         // every upload but never exposes it when options.stream is set — on
         // any upload error (e.g. a DNS failure reaching Cloudinary) that

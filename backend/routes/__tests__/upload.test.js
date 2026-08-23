@@ -14,7 +14,7 @@ vi.mock('../../config/cloudinary.js', () => ({
   default: { uploader: { upload_stream: (...args) => uploadStreamMock(...args) } },
 }));
 
-const { default: uploadRouter } = await import('../upload.js');
+const { default: uploadRouter, uploadToCloudinary } = await import('../upload.js');
 
 const app = express();
 app.use('/api/upload', uploadRouter);
@@ -39,6 +39,22 @@ function fakeStream(callback, { emitStreamError } = {}) {
 }
 
 describe('POST /upload — a stream-level error must not crash the process', () => {
+  it('passes an explicit timeout to Cloudinary when requested', async () => {
+    uploadStreamMock.mockImplementation((options, callback) => {
+      const stream = fakeStream(callback);
+      const originalEnd = stream.end;
+      stream.end = () => {
+        callback(null, { secure_url: 'https://res.cloudinary.com/test.png', public_id: 'test' });
+        originalEnd();
+      };
+      return stream;
+    });
+
+    await uploadToCloudinary(Buffer.from('fake-image-bytes'), 'test', { timeoutMs: 15_000 });
+
+    expect(uploadStreamMock.mock.calls[0][0].timeout).toBe(15_000);
+  });
+
   it('passes disable_promises so cloudinary\'s internal Q deferred is never rejected unconsumed', async () => {
     // cloudinary@1.41.3's call_api() creates a Q.defer() per upload but never
     // exposes it for the streaming API — on error that deferred rejects with

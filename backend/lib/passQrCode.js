@@ -18,7 +18,7 @@ export async function ensurePassQrCode(pass) {
   if (pass.qrCodeUrl) return pass.qrCodeUrl;
 
   const buffer = await QRCode.toBuffer(pass.qrToken, { errorCorrectionLevel: 'H', width: 300 });
-  const result = await uploadToCloudinary(buffer, 'puso-shop/pass-qr');
+  const result = await uploadToCloudinary(buffer, 'puso-shop/pass-qr', { timeoutMs: 15_000 });
   await passRepository.updateById(pass._id, { qrCodeUrl: result.secure_url });
   return result.secure_url;
 }
