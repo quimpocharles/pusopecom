@@ -18,6 +18,7 @@ import api from '../services/api';
 import { toTitleCase } from '../utils/text';
 import { PAYMENT_CHANNELS, calculateGatewayFee } from '../utils/paymentChannels';
 import SEO from '../components/common/SEO';
+import { markPaymentInFlight, clearPaymentInFlight } from '../utils/staleChunkRecovery';
 
 // ─── Delivery option card ────────────────────────────────────────────────────
 const DeliveryCard = ({ selected, onClick, label, description, isFree, fee, note }) => (
@@ -315,6 +316,13 @@ const Checkout = () => {
           : (isPassOnly ? undefined : data.notes),
       };
 
+      // Production Stale Chunk Auto-Recovery — suppresses the global
+      // recovery handler's auto-reload for the duration of an active
+      // order-creation submission, so a stale-chunk failure elsewhere on
+      // the page can never interrupt (and never appear to risk
+      // duplicating) a payment in flight. Cleared on any outcome that
+      // doesn't end in leaving this page for the gateway.
+      markPaymentInFlight();
       const response = await orderService.createOrder(orderData);
 
       if (response.success && response.data.checkoutUrl) {
@@ -335,9 +343,11 @@ const Checkout = () => {
         setRedirecting(true);
         window.location.href = response.data.checkoutUrl;
       } else {
+        clearPaymentInFlight();
         setError('Failed to create checkout session. Please try again.');
       }
     } catch (err) {
+      clearPaymentInFlight();
       // A race between the preview validate() call and this submission
       // (code just expired/hit its cap) is the one way order creation can
       // reject a code that already looked valid — don't silently resubmit
