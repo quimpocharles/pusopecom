@@ -218,6 +218,35 @@ export async function findStalePending({ cutoff, client = prisma } = {}) {
   return serialize(orders.map(withOrderFallbacks)).map(reshapeOrder);
 }
 
+/**
+ * Durable Payment Reminder Delivery — the atomic primitive
+ * lib/sendPaymentReminders.js's per-tier claim/finalize/release protocol
+ * is built on. Compare-and-swap: succeeds only if paymentReminderTiers
+ * still equals `expected` at write time, the same optimistic-concurrency
+ * technique tryResolvePayment and claimConfirmationEmailDelivery already
+ * use via a WHERE-guarded updateMany above, just guarding on the exact
+ * array value instead of a status enum — paymentReminderTiers has no
+ * separate claimed-vs-sent column the way confirmationEmailSentAt/
+ * confirmationEmailClaimedAt does, so the array itself is both.
+ *
+ * `requireAwaitingPayment` additionally guards on orderStatus, and is
+ * used for the claim call specifically: the one point where an order that
+ * resolved away from awaiting_payment between the sweep's initial read
+ * and this call must be rejected outright, not merely raced against other
+ * workers claiming the same tier.
+ */
+export async function casReminderTiers(id, { expected, next, requireAwaitingPayment = false, client = prisma } = {}) {
+  const result = await client.order.updateMany({
+    where: {
+      id,
+      paymentReminderTiers: { equals: expected },
+      ...(requireAwaitingPayment ? { orderStatus: 'awaiting_payment' } : {}),
+    },
+    data: { paymentReminderTiers: next },
+  });
+  return result.count > 0;
+}
+
 export async function claimConfirmationEmailDelivery(id, { claimedAt, staleBefore, client = prisma } = {}) {
   const result = await client.order.updateMany({
     where: {

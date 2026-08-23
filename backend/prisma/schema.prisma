@@ -492,6 +492,15 @@ model Order {
   // unconditionally at checkout. Same array, same idempotency mechanism;
   // that tier's threshold is just measured from createdAt directly instead
   // of from the retention deadline.
+  //
+  // Durable Payment Reminder Delivery — a bare entry (e.g. '24h') means
+  // that tier was actually delivered (or deliberately, permanently
+  // skipped as a stale catch-up — see sendPaymentReminders.js's
+  // skipKeys), never merely attempted. A transient in-flight attempt is
+  // instead encoded as one extra entry, '<tierKey>:claimed:<epochMs>',
+  // written/removed atomically via orderRepository.casReminderTiers — see
+  // that function and sendPaymentReminders.js's attemptTier for the full
+  // claim/finalize/release protocol this array's contents implement.
   paymentReminderTiers String[] @default([])
 
   // Set only after the confirmation email's SMTP send resolves. A null value

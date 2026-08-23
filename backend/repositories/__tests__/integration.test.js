@@ -1,5 +1,6 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi, beforeEach, afterEach } from 'vitest';
 import prisma from '../../lib/prisma.js';
+import * as emailService from '../../services/emailService.js';
 import * as productRepo from '../productRepository.js';
 import * as orderRepo from '../orderRepository.js';
 import * as userRepo from '../userRepository.js';
@@ -1381,20 +1382,43 @@ async function makeReminderTestOrder(hoursAgo, extra = {}) {
   });
 }
 
-describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
+describe('sendPaymentReminders — Durable Payment Reminder Delivery', () => {
+  // This describe block is the one place in this file that depends on a
+  // reminder email actually succeeding (paymentReminderTiers is now only
+  // written on confirmed delivery — that's the whole point of this fix).
+  // There's no reachable SMTP server in this test environment, so real
+  // sendMail calls fail with ECONNREFUSED — under the OLD unconditional-
+  // record behavior that didn't matter, but it would now make every test
+  // below fail on an infrastructure limitation rather than exercise the
+  // logic being tested. Scoped to just this block (spy + restore per
+  // test) so every other describe in this file keeps hitting the real
+  // transporter exactly as before.
+  let pendingSpy;
+  let reminderSpy;
+
+  beforeEach(() => {
+    pendingSpy = vi.spyOn(emailService, 'sendPaymentPendingEmail').mockResolvedValue(undefined);
+    reminderSpy = vi.spyOn(emailService, 'sendPaymentReminderEmail').mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    pendingSpy.mockRestore();
+    reminderSpy.mockRestore();
+  });
+
   it('sends the 24h tier for an order that just crossed 24h remaining (default 48h retention), and records it', async () => {
     // 25h old under a 48h window = 23h remaining — past the 24h threshold.
-    // Pending-Payment Email UX Revision — pre-seeded as already past the
-    // checkout-relative initial_30m tier (realistic: a real order this old
-    // would have crossed that 30-minute grace period on an earlier sweep
-    // long before ever reaching 24h remaining), so this test isolates just
-    // the 24h deadline tier's own behavior, same as before this tier existed.
+    // Pre-seeded as already past the checkout-relative initial_30m tier
+    // (realistic: a real order this old would have crossed that 30-minute
+    // grace period on an earlier sweep long before ever reaching 24h
+    // remaining), so this test isolates just the 24h deadline tier.
     const order = await makeReminderTestOrder(25, { paymentReminderTiers: ['initial_30m'] });
 
     try {
       const result = await sendPaymentReminders();
       expect(result.skipped).toBe(false);
       expect(result.remindersSent).toBeGreaterThanOrEqual(1);
+      expect(reminderSpy).toHaveBeenCalledWith(order.email, expect.objectContaining({ orderNumber: order.orderNumber }), '24 hours');
 
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
       expect(updated.paymentReminderTiers).toEqual(['initial_30m', '24h']);
@@ -1404,12 +1428,10 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
   }, 20000);
 
   it('sends nothing for an order still well inside every tier window', async () => {
-    // Pending-Payment Email UX Revision — genuinely inside every tier's
-    // window now means under the initial_30m tier's 30-minute grace period
-    // too, not just the old 24h/6h/2h deadline tiers. 6 minutes old keeps
-    // this test's original meaning intact rather than accepting a
-    // partially-fired result.
-    const order = await makeReminderTestOrder(0.1); // 6 minutes old — inside every tier, including the new 30-minute one
+    // Genuinely inside every tier's window means under the initial_30m
+    // tier's 30-minute grace period too, not just the 24h/6h/2h deadline
+    // tiers. 6 minutes old keeps this test's original meaning intact.
+    const order = await makeReminderTestOrder(0.1); // 6 minutes old — inside every tier
 
     try {
       await sendPaymentReminders();
@@ -1431,20 +1453,24 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
       await sendPaymentReminders();
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
       expect(updated.paymentReminderTiers).toEqual(['24h', 'initial_30m']); // unchanged — not appended again
+      expect(pendingSpy).not.toHaveBeenCalled();
+      expect(reminderSpy).not.toHaveBeenCalled();
     } finally {
       await prisma.order.delete({ where: { id: order.id } });
     }
   }, 15000);
 
-  it('a cron gap that skips past multiple tiers sends only the most urgent, but records all of them', async () => {
+  it('a cron gap that skips past multiple tiers sends only the most urgent, but permanently skip-marks the rest', async () => {
     // 47h old under a 48h window = 1h remaining — past 24h, 6h, AND 2h at
     // once. Pre-seeded past initial_30m for the same reason as the 24h
-    // test above — isolates this test to the deadline-tier "most urgent
-    // wins, all get recorded" behavior it's actually about.
+    // test above.
     const order = await makeReminderTestOrder(47, { paymentReminderTiers: ['initial_30m'] });
 
     try {
       await sendPaymentReminders();
+      expect(reminderSpy).toHaveBeenCalledTimes(1);
+      expect(reminderSpy).toHaveBeenCalledWith(order.email, expect.objectContaining({ orderNumber: order.orderNumber }), '2 hours');
+
       const updated = await prisma.order.findUnique({ where: { id: order.id } });
       expect(updated.paymentReminderTiers).toEqual(['initial_30m', '24h', '6h', '2h']);
     } finally {
@@ -1461,6 +1487,118 @@ describe('sendPaymentReminders — Payment Platform Redesign, Phase 6', () => {
       expect(result).toEqual({ skipped: true, remindersSent: 0, candidateCount: 0, errors: [] });
     } finally {
       await siteSettingsRepo.update({ payment: { orderExpirationEnabled: before.payment.orderExpirationEnabled } });
+    }
+  }, 15000);
+
+  it('a failed initial_30m send does NOT record the tier, and is retried on the next sweep', async () => {
+    const order = await makeReminderTestOrder(31 / 60); // 31 minutes old
+    pendingSpy.mockRejectedValueOnce(new Error('Connection timeout'));
+
+    try {
+      const first = await sendPaymentReminders();
+      expect(first.remindersSent).toBe(0);
+
+      const afterFailure = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(afterFailure.paymentReminderTiers).toEqual([]); // NOT consumed by the failed attempt
+
+      pendingSpy.mockResolvedValueOnce(undefined); // SMTP recovers
+      const second = await sendPaymentReminders();
+      expect(second.remindersSent).toBeGreaterThanOrEqual(1);
+      expect(pendingSpy).toHaveBeenCalledTimes(2);
+
+      const afterRetry = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(afterRetry.paymentReminderTiers).toEqual(['initial_30m']);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 20000);
+
+  it('an order that pays between the sweep reading it and processing it receives no reminder', async () => {
+    // Simulates the exact race Problem 2 describes: the sweep's own query
+    // would have read this order as awaiting_payment, but by the time the
+    // per-tier claim runs, it has already resolved to paid — the claim's
+    // orderStatus guard must reject it, not just the initial snapshot.
+    const order = await makeReminderTestOrder(31 / 60);
+    await prisma.order.update({ where: { id: order.id }, data: { orderStatus: 'paid', paymentStatus: 'paid' } });
+
+    try {
+      // sendPaymentReminders() itself only queries orderStatus:
+      // 'awaiting_payment', so a genuinely-paid order would never even be
+      // fetched — that's the coarse, already-verified layer. This test
+      // instead proves the fine-grained layer directly: even a claim
+      // attempted against this exact order, with the exact tiers array it
+      // currently holds, is rejected once orderStatus has moved on.
+      const claimed = await orderRepo.casReminderTiers(order.id, {
+        expected: [],
+        next: ['initial_30m:claimed:' + Date.now()],
+        requireAwaitingPayment: true,
+      });
+      expect(claimed).toBe(false);
+
+      const untouched = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(untouched.paymentReminderTiers).toEqual([]);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('two concurrent workers racing the same tier on the same order — only one wins the claim', async () => {
+    const order = await makeReminderTestOrder(31 / 60);
+
+    try {
+      const now = Date.now();
+      const claimEntry = `initial_30m:claimed:${now}`;
+
+      // Genuine concurrency against real Postgres, not a simulated race —
+      // both requests are in flight at once, racing the same
+      // compare-and-swap on the same row.
+      const [claimA, claimB] = await Promise.all([
+        orderRepo.casReminderTiers(order.id, { expected: [], next: [claimEntry], requireAwaitingPayment: true }),
+        orderRepo.casReminderTiers(order.id, { expected: [], next: [claimEntry], requireAwaitingPayment: true }),
+      ]);
+
+      expect([claimA, claimB].filter(Boolean)).toHaveLength(1);
+
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual([claimEntry]);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('a stale claim from a crashed worker is reclaimed and delivered on a later sweep', async () => {
+    const staleClaimedAt = Date.now() - 20 * 60 * 1000; // older than the 15-minute lease
+    const order = await makeReminderTestOrder(31 / 60, {
+      paymentReminderTiers: [`initial_30m:claimed:${staleClaimedAt}`],
+    });
+
+    try {
+      const result = await sendPaymentReminders();
+      expect(result.remindersSent).toBeGreaterThanOrEqual(1);
+      expect(pendingSpy).toHaveBeenCalledTimes(1);
+
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual(['initial_30m']);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 15000);
+
+  it('a fresh (non-stale) claim blocks a second attempt in the same window', async () => {
+    const freshClaimedAt = Date.now() - 2 * 60 * 1000; // well inside the 15-minute lease
+    const order = await makeReminderTestOrder(31 / 60, {
+      paymentReminderTiers: [`initial_30m:claimed:${freshClaimedAt}`],
+    });
+
+    try {
+      const result = await sendPaymentReminders();
+      expect(result.remindersSent).toBe(0);
+      expect(pendingSpy).not.toHaveBeenCalled();
+
+      const updated = await prisma.order.findUnique({ where: { id: order.id } });
+      expect(updated.paymentReminderTiers).toEqual([`initial_30m:claimed:${freshClaimedAt}`]); // untouched
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
     }
   }, 15000);
 });

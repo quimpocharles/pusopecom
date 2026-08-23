@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Unit-level, same pattern as sendRefundReminders.test.js — mocked
-// repositories/email service, no real DB. Deterministic control over
-// "now" is via each order's createdAt relative to Date.now(), not a fake
-// clock, since sendPaymentReminders.js reads Date.now() directly.
+// Unit-level, mocked repositories/email service — but casReminderTiers is
+// backed by a small in-memory store that actually implements
+// compare-and-swap semantics (checks `expected` against live state,
+// checks orderStatus when requireAwaitingPayment is set), not just a
+// vi.fn() recording call arguments. Durable Payment Reminder Delivery's
+// whole point is optimistic-concurrency correctness, so the mock has to
+// behave like real concurrent state, not merely echo back what it was
+// called with.
 
 vi.mock('../../repositories/orderRepository.js', () => ({
   find: vi.fn(),
-  updateById: vi.fn(),
-  default: { find: vi.fn(), updateById: vi.fn() },
+  casReminderTiers: vi.fn(),
+  default: { find: vi.fn(), casReminderTiers: vi.fn() },
 }));
 vi.mock('../../repositories/siteSettingsRepository.js', () => ({
   get: vi.fn(),
@@ -34,6 +38,37 @@ const emailService = await import('../../services/emailService.js');
 const HOUR = 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
 
+// A minimal fake of the real Postgres row this order maps to — deliberately
+// separate from the plain-object `order` handed to `find()`'s mock, so a
+// test can make the two diverge (simulating "the sweep's snapshot is
+// stale relative to what's actually in the database right now").
+function makeStore({ id, orderStatus = 'awaiting_payment', tiers = [] } = {}) {
+  const state = { orderStatus, tiers };
+  return {
+    id,
+    getTiers: () => state.tiers,
+    getOrderStatus: () => state.orderStatus,
+    setOrderStatus: (s) => { state.orderStatus = s; },
+    cas: async ({ expected, next, requireAwaitingPayment }) => {
+      if (requireAwaitingPayment && state.orderStatus !== 'awaiting_payment') return false;
+      if (JSON.stringify(state.tiers) !== JSON.stringify(expected)) return false;
+      state.tiers = next;
+      return true;
+    },
+  };
+}
+
+// Wires orderRepository.casReminderTiers to whichever store matches the id
+// it's called with — lets a single test register multiple orders/stores.
+function wireStores(stores) {
+  const byId = new Map(stores.map((s) => [s.id, s]));
+  orderRepository.casReminderTiers.mockImplementation((id, opts) => {
+    const store = byId.get(id);
+    if (!store) throw new Error(`No fake store registered for order id ${id}`);
+    return store.cas(opts);
+  });
+}
+
 function makeOrder(overrides = {}) {
   return {
     _id: 'order-1',
@@ -47,75 +82,222 @@ function makeOrder(overrides = {}) {
   };
 }
 
-describe('sendPaymentReminders — initial 30-minute pending reminder', () => {
+describe('sendPaymentReminders — Durable Payment Reminder Delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     siteSettingsRepository.get.mockResolvedValue({
       payment: { orderExpirationEnabled: true, orderRetentionHours: 48 },
     });
-    orderRepository.updateById.mockResolvedValue({});
     notificationRepository.create.mockResolvedValue({ id: 'n1' });
   });
 
-  it('B. sends the pending email to an order older than the 30-minute grace period', async () => {
+  it('1. initial_30m email succeeds — tier is recorded', async () => {
     const order = makeOrder({ createdAt: new Date(Date.now() - 31 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [] });
     orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
 
     const result = await sendPaymentReminders();
 
     expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledWith(order.email, order);
-    expect(orderRepository.updateById).toHaveBeenCalledWith(order._id, {
-      paymentReminderTiers: ['initial_30m'],
-    });
+    expect(store.getTiers()).toEqual(['initial_30m']);
     expect(result.remindersSent).toBe(1);
   });
 
-  it('C. does not send the pending email to an order younger than 30 minutes', async () => {
-    const order = makeOrder({ createdAt: new Date(Date.now() - 10 * MINUTE) });
+  it('2. initial_30m email fails — tier is NOT recorded', async () => {
+    const order = makeOrder({ createdAt: new Date(Date.now() - 31 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [] });
     orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+    emailService.sendPaymentPendingEmail.mockRejectedValueOnce(new Error('Connection timeout'));
 
     const result = await sendPaymentReminders();
 
-    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
-    expect(orderRepository.updateById).not.toHaveBeenCalled();
+    expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledWith(order.email, order);
+    expect(store.getTiers()).toEqual([]); // claim taken then released — nothing left behind
     expect(result.remindersSent).toBe(0);
+    expect(result.errors).toEqual([]); // best-effort: doesn't fail the sweep
   });
 
-  it('D/E. an order that has already resolved (paid/failed/expired) is never a candidate — the query only ever fetches awaiting_payment orders', async () => {
-    // orderRepository.find is called with where: { orderStatus: 'awaiting_payment' }
-    // — a paid/failed/expired order simply never appears in what it resolves
-    // to, regardless of its age. Simulate the real query returning nothing.
-    orderRepository.find.mockResolvedValue([]);
+  it('3. a failed initial_30m attempt is retried on the next sweep', async () => {
+    const order = makeOrder({ createdAt: new Date(Date.now() - 31 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+    emailService.sendPaymentPendingEmail.mockRejectedValueOnce(new Error('Connection timeout'));
+
+    await sendPaymentReminders();
+    expect(store.getTiers()).toEqual([]);
+
+    // Second sweep — same order, same (still empty) tiers, email now works.
+    emailService.sendPaymentPendingEmail.mockClear();
+    const secondOrder = { ...order, paymentReminderTiers: store.getTiers() };
+    orderRepository.find.mockResolvedValue([secondOrder]);
 
     const result = await sendPaymentReminders();
 
-    expect(orderRepository.find).toHaveBeenCalledWith({ where: { orderStatus: 'awaiting_payment' } });
-    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
-    expect(result.remindersSent).toBe(0);
-    expect(result.candidateCount).toBe(0);
+    expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledTimes(1);
+    expect(store.getTiers()).toEqual(['initial_30m']);
+    expect(result.remindersSent).toBe(1);
   });
 
-  it('F. running the sweep twice does not send the initial reminder twice', async () => {
+  it('4. a successful initial_30m attempt is never resent on a later sweep', async () => {
     const order = makeOrder({ createdAt: new Date(Date.now() - 45 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [] });
     orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
 
     await sendPaymentReminders();
     expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledTimes(1);
 
-    // Second sweep: simulate the tier having been persisted from the first run.
-    const orderAfterFirstRun = { ...order, paymentReminderTiers: ['initial_30m'] };
-    orderRepository.find.mockResolvedValue([orderAfterFirstRun]);
     emailService.sendPaymentPendingEmail.mockClear();
-    orderRepository.updateById.mockClear();
+    const secondOrder = { ...order, paymentReminderTiers: store.getTiers() };
+    orderRepository.find.mockResolvedValue([secondOrder]);
 
     const result = await sendPaymentReminders();
 
     expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
-    expect(orderRepository.updateById).not.toHaveBeenCalled();
+    expect(store.getTiers()).toEqual(['initial_30m']);
     expect(result.remindersSent).toBe(0);
   });
 
-  it('G. a disabled expiration toggle suppresses the initial reminder the same as every other tier', async () => {
+  it('5. an order that paid between the sweep reading it and processing it receives no reminder', async () => {
+    // find() returns the STALE snapshot (as it looked when the query ran:
+    // still awaiting_payment). The store — standing in for what's actually
+    // in the database right now — has already moved to 'paid' by the time
+    // the claim's CAS runs.
+    const order = makeOrder({ createdAt: new Date(Date.now() - 45 * MINUTE) });
+    const store = makeStore({ id: order._id, orderStatus: 'paid', tiers: [] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+
+    const result = await sendPaymentReminders();
+
+    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
+    expect(store.getTiers()).toEqual([]); // claim never took — nothing recorded either
+    expect(result.remindersSent).toBe(0);
+  });
+
+  it('6. an order that failed/expired/cancelled between read and processing receives no reminder', async () => {
+    for (const status of ['failed_payment', 'expired', 'cancelled']) {
+      vi.clearAllMocks();
+      siteSettingsRepository.get.mockResolvedValue({
+        payment: { orderExpirationEnabled: true, orderRetentionHours: 48 },
+      });
+      const order = makeOrder({ createdAt: new Date(Date.now() - 45 * MINUTE) });
+      const store = makeStore({ id: order._id, orderStatus: status, tiers: [] });
+      orderRepository.find.mockResolvedValue([order]);
+      wireStores([store]);
+
+      await sendPaymentReminders();
+
+      expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
+      expect(store.getTiers()).toEqual([]);
+    }
+  });
+
+  it('7. two concurrent workers racing the same tier — only one succeeds in claiming, only one email is sent', async () => {
+    // Simulates two sweep processes both having read the same stale
+    // snapshot (paymentReminderTiers: []) and racing to claim initial_30m
+    // for the same order at the same time. Real concurrency (genuine
+    // Promise.all against Postgres) is additionally verified in
+    // repositories/__tests__/integration.test.js — this proves the CAS
+    // logic itself rejects a second claim against state it didn't expect.
+    const store = makeStore({ id: 'order-race', tiers: [] });
+    const now = Date.now();
+
+    const [claimA, claimB] = await Promise.all([
+      store.cas({ expected: [], next: ['initial_30m:claimed:' + now], requireAwaitingPayment: true }),
+      store.cas({ expected: [], next: ['initial_30m:claimed:' + now], requireAwaitingPayment: true }),
+    ]);
+
+    expect([claimA, claimB].filter(Boolean)).toHaveLength(1);
+    expect(store.getTiers()).toEqual(['initial_30m:claimed:' + now]);
+  });
+
+  it('8a. 24h tier still fires at the correct threshold and is recorded only on success', async () => {
+    // 25h old, 48h retention -> 23h remaining, past the 24h threshold.
+    // Already past initial_30m (pre-seeded) so this isolates the 24h tier.
+    const order = makeOrder({ createdAt: new Date(Date.now() - 25 * HOUR), paymentReminderTiers: ['initial_30m'] });
+    const store = makeStore({ id: order._id, tiers: ['initial_30m'] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+
+    const result = await sendPaymentReminders();
+
+    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '24 hours');
+    expect(store.getTiers()).toEqual(['initial_30m', '24h']);
+    expect(result.remindersSent).toBe(1);
+  });
+
+  it('8b. a failed 24h send is not recorded and is retried next sweep', async () => {
+    const order = makeOrder({ createdAt: new Date(Date.now() - 25 * HOUR), paymentReminderTiers: ['initial_30m'] });
+    const store = makeStore({ id: order._id, tiers: ['initial_30m'] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+    emailService.sendPaymentReminderEmail.mockRejectedValueOnce(new Error('Connection timeout'));
+
+    const first = await sendPaymentReminders();
+    expect(store.getTiers()).toEqual(['initial_30m']); // NOT recorded
+    expect(first.remindersSent).toBe(0);
+
+    const secondOrder = { ...order, paymentReminderTiers: store.getTiers() };
+    orderRepository.find.mockResolvedValue([secondOrder]);
+    emailService.sendPaymentReminderEmail.mockClear();
+
+    const second = await sendPaymentReminders();
+    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '24 hours');
+    expect(store.getTiers()).toEqual(['initial_30m', '24h']);
+    expect(second.remindersSent).toBe(1);
+  });
+
+  it('8c. the 6h and 2h tiers still fire on schedule', async () => {
+    // 44h old, 48h retention -> 4h remaining -> only the 6h threshold
+    // newly crossed (24h already recorded, 2h not yet).
+    const order = makeOrder({
+      createdAt: new Date(Date.now() - 44 * HOUR),
+      paymentReminderTiers: ['initial_30m', '24h'],
+    });
+    const store = makeStore({ id: order._id, tiers: ['initial_30m', '24h'] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+
+    await sendPaymentReminders();
+
+    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '6 hours');
+    expect(store.getTiers()).toEqual(['initial_30m', '24h', '6h']);
+  });
+
+  it('9. a cron gap that skips past multiple tiers sends only the most urgent and permanently skip-marks the rest; dedup remains intact across repeated sweeps', async () => {
+    // 47h old, 48h retention -> 1h remaining -> 24h, 6h, AND 2h all due at
+    // once. Only 2h (most urgent) is actually emailed; 24h/6h are
+    // committed as permanently-skipped (never resent later) in the same
+    // atomic write — none of this is a delivery attempt, so it isn't
+    // subject to success/failure semantics.
+    const order = makeOrder({ createdAt: new Date(Date.now() - 47 * HOUR), paymentReminderTiers: ['initial_30m'] });
+    const store = makeStore({ id: order._id, tiers: ['initial_30m'] });
+    orderRepository.find.mockResolvedValue([order]);
+    wireStores([store]);
+
+    const result = await sendPaymentReminders();
+
+    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledTimes(1);
+    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '2 hours');
+    expect(store.getTiers()).toEqual(expect.arrayContaining(['initial_30m', '24h', '6h', '2h']));
+    expect(result.remindersSent).toBe(1);
+
+    // Idempotent across a repeated sweep: nothing new fires, nothing is
+    // ever resent.
+    emailService.sendPaymentReminderEmail.mockClear();
+    const secondOrder = { ...order, paymentReminderTiers: store.getTiers() };
+    orderRepository.find.mockResolvedValue([secondOrder]);
+
+    const second = await sendPaymentReminders();
+    expect(emailService.sendPaymentReminderEmail).not.toHaveBeenCalled();
+    expect(second.remindersSent).toBe(0);
+  });
+
+  it('a disabled expiration toggle suppresses every tier, including the new one', async () => {
     siteSettingsRepository.get.mockResolvedValue({
       payment: { orderExpirationEnabled: false, orderRetentionHours: 48 },
     });
@@ -129,88 +311,31 @@ describe('sendPaymentReminders — initial 30-minute pending reminder', () => {
     expect(orderRepository.find).not.toHaveBeenCalled();
   });
 
-  it('H. existing 24h/6h/2h deadline tiers still fire independently of the new initial tier', async () => {
-    // retention = 48h; an order 25h old has 23h remaining — under the 24h
-    // threshold, so the 24h tier is due. The initial tier already fired
-    // long before this (well past 30 minutes), so only the deadline tier
-    // should fire on this sweep.
-    const order = makeOrder({
-      createdAt: new Date(Date.now() - 25 * HOUR),
-      paymentReminderTiers: ['initial_30m'],
-    });
-    orderRepository.find.mockResolvedValue([order]);
-
-    const result = await sendPaymentReminders();
-
-    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
-    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '24 hours');
-    expect(orderRepository.updateById).toHaveBeenCalledWith(order._id, {
-      paymentReminderTiers: ['initial_30m', '24h'],
-    });
-    expect(result.remindersSent).toBe(1);
-  });
-
-  it('H. the 6h and 2h tiers still fire on schedule, independent of the initial tier', async () => {
-    // 44h old, 48h retention -> 4h remaining -> only the 6h threshold is
-    // crossed (not yet 2h).
-    const order = makeOrder({
-      createdAt: new Date(Date.now() - 44 * HOUR),
-      paymentReminderTiers: ['initial_30m', '24h'],
-    });
-    orderRepository.find.mockResolvedValue([order]);
-
-    await sendPaymentReminders();
-
-    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '6 hours');
-  });
-
-  it('both the initial tier and a deadline tier can fire in the same sweep for a very short retention window', async () => {
-    // A degenerate but valid admin config: 1-hour retention. An order 40
-    // minutes old is past the 30-minute grace period AND already inside
-    // the 24h/6h/2h-remaining thresholds (20 minutes remaining < 2 hours).
-    siteSettingsRepository.get.mockResolvedValue({
-      payment: { orderExpirationEnabled: true, orderRetentionHours: 1 },
-    });
-    const order = makeOrder({ createdAt: new Date(Date.now() - 40 * MINUTE) });
-    orderRepository.find.mockResolvedValue([order]);
-
-    await sendPaymentReminders();
-
-    expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledWith(order.email, order);
-    // hoursRemaining (~0.33h) crosses all three deadline thresholds at
-    // once; only the most urgent (2h) is actually emailed — same
-    // "don't send a stale catch-up reminder" rule the deadline tiers
-    // already applied before this change.
-    expect(emailService.sendPaymentReminderEmail).toHaveBeenCalledWith(order.email, order, '2 hours');
-    expect(orderRepository.updateById).toHaveBeenNthCalledWith(1, order._id, {
-      paymentReminderTiers: ['initial_30m'],
-    });
-    expect(orderRepository.updateById).toHaveBeenNthCalledWith(2, order._id, {
-      paymentReminderTiers: ['initial_30m', '24h', '6h', '2h'],
-    });
-  });
-
-  it('J. abandoned-checkout scenario: no payment ever arrives, sweep runs 30+ minutes later — exactly one pending email', async () => {
-    const order = makeOrder({ createdAt: new Date(Date.now() - 31 * MINUTE) });
-    orderRepository.find.mockResolvedValue([order]);
+  it('a stale claim (worker crashed mid-send) is reclaimed and retried on a later sweep', async () => {
+    const staleClaimedAt = Date.now() - 20 * MINUTE; // older than the 15-minute lease
+    const order = makeOrder({ createdAt: new Date(Date.now() - 45 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [`initial_30m:claimed:${staleClaimedAt}`] });
+    orderRepository.find.mockResolvedValue([{ ...order, paymentReminderTiers: store.getTiers() }]);
+    wireStores([store]);
 
     const result = await sendPaymentReminders();
 
     expect(emailService.sendPaymentPendingEmail).toHaveBeenCalledTimes(1);
+    expect(store.getTiers()).toEqual(['initial_30m']);
     expect(result.remindersSent).toBe(1);
   });
 
-  it('a delivery failure is swallowed (best-effort) and still marks the tier as processed', async () => {
-    const order = makeOrder({ createdAt: new Date(Date.now() - 40 * MINUTE) });
-    orderRepository.find.mockResolvedValue([order]);
-    emailService.sendPaymentPendingEmail.mockRejectedValueOnce(new Error('SMTP down'));
+  it('a fresh (non-stale) claim blocks a second attempt in the same sweep window', async () => {
+    const freshClaimedAt = Date.now() - 2 * MINUTE; // well inside the 15-minute lease
+    const order = makeOrder({ createdAt: new Date(Date.now() - 45 * MINUTE) });
+    const store = makeStore({ id: order._id, tiers: [`initial_30m:claimed:${freshClaimedAt}`] });
+    orderRepository.find.mockResolvedValue([{ ...order, paymentReminderTiers: store.getTiers() }]);
+    wireStores([store]);
 
     const result = await sendPaymentReminders();
 
-    expect(orderRepository.updateById).toHaveBeenCalledWith(order._id, {
-      paymentReminderTiers: ['initial_30m'],
-    });
-    expect(result.remindersSent).toBe(1);
-    expect(result.errors).toEqual([]);
+    expect(emailService.sendPaymentPendingEmail).not.toHaveBeenCalled();
+    expect(store.getTiers()).toEqual([`initial_30m:claimed:${freshClaimedAt}`]); // untouched
+    expect(result.remindersSent).toBe(0);
   });
 });
