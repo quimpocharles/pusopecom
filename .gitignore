@@ -35,3 +35,8 @@ build/
 # Testing
 coverage/
 .nyc_output/
+
+
+package.json
+package-lock.json
+.playwright-mcp/
