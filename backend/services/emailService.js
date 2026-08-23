@@ -1,20 +1,25 @@
-import nodemailer from 'nodemailer';
 import { productionBaseUrl } from '../lib/appUrl.js';
+import { sendEmail } from './emailTransport.js';
 
-const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS) || 10_000;
-
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT) || 587,
-  secure: false,
-  connectionTimeout: EMAIL_TIMEOUT_MS,
-  greetingTimeout: EMAIL_TIMEOUT_MS,
-  socketTimeout: EMAIL_TIMEOUT_MS * 3,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
+// MXroute HTTP API Transport Migration — every send in this file goes
+// through sendEmail() (emailTransport.js), reaching MXroute over HTTPS
+// instead of raw SMTP:587 (which times out from Railway — see that
+// module's comment for the full root-cause writeup). `from` is
+// deliberately the bare EMAIL_USER address, not the previous
+// `"Puso Pilipinas" <${EMAIL_USER}>` display-name format — MXroute's API
+// is documented and was live-tested only with a bare address (a live
+// re-test of the display-name format was rejected/mangled by the API, not
+// just unverified), so it's deliberately not used.
+//
+// Scheduled Report Email Redesign — sendScheduledReportEmail (below) used
+// to be the one exception still on SMTP, because it sent real file
+// attachments (Excel/CSV/PDF), which MXroute's HTTP API doesn't support.
+// It's been redesigned to send an HTML summary + download links instead
+// (the files themselves are generated on demand by the existing,
+// authenticated admin report-download route, not attached) — so it now
+// uses the same MXroute API transport as everything else here. Nodemailer
+// is no longer imported or used anywhere in this file, or anywhere else in
+// the backend — SMTP is fully retired from production email.
 
 // ── Brand tokens ──────────────────────────────────────────────────────────────
 const BLACK     = '#0a0a0a';
@@ -78,7 +83,7 @@ const getEmailTemplate = (content) => `
             <td align="center" style="background:${BLACK};padding:32px 40px 24px;border-bottom:1px solid ${BORDER};">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
                 <tr>
-                  <td style="background:#ffffff;border-radius:10px;padding:10px 18px;line-height:0;">
+                  <td style="background:${DARK};border-radius:10px;padding:10px 18px;line-height:0;">
                     <img src="${logoUrl()}" alt="Puso Pilipinas" width="120" height="auto"
                          style="display:block;" />
                   </td>
@@ -147,6 +152,38 @@ const smallLink = (href) =>
      Or copy this link: <span style="word-break:break-all;color:rgba(255,255,255,0.50);">${href}</span>
    </p>`;
 
+// Scheduled Report Email Redesign — one text-link row per available
+// format, replacing the old file attachments. Each href routes through the
+// admin frontend (never a raw API URL), which is what makes these safe to
+// click straight from an email: the SPA already requires an authenticated
+// admin session (JWT held client-side) before it will call the download
+// API on the visitor's behalf — a link is never itself a bearer of access.
+// Silently skips any format not provided rather than rendering a dead link.
+const downloadLinksRow = (downloadLinks = {}) => {
+  const items = [
+    downloadLinks.xlsx && { href: downloadLinks.xlsx, label: 'Download Excel' },
+    downloadLinks.csv && { href: downloadLinks.csv, label: 'Download CSV' },
+    downloadLinks.pdf && { href: downloadLinks.pdf, label: 'Download PDF' },
+  ].filter(Boolean);
+  if (items.length === 0) return '';
+
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+      <tr>
+        <td align="center">
+          ${items.map((item) => `
+            <a href="${item.href}"
+               style="display:inline-block;margin:0 8px 8px;padding:10px 20px;border:1px solid ${BORDER};
+                      border-radius:100px;font-size:13px;font-weight:600;color:${WHITE};text-decoration:none;
+                      white-space:nowrap;">
+              ${item.label}
+            </a>
+          `).join('')}
+        </td>
+      </tr>
+    </table>`;
+};
+
 const label = (text) =>
   `<p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;
              color:rgba(255,255,255,0.35);">${text}</p>`;
@@ -167,10 +204,10 @@ export const sendVerificationEmail = async (email, firstName, verificationToken)
     ${p('This link expires in <strong style="color:${WHITE}">24 hours</strong>. If you didn\'t create an account, you can safely ignore this email.', 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: 'Verify Your Email — Puso Pilipinas',
+    subject: 'Verify Your Email - Puso Pilipinas',
     html: getEmailTemplate(content),
   });
 };
@@ -188,10 +225,10 @@ export const sendPasswordResetEmail = async (email, firstName, resetToken) => {
     ${p('This link expires in <strong style="color:rgba(255,255,255,0.80)">1 hour</strong>. If you didn\'t request a reset, your password remains unchanged.', 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: 'Reset Your Password — Puso Pilipinas',
+    subject: 'Reset Your Password - Puso Pilipinas',
     html: getEmailTemplate(content),
   });
 };
@@ -408,10 +445,10 @@ export const sendOrderConfirmationEmail = async (email, order) => {
       : 'We\'ll send you another email once your order ships.', 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: `Order Confirmed — ${order.orderNumber}`,
+    subject: `Order Confirmed - ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -476,10 +513,10 @@ export const sendPaymentPendingEmail = async (email, order) => {
     ${p('Your items are reserved, not guaranteed forever — if payment isn\'t completed, the reservation eventually releases and someone else can buy them. We\'ll remind you before that happens.', 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: `Complete Your Payment — ${order.orderNumber}`,
+    subject: `Complete Your Payment - ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -499,10 +536,10 @@ export const sendPaymentReminderEmail = async (email, order, timeRemainingLabel)
     ${p(`Total due: <strong style="color:${WHITE};">&#8369;${order.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong>`, 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: `Reminder: Complete Payment (${timeRemainingLabel} left) — ${order.orderNumber}`,
+    subject: `Reminder: Complete Payment (${timeRemainingLabel} left) - ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -526,10 +563,10 @@ export const sendPaymentFailedEmail = async (email, order, reason) => {
     ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong> &nbsp;&middot;&nbsp; &#8369;${order.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: `${isExpired ? 'Payment Session Expired' : 'Payment Failed'} — ${order.orderNumber}`,
+    subject: `${isExpired ? 'Payment Session Expired' : 'Payment Failed'} - ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -566,10 +603,10 @@ export const sendOrderStatusEmail = async (email, order, status) => {
     ${p(`Order <strong style="color:${WHITE};font-family:monospace;">${order.orderNumber}</strong>`, 'font-size:13px;')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
+  await sendEmail({
+    from: process.env.EMAIL_USER,
     to: email,
-    subject: `${copy.title} — ${order.orderNumber}`,
+    subject: `${copy.title} - ${order.orderNumber}`,
     html: getEmailTemplate(content),
   });
 };
@@ -591,6 +628,15 @@ const statRow = (...cards) => {
   return `<tr>${cells.join('')}</tr>`;
 };
 
+// Escapes a value before it's interpolated into an HTML template literal.
+// Report rows are static labels/numbers today (verified — see the
+// Scheduled Report Email Redesign security review), but breakdownTable has
+// no control over what a future report adds to a summary row, so this is
+// applied at the render boundary rather than trusted to stay that way.
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[c]));
+
 // A simple two-column "label — right-aligned value" table, used for every
 // breakdown section (products/organizations/payments/shipping/try-on) so
 // the report doesn't need a bespoke table shape per section.
@@ -600,8 +646,8 @@ const breakdownTable = (rows, labelHeader, valueHeader) => {
   }
   const body = rows.map(([label, val]) => `
     <tr>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;color:rgba(255,255,255,0.65);">${label}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">${val}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;color:rgba(255,255,255,0.65);">${escapeHtml(label)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;font-weight:600;color:${WHITE};">${escapeHtml(val)}</td>
     </tr>`).join('');
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -727,12 +773,15 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
     ${p('Support Issues are not shown — no support/ticket model exists on the platform yet. Checkout Abandonment has its own dedicated report (Admin &rarr; Reports &rarr; Checkout Recovery), not folded into this daily digest.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
-    to: recipients.join(', '),
-    subject: `${title} — ${dateStr}`,
-    html: getEmailTemplate(content),
-  });
+  // MXroute's HTTP API is documented as one recipient per call ("For
+  // multiple recipients, make separate API calls") — unlike SMTP's single
+  // comma-joined `to`, which no longer applies here. Promise.all keeps the
+  // same "all recipients or none" failure shape the previous single SMTP
+  // send effectively had, rather than inventing new partial-failure
+  // business logic this migration wasn't asked to add.
+  const html = getEmailTemplate(content);
+  const subject = `${title} — ${dateStr}`;
+  await Promise.all(recipients.map((to) => sendEmail({ from: process.env.EMAIL_USER, to, subject, html })));
 };
 
 /**
@@ -741,28 +790,37 @@ export const sendDailyBusinessReportEmail = async (recipients, report, title = '
  * Performance) each gets its own email through here, rather than one bespoke
  * HTML template per report shape. `keyStats` is deliberately the exact same
  * [[label, value], ...] `summary` array each report's own toExportShape()
- * already produces for its Excel "Summary" sheet — the email highlights the
- * headline numbers, the attached Excel/CSV/PDF carry the full detail, so the
- * two are guaranteed to agree instead of being two separately-maintained views.
+ * already produces for its Excel "Summary" sheet — the email's table and the
+ * downloadable files are guaranteed to agree, rather than being two
+ * separately-maintained views.
+ *
+ * Scheduled Report Email Redesign — this used to attach the Excel/CSV/PDF
+ * files directly (MXroute's API doesn't support attachments). It now sends
+ * a real HTML summary (keyStats as an actual <table>, not a screenshot)
+ * plus a "View Full Report" link and one text link per downloadable
+ * format. `downloadLinks: { xlsx?, csv?, pdf? }` are pre-built, already
+ * production-safe URLs (see dailyBusinessReportService.js) pointing at the
+ * admin frontend, which re-generates the file on demand — via the same
+ * authenticated route the Report Archive UI's own download button already
+ * uses — from the archived ReportRun this email's link references. No file
+ * is generated or stored ahead of time for the email itself, and nothing
+ * about the report's data is ever placed in the URL.
  */
-export const sendScheduledReportEmail = async (recipients, { title, dateStr, keyStats, dashboardLink, attachments }) => {
+export const sendScheduledReportEmail = async (recipients, { title, dateStr, keyStats, dashboardLink, downloadLinks }) => {
   const content = `
-    ${h2(title)}
+    ${h2(escapeHtml(title))}
     ${p(dateStr, 'font-size:13px;')}
     ${divider()}
     ${breakdownTable(keyStats, 'Metric', 'Value')}
-    ${pillButton(dashboardLink, 'View Full Dashboard')}
+    ${pillButton(dashboardLink, 'View Full Report')}
+    ${downloadLinksRow(downloadLinks)}
     ${divider()}
-    ${p('The full report — every table above, plus underlying detail — is attached as Excel, CSV, and PDF.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
+    ${p('This is a summary — sign in to the full report for complete detail, or use a link above to download it as Excel, CSV, or PDF.', 'font-size:12px;color:rgba(255,255,255,0.35);')}
   `;
 
-  await transporter.sendMail({
-    from: `"Puso Pilipinas" <${process.env.EMAIL_USER}>`,
-    to: recipients.join(', '),
-    subject: `${title} — ${dateStr}`,
-    html: getEmailTemplate(content),
-    attachments,
-  });
+  const html = getEmailTemplate(content);
+  const subject = `${title} - ${dateStr}`;
+  await Promise.all(recipients.map((to) => sendEmail({ from: process.env.EMAIL_USER, to, subject, html })));
 };
 
 export default {

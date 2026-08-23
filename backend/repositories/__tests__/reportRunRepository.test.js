@@ -35,6 +35,30 @@ describe('reportRunRepository.create', () => {
 
     expect(create.mock.calls[0][0].data.recipients).toEqual([]);
   });
+
+  // Scheduled Report Email Redesign — an explicit id lets a caller know a
+  // run's id before archiving it, so a download link embedded in an email
+  // already being composed can reference this exact run.
+  it('passes an explicit id through to Prisma when supplied', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'explicit-id-1', status: 'sent' });
+    const client = { reportRun: { create } };
+
+    await reportRunRepository.create(
+      { id: 'explicit-id-1', type: 'sales_report', status: 'sent', reportDate: new Date('2026-08-01'), data: {}, recipients: [] },
+      { client }
+    );
+
+    expect(create.mock.calls[0][0].data.id).toBe('explicit-id-1');
+  });
+
+  it('omits id entirely when not supplied, leaving Prisma\'s @default(uuid()) in control', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'auto-generated', status: 'sent' });
+    const client = { reportRun: { create } };
+
+    await reportRunRepository.create({ status: 'sent', reportDate: new Date() }, { client });
+
+    expect('id' in create.mock.calls[0][0].data).toBe(false);
+  });
 });
 
 describe('reportRunRepository.find/count/findById/deleteById', () => {

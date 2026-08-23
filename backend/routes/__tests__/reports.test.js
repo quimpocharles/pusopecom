@@ -673,6 +673,42 @@ describe('Report Archive endpoints', () => {
     expect(workbook.getWorksheet('Top Selling Products').getRow(2).getCell(1).value).toBe('Jersey');
   }, 15000);
 
+  // Scheduled Report Email Redesign — the download route used to hardcode
+  // dailyBusinessReportToExportShape regardless of run.type, which was
+  // silently wrong for anything other than the 4 cadence Business Report
+  // types. This pins the fix: a 6-way-split type (e.g. sales_report) must
+  // route through its OWN shape function, or the columns/data would be
+  // nonsensical (or throw) against data that was never shaped like a
+  // Business Report snapshot.
+  it('GET /archive/:id/download routes a non-cadence type (sales_report) through its own export shape, not the daily-business-report one', async () => {
+    const run = await makeRun({
+      type: 'sales_report',
+      data: {
+        totalRevenue: 5000, totalOrders: 4, averageOrderValue: 1250,
+        revenueOverTime: [{ date: '2026-08-01', revenue: 5000, orders: 4 }],
+        salesByCategory: [{ category: 'jersey', revenue: 5000, units: 4 }],
+        salesBySport: [{ sport: 'basketball', revenue: 5000, units: 4 }],
+      },
+    });
+
+    const res = await request(app).get(`/api/reports/archive/${run.id}/download?format=xlsx`).buffer(true).parse((response, cb) => {
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/spreadsheetml/);
+
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(res.body);
+    // Sales report's own sheet names — proof salesReportToExportShape ran,
+    // not dailyBusinessReportToExportShape (which has no "By Category" sheet).
+    expect(workbook.getWorksheet('By Category').getRow(2).getCell(1).value).toBe('jersey');
+    expect(workbook.getWorksheet('Revenue Over Time')).toBeTruthy();
+    expect(workbook.getWorksheet('Top Selling Products')).toBeUndefined(); // the OTHER shape's sheet, must not appear
+  }, 15000);
+
   it('GET /archive/:id/download 404s for a skipped run with no data', async () => {
     const run = await makeRun({ status: 'skipped', data: null, recipients: [] });
 

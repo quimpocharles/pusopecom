@@ -215,29 +215,10 @@ export async function sendReportExport(res, { format, baseFilename, summary, she
   sendCSV(res, `${baseFilename}.csv`, primary.columns, primary.rows);
 }
 
-/**
- * For the scheduled 5 AM emails (dailyBusinessReportService's 6-way split)
- * — the same {summary, sheets} shape every interactive export already
- * produces, turned into email-ready attachment buffers instead of an HTTP
- * response.
- */
-export async function buildReportAttachments({ summary, sheets, baseFilename, title }) {
-  const resolvedTitle = title || humanizeFilename(baseFilename);
-  const workbook = buildXLSXWorkbook({ summary, sheets });
-  const [workbookBuffer, pdfBuffer] = await Promise.all([
-    workbook.xlsx.writeBuffer(),
-    buildPDFBuffer({ title: resolvedTitle, summary, sheets }),
-  ]);
-  const [primary] = sheets;
-  const csvBuffer = Buffer.from(toCSV(primary.columns, primary.rows), 'utf-8');
-
-  return [
-    {
-      filename: `${baseFilename}.xlsx`,
-      content: Buffer.from(workbookBuffer),
-      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    },
-    { filename: `${baseFilename}.csv`, content: csvBuffer, contentType: 'text/csv' },
-    { filename: `${baseFilename}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
-  ];
-}
+// buildReportAttachments (email-attachment buffers for the scheduled 5 AM
+// reports) was removed as part of the Scheduled Report Email Redesign —
+// those emails no longer attach files; they link to this same generation
+// logic (buildXLSXWorkbook/buildPDFBuffer/toCSV, still used by
+// sendReportExport above and by routes/reports.js's archive download
+// route) on demand instead. The underlying generation functions are
+// unchanged and still fully exercised by both.

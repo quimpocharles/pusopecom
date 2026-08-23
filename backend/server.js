@@ -60,7 +60,6 @@ import venueRoutes from './routes/venues.js';
 import passEventRoutes from './routes/passEvents.js';
 import organizationRoutes from './routes/organizations.js';
 import accountRoutes from './routes/account.js';
-import diagnosticsRoutes from './routes/diagnostics.js';
 import { authenticate } from './middleware/auth.js';
 
 // Create Express app
@@ -216,10 +215,6 @@ app.use('/api/admin/refunds', refundRoutes);
 app.use('/api/admin/couriers', courierRoutes);
 app.use('/api/admin/staff', staffRoutes);
 app.use('/api/admin/integrations', integrationsRoutes);
-// TEMPORARY — MXroute HTTP API connectivity diagnostic (Railway→SMTP:587
-// timeout investigation). Admin-gated, no cron/webhook wiring. Remove this
-// line and delete routes/diagnostics.js once the test has run.
-app.use('/api/admin/diagnostics', diagnosticsRoutes);
 app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);
 app.use('/api/leagues', leagueRoutes);

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as orderRepository from '../repositories/orderRepository.js';
@@ -9,7 +10,6 @@ import * as reportRunRepository from '../repositories/reportRunRepository.js';
 import { sendDailyBusinessReportEmail, sendScheduledReportEmail } from './emailService.js';
 import { productionBaseUrl } from '../lib/appUrl.js';
 import { buildFulfillmentSection } from '../lib/fulfillmentSnapshot.js';
-import { buildReportAttachments } from '../lib/reportExport.js';
 import { computeExecutiveReport, executiveReportToExportShape } from './reportQueries/executive.js';
 import { computeSalesReport, salesReportToExportShape } from './reportQueries/sales.js';
 import { computeProductsReport, inventoryReportToExportShape } from './reportQueries/products.js';
@@ -533,6 +533,20 @@ function phDateString(date) {
  * its own ReportRunType so a bug in one (e.g. Fit Check Analytics) never
  * blocks the other five from sending.
  */
+// Scheduled Report Email Redesign — the single canonical type → shape
+// mapping routes/reports.js's GET /archive/:id/download uses to regenerate
+// the correct Excel/CSV/PDF for ANY archived ReportRun, not just the
+// original composite Daily/Weekly/Monthly/Quarterly Business Report shape
+// it was hardcoded to before. Built once here (from SCHEDULED_REPORT_DEFS,
+// defined right below) rather than duplicated in routes/reports.js, so the
+// two can never drift out of sync with which type uses which shape function.
+export const REPORT_RUN_EXPORT_SHAPES = {
+  daily_business_report: dailyBusinessReportToExportShape,
+  weekly_business_report: dailyBusinessReportToExportShape,
+  monthly_business_report: dailyBusinessReportToExportShape,
+  quarterly_business_report: dailyBusinessReportToExportShape,
+};
+
 const SCHEDULED_REPORT_DEFS = [
   {
     type: 'executive_daily_report',
@@ -584,6 +598,10 @@ const SCHEDULED_REPORT_DEFS = [
   },
 ];
 
+for (const def of SCHEDULED_REPORT_DEFS) {
+  REPORT_RUN_EXPORT_SHAPES[def.type] = def.toExportShape;
+}
+
 export const generateAndSendDailyBusinessReport = async () => {
   const { start } = yesterdayRangePH();
   const dateLabel = phDateString(start); // yesterday's PH calendar date
@@ -608,27 +626,40 @@ export const generateAndSendDailyBusinessReport = async () => {
   }
 
   await Promise.all(SCHEDULED_REPORT_DEFS.map(async (def) => {
+    // Scheduled Report Email Redesign — generated up front (not left to
+    // Prisma's @default(uuid())) so the download links built into the
+    // email below can reference this exact run before it's archived.
+    // Archiving still happens after the send attempt resolves, same as
+    // every other cadence — this only decides the id in advance, it
+    // doesn't mark anything "sent" before delivery is actually confirmed.
+    const runId = randomUUID();
+    let data;
     try {
-      const data = await def.compute(query);
+      data = await def.compute(query);
       const shape = def.toExportShape(data);
-      const attachments = await buildReportAttachments({
-        summary: shape.summary,
-        sheets: shape.sheets,
-        baseFilename: def.baseFilename,
-        title: def.title,
-      });
+      const downloadBase = `${productionBaseUrl()}/admin/reports/exports/download`;
       await sendScheduledReportEmail(recipients, {
         title: def.title,
         dateStr,
         keyStats: shape.summary,
         dashboardLink: `${productionBaseUrl()}${def.dashboardPath}`,
-        attachments,
+        downloadLinks: {
+          xlsx: `${downloadBase}?runId=${runId}&format=xlsx`,
+          csv: `${downloadBase}?runId=${runId}&format=csv`,
+          pdf: `${downloadBase}?runId=${runId}&format=pdf`,
+        },
       });
-      await archiveRun({ type: def.type, status: 'sent', reportDate: start, data, recipients });
+      await archiveRun({ id: runId, type: def.type, status: 'sent', reportDate: start, data, recipients });
     } catch (error) {
       logger.error({ err: error, type: def.type }, 'Scheduled report failed');
       Sentry.captureException(error);
-      await archiveRun({ type: def.type, status: 'failed', reportDate: start, recipients, errorMessage: error.message });
+      // `data` may already be computed even though the send failed (the
+      // failure could be the email step, not the compute step) — archive
+      // it when available so the report is still recoverable from the
+      // Archive UI even though delivery didn't succeed, same id either way
+      // so a link already opened from a partially-failed attempt still
+      // resolves correctly.
+      await archiveRun({ id: runId, type: def.type, status: 'failed', reportDate: start, recipients, errorMessage: error.message, data });
     }
   }));
 

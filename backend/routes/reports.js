@@ -26,7 +26,7 @@ import {
   generateAndSendWeeklyBusinessReport,
   generateAndSendMonthlyBusinessReport,
   generateAndSendQuarterlyBusinessReport,
-  dailyBusinessReportToExportShape,
+  REPORT_RUN_EXPORT_SHAPES,
 } from '../services/dailyBusinessReportService.js';
 import { body, validationResult } from 'express-validator';
 import { authenticate, isAdmin, requirePermission, requireAnyPermission } from '../middleware/auth.js';
@@ -200,6 +200,13 @@ router.get('/archive/:id', async (req, res) => {
   }
 });
 
+// Reused directly by scheduled report emails' download links (Scheduled
+// Report Email Redesign) — those are plain frontend URLs the admin SPA
+// calls this exact route through, using the same authenticate+isAdmin+
+// requireAnyPermission gate as every other /archive endpoint. No separate
+// signed-URL scheme was needed: the file is never generated or stored
+// ahead of time, only ever regenerated here, on demand, for a request that
+// already carries a real admin's bearer token.
 router.get('/archive/:id/download', async (req, res) => {
   try {
     const run = await reportRunRepository.findById(req.params.id);
@@ -207,14 +214,26 @@ router.get('/archive/:id/download', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Report run not found' });
     }
     if (!run.data) {
-      return res.status(404).json({ success: false, message: 'This run has no data to download (skipped or failed)' });
+      return res.status(404).json({ success: false, message: 'This run has no data to download (skipped, or failed before the report was computed)' });
+    }
+
+    // Every archived type maps to the same {summary, sheets} shape its own
+    // interactive export route already produces — REPORT_RUN_EXPORT_SHAPES
+    // is the one place that mapping lives, shared with nothing needing to
+    // be kept in sync by hand. A type with no registered shape function
+    // (shouldn't happen — every ReportRunType is registered) fails loudly
+    // rather than silently applying the wrong one to the wrong data.
+    const toExportShape = REPORT_RUN_EXPORT_SHAPES[run.type];
+    if (!toExportShape) {
+      logger.error({ type: run.type }, 'No export shape registered for this report run type');
+      return res.status(500).json({ success: false, message: 'Failed to download report run' });
     }
 
     const dateLabel = new Date(run.reportDate).toISOString().slice(0, 10);
     await sendReportExport(res, {
       format: exportFormat(req.query),
-      baseFilename: `daily-business-report-${dateLabel}`,
-      ...dailyBusinessReportToExportShape(run.data),
+      baseFilename: `${run.type.replace(/_/g, '-')}-${dateLabel}`,
+      ...toExportShape(run.data),
     });
   } catch (error) {
     logger.error({ err: error }, 'Download report archive run error');

@@ -15,10 +15,16 @@ const PRODUCTION_REQUIRED = [
   'DATABASE_URL',       // Prisma datasource — no default
   'JWT_SECRET',         // jwt.sign/verify — no default
   'FRONTEND_URL',       // CORS allowlist + Xendit return URLs + email links
-  'EMAIL_HOST',         // nodemailer transporter host
-  'EMAIL_PORT',         // transporter port (defaults to 587 if unset)
-  'EMAIL_USER',         // SMTP auth user / from-address
-  'EMAIL_PASSWORD',     // SMTP auth password
+  // MXroute HTTP API Transport Migration — EMAIL_HOST/USER/PASSWORD are now
+  // primarily the MXroute HTTP API's server/username/password fields
+  // (emailTransport.js), reached over HTTPS instead of raw SMTP. EMAIL_PORT
+  // is genuinely still used too — sendScheduledReportEmail (real file
+  // attachments, which the API doesn't support) still sends over SMTP via
+  // the same four variables, so none of these became dead configuration.
+  'EMAIL_HOST',         // MXroute API `server` field / SMTP host (attachments only)
+  'EMAIL_PORT',         // SMTP port for the attachment-only path (defaults to 587 if unset)
+  'EMAIL_USER',         // MXroute API `username`/`from` / SMTP auth user
+  'EMAIL_PASSWORD',     // MXroute API `password` / SMTP auth password
   'XENDIT_SECRET_KEY',  // Xendit API auth (primary gateway)
   'XENDIT_WEBHOOK_TOKEN', // Xendit webhook signature verification
 ];

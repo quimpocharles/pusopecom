@@ -67,6 +67,7 @@ const FitCheckAnalyticsPage = lazy(() => import('./pages/admin/reports/FitCheckA
 const OrganizationsReportPage = lazy(() => import('./pages/admin/reports/OrganizationsReportPage'));
 const FinanceReportPage = lazy(() => import('./pages/admin/reports/FinanceReportPage'));
 const ExportsWorkspace = lazy(() => import('./pages/admin/reports/ExportsWorkspace'));
+const ReportDownloadRedirect = lazy(() => import('./pages/admin/reports/ReportDownloadRedirect'));
 const SettingsLayout = lazy(() => import('./components/admin/settings/SettingsLayout'));
 const SettingsOverview = lazy(() => import('./pages/admin/settings/SettingsOverview'));
 const FitCheckSettings = lazy(() => import('./pages/admin/settings/FitCheckSettings'));
@@ -170,6 +171,7 @@ function App() {
                 <Route path="organizations" element={<PermissionRoute permission={PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW}><OrganizationsReportPage /></PermissionRoute>} />
                 <Route path="finance" element={<PermissionRoute permission={PERMISSIONS.REPORTS_FINANCE_VIEW}><FinanceReportPage /></PermissionRoute>} />
                 <Route path="exports" element={<PermissionRoute anyOf={REPORTS_ANY_VIEW}><ExportsWorkspace /></PermissionRoute>} />
+                <Route path="exports/download" element={<PermissionRoute anyOf={REPORTS_ANY_VIEW}><ReportDownloadRedirect /></PermissionRoute>} />
               </Route>
               <Route path="settings" element={<PermissionRoute anyOf={SETTINGS_ANY_MANAGE}><SettingsLayout /></PermissionRoute>}>
                 <Route index element={<SettingsOverview />} />

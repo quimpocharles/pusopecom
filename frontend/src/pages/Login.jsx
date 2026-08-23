@@ -18,7 +18,15 @@ const Login = () => {
 
   const getRedirectPath = () => {
     const searchParams = new URLSearchParams(location.search);
-    return searchParams.get('redirect') || location.state?.from?.pathname || '/';
+    const redirectParam = searchParams.get('redirect');
+    if (redirectParam) return redirectParam;
+    // `from` is the full location AdminRoute redirected from (see
+    // AdminRoute.jsx) — pathname alone would drop query params a
+    // destination needs (e.g. a report download's ?runId=&format=), so
+    // reconstruct the full path+search, not just from.pathname.
+    const from = location.state?.from;
+    if (from?.pathname) return `${from.pathname}${from.search || ''}`;
+    return '/';
   };
 
   // Check if profile needs completion

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import zlib from 'node:zlib';
 import ExcelJS from 'exceljs';
-import { toCSV, sendCSV, sendXLSX, sendPDF, buildPDFBuffer, buildReportAttachments, sendReportExport } from '../reportExport.js';
+import { toCSV, sendCSV, sendXLSX, sendPDF, buildPDFBuffer, sendReportExport } from '../reportExport.js';
 
 // pdfkit FlateDecode-compresses content streams by default AND renders text
 // as hex glyph strings (`<556e69...>` in Tj/TJ operators, not literal
@@ -159,30 +159,12 @@ describe('sendPDF / buildPDFBuffer', () => {
   });
 });
 
-describe('buildReportAttachments', () => {
-  it('returns xlsx, csv, and pdf attachments with correct filenames and content types', async () => {
-    const attachments = await buildReportAttachments({
-      summary: [['Total', 1500]],
-      sheets: [{ name: 'Primary', columns, rows }],
-      baseFilename: 'sales-report',
-    });
-
-    expect(attachments).toHaveLength(3);
-    const byExt = Object.fromEntries(attachments.map((a) => [a.filename.split('.').pop(), a]));
-
-    expect(byExt.xlsx.filename).toBe('sales-report.xlsx');
-    expect(byExt.xlsx.contentType).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    expect(Buffer.isBuffer(byExt.xlsx.content)).toBe(true);
-
-    expect(byExt.csv.filename).toBe('sales-report.csv');
-    expect(byExt.csv.contentType).toBe('text/csv');
-    expect(byExt.csv.content.toString()).toContain('Jersey,1000');
-
-    expect(byExt.pdf.filename).toBe('sales-report.pdf');
-    expect(byExt.pdf.contentType).toBe('application/pdf');
-    expect(byExt.pdf.content.slice(0, 5).toString()).toBe('%PDF-');
-  });
-});
+// buildReportAttachments was removed as part of the Scheduled Report Email
+// Redesign — scheduled report emails no longer attach files (see
+// emailService.test.js's sendScheduledReportEmail coverage); the
+// generation functions it composed (buildXLSXWorkbook/buildPDFBuffer/
+// toCSV) remain fully covered above and by sendReportExport below, which
+// is what report downloads now always go through, on demand.
 
 describe('sendReportExport', () => {
   it('sends a PDF when format is pdf', async () => {
