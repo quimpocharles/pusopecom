@@ -1,39 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  CurrencyDollarIcon,
-  ShoppingBagIcon,
-  ExclamationTriangleIcon,
-  TruckIcon,
-  XCircleIcon,
-  EyeIcon,
-  SparklesIcon,
-  Cog6ToothIcon,
-} from '@heroicons/react/24/outline';
-import StatsCard from '../StatsCard';
+import { EyeIcon, SparklesIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import reportService from '../../../services/reportService';
 
+// Admin Dashboard Phase 2 — this used to also offer Today's Revenue,
+// Today's Orders, Low Stock, Pending Shipments, and Failed Payments as
+// pinnable cards. Those now live in the Dashboard's own fixed STATUS/NEEDS
+// ATTENTION sections (STATUS and NEEDS ATTENTION "must always be visible
+// and must not be hideable" — a customizable pin is the opposite of that),
+// so they were removed from what this component can render, leaving only
+// the two genuine PERFORMANCE-tier widgets. The backend's dashboard-widget
+// config/data endpoints are untouched and still return all 7 keys — a
+// widget whose key has no entry here (below) simply doesn't render, same
+// as this component already did for any unrecognized key.
 const WIDGET_META = {
-  todaysRevenue: { label: "Today's Revenue", icon: CurrencyDollarIcon, color: 'green' },
-  todaysOrders: { label: "Today's Orders", icon: ShoppingBagIcon, color: 'blue' },
-  lowStock: { label: 'Low Stock', icon: ExclamationTriangleIcon, color: 'orange' },
-  pendingShipments: { label: 'Pending Shipments', icon: TruckIcon, color: 'purple' },
-  failedPayments: { label: 'Failed Payments (Today)', icon: XCircleIcon, color: 'red' },
-  mostViewedProducts: { label: 'Most Viewed Products', icon: EyeIcon, color: 'indigo' },
-  mostTriedOnProducts: { label: 'Most Tried-On Products', icon: SparklesIcon, color: 'indigo' },
+  mostViewedProducts: { label: 'Most Viewed Products', icon: EyeIcon },
+  mostTriedOnProducts: { label: 'Most Tried-On Products', icon: SparklesIcon },
 };
-
-const money = (n) => `₱${Number(n ?? 0).toLocaleString()}`;
-
-function widgetValue(key, data) {
-  switch (key) {
-    case 'todaysRevenue': return money(data.todaysRevenue);
-    case 'todaysOrders': return data.todaysOrders;
-    case 'lowStock': return data.lowStock;
-    case 'pendingShipments': return data.pendingShipments;
-    case 'failedPayments': return data.failedPayments;
-    default: return null;
-  }
-}
 
 const ListWidget = ({ label, icon: Icon, items, empty }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -87,35 +69,41 @@ const PinnedWidgets = () => {
     setConfig((prev) => prev.map((w) => (w.key === key ? { ...w, active } : w)));
   };
 
+  // Only ever consider keys this component still knows how to render — the
+  // backend config can (and does) still contain the 5 retired keys; they
+  // just silently never appear here, same as any other unrecognized key
+  // already did before this change.
+  const knownConfig = config.filter((w) => WIDGET_META[w.key]);
+
   if (loading || !data) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse h-24" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse h-32" />
         ))}
       </div>
     );
   }
 
-  const active = config.filter((w) => w.active);
+  const active = knownConfig.filter((w) => w.active);
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Pinned Reports</h2>
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-900">More Insights</p>
         <button
           onClick={() => setCustomizing((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800"
         >
-          <Cog6ToothIcon className="w-4 h-4" />
+          <Cog6ToothIcon className="w-3.5 h-3.5" />
           Customize
         </button>
       </div>
 
       {customizing && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {config.map((w) => (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-3">
+          <div className="grid grid-cols-2 gap-2">
+            {knownConfig.map((w) => (
               <label key={w.key} className="flex items-center gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
@@ -123,7 +111,7 @@ const PinnedWidgets = () => {
                   onChange={(e) => handleToggle(w.key, e.target.checked)}
                   className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
-                {WIDGET_META[w.key]?.label || w.key}
+                {WIDGET_META[w.key].label}
               </label>
             ))}
           </div>
@@ -133,26 +121,13 @@ const PinnedWidgets = () => {
       {active.length === 0 ? (
         <p className="text-sm text-gray-400">No widgets pinned — click Customize to add some.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {active.map((w) => {
             const meta = WIDGET_META[w.key];
-            if (!meta) return null;
-
             if (w.key === 'mostViewedProducts') {
               return <ListWidget key={w.key} label={meta.label} icon={meta.icon} items={data.mostViewedProducts} empty="No view data yet" />;
             }
-            if (w.key === 'mostTriedOnProducts') {
-              return <ListWidget key={w.key} label={meta.label} icon={meta.icon} items={data.mostTriedOnProducts} empty="No try-on data yet" />;
-            }
-            return (
-              <StatsCard
-                key={w.key}
-                icon={meta.icon}
-                title={meta.label}
-                value={widgetValue(w.key, data)}
-                color={meta.color}
-              />
-            );
+            return <ListWidget key={w.key} label={meta.label} icon={meta.icon} items={data.mostTriedOnProducts} empty="No try-on data yet" />;
           })}
         </div>
       )}

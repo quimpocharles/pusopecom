@@ -91,6 +91,19 @@ async function buildAlertsFeed({ productsData, fulfillment }) {
       link: '/admin/reports/finance',
     });
   }
+  // Already computed by buildFulfillmentSection on every call — this was
+  // silently dropped before reaching the alerts feed (Admin Dashboard
+  // Phase 2 audit). Links to the actual Returns & Refunds admin page
+  // (where a return is approved/rejected), not a report — unlike the
+  // refund-queue alert above, which is a financial figure with no single
+  // actionable page of its own yet.
+  if (fulfillment.returnsAwaitingApproval > 0) {
+    alerts.push({
+      severity: 'warning',
+      message: `${fulfillment.returnsAwaitingApproval} return${fulfillment.returnsAwaitingApproval === 1 ? '' : 's'} awaiting approval`,
+      link: '/admin/returns',
+    });
+  }
   // Only flag silence, not absence — a system that has never once
   // processed a webhook (a fresh environment) isn't "unhealthy", it just
   // has no data yet.

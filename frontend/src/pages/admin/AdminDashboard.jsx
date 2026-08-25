@@ -1,193 +1,211 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  CurrencyDollarIcon,
-  CalendarDaysIcon,
-  ShoppingCartIcon,
-  UsersIcon,
-  ExclamationTriangleIcon
-} from '@heroicons/react/24/outline';
-import StatsCard from '../../components/admin/StatsCard';
+import { ExclamationTriangleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import PinnedWidgets from '../../components/admin/dashboard/PinnedWidgets';
+import reportService from '../../services/reportService';
 import orderService from '../../services/orderService';
 import authService from '../../services/authService';
 import { ORDER_STATUS_COLORS, orderStatusLabel } from '../../utils/orderStatus';
 
+const paymentColors = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  paid: 'bg-green-100 text-green-800',
+  failed: 'bg-red-100 text-red-800',
+  refunded: 'bg-gray-100 text-gray-800',
+};
+
+// Same severity → style mapping as ExecutiveDashboard.jsx's own alert rows
+// (kept in sync by hand, not shared, since that file is explicitly not to
+// be touched by this change) — visual consistency between the two
+// surfaces that both render this exact alert feed.
+const alertStyles = {
+  critical: { border: 'border-red-200', bg: 'bg-red-50', text: 'text-red-700', Icon: ExclamationCircleIcon, iconColor: 'text-red-500' },
+  warning: { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700', Icon: ExclamationTriangleIcon, iconColor: 'text-amber-500' },
+};
+
+// Admin Dashboard Phase 2A — every data source below is fetched and
+// tracked independently (never one Promise.all whose single rejection
+// blanks the whole page). `state` distinguishes a genuine value from an
+// unreachable one so a 403 (an admin's department lacks the permission a
+// given call requires) can never render as a false "zero" / "all healthy"
+// result — see classifyError below and each section's own state === ...
+// branches.
+function classifyError(err) {
+  return err?.response?.status === 403 ? 'forbidden' : 'error';
+}
+
+const UNAVAILABLE_TEXT = {
+  forbidden: 'Not available for your role',
+  error: "Couldn't load",
+};
+
+function StatusCard({ label, state, value, subtitle }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
+      {state === 'ready' ? (
+        <>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+        </>
+      ) : state === 'loading' ? (
+        <div className="h-8 w-20 bg-gray-100 rounded animate-pulse mt-2" />
+      ) : (
+        <p className="text-sm text-gray-400 mt-2">{UNAVAILABLE_TEXT[state]}</p>
+      )}
+    </div>
+  );
+}
+
 const AdminDashboard = () => {
-  const [orderStats, setOrderStats] = useState(null);
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [totalOrders, setTotalOrders] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // { state: 'loading' | 'ready' | 'forbidden' | 'error', data }
+  const [executive, setExecutive] = useState({ state: 'loading', data: null });
+  const [users, setUsers] = useState({ state: 'loading', data: null });
+  const [topSelling, setTopSelling] = useState({ state: 'loading', data: null });
+  const [recentOrders, setRecentOrders] = useState({ state: 'loading', data: null });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, ordersRes, usersRes] = await Promise.all([
-          orderService.getOrderStats(),
-          orderService.getAllOrders({ limit: 5 }),
-          authService.getAdminUsers({ limit: 1 })
-        ]);
+    // Ungated (see routes/reports.js's own comment on dashboard-widgets —
+    // the same "visible to every admin" philosophy applies here); called
+    // with no date params, computeExecutiveReport's totals are all-time,
+    // matching what "Total Revenue"/"Total Orders" have always meant here.
+    reportService.getExecutiveReport()
+      .then((res) => setExecutive({ state: 'ready', data: res.data }))
+      .catch((err) => setExecutive({ state: classifyError(err), data: null }));
 
-        setOrderStats(statsRes.data);
-        setRecentOrders(ordersRes.data);
-        setTotalOrders(ordersRes.pagination.total);
-        setTotalUsers(usersRes.pagination.total);
-      } catch (error) {
-        console.error('Failed to load dashboard:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // users.view-gated — not every department has it (e.g. marketing).
+    authService.getAdminUsers({ limit: 1 })
+      .then((res) => setUsers({ state: 'ready', data: res.pagination.total }))
+      .catch((err) => setUsers({ state: classifyError(err), data: null }));
 
-    fetchData();
+    // orders.view-gated.
+    orderService.getOrderStats()
+      .then((res) => setTopSelling({ state: 'ready', data: res.data.topSellingProducts || [] }))
+      .catch((err) => setTopSelling({ state: classifyError(err), data: null }));
+
+    // orders.view-gated.
+    orderService.getAllOrders({ limit: 5 })
+      .then((res) => setRecentOrders({ state: 'ready', data: res.data || [] }))
+      .catch((err) => setRecentOrders({ state: classifyError(err), data: null }));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const statusColors = ORDER_STATUS_COLORS;
-
-  const paymentColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    paid: 'bg-green-100 text-green-800',
-    failed: 'bg-red-100 text-red-800',
-    refunded: 'bg-gray-100 text-gray-800',
-  };
-
-  // Payment Platform Redesign, Phase 2 — this card's original intent was
-  // "orders that need attention," which under the old model meant
-  // orderStatus='processing' (the only state an unpaid order sat in).
-  // That's now 'awaiting_payment'; 'processing' has been repurposed to
-  // mean fulfillment prep for an already-paid order.
-  const pendingCount = orderStats?.ordersByStatus?.awaiting_payment || 0;
+  const alerts = executive.state === 'ready' ? executive.data.alerts : null;
+  const kpis = executive.state === 'ready' ? executive.data.kpis : null;
+  const ops = executive.state === 'ready' ? executive.data.operationsHealth : null;
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
 
-      <PinnedWidgets />
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard
-          icon={CurrencyDollarIcon}
-          title="Total Revenue"
-          value={`₱${(orderStats?.totalRevenue || 0).toLocaleString()}`}
-          subtitle={`${orderStats?.paidOrdersCount || 0} orders paid`}
-          color="green"
+      {/* STATUS — fixed, always visible, never customizable/hideable. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatusCard
+          label="Total Revenue"
+          state={executive.state}
+          value={kpis && `₱${kpis.totalRevenue.toLocaleString()}`}
         />
-        <StatsCard
-          icon={CalendarDaysIcon}
-          title="Revenue This Month"
-          value={`₱${(orderStats?.revenueThisMonth || 0).toLocaleString()}`}
-          subtitle={`${orderStats?.monthlyOrdersCount || 0} orders this month`}
-          color="blue"
+        <StatusCard
+          label="Total Orders"
+          state={executive.state}
+          value={kpis && kpis.totalOrders.toLocaleString()}
         />
-        <StatsCard
-          icon={ShoppingCartIcon}
-          title="Total Orders"
-          value={totalOrders}
-          subtitle={`${pendingCount} awaiting payment`}
-          color="purple"
+        <StatusCard
+          label="Fulfillment Rate"
+          state={executive.state}
+          value={ops && `${ops.fulfillmentRate}%`}
+          subtitle={ops && `${ops.pendingShipments} pending shipment${ops.pendingShipments === 1 ? '' : 's'}`}
         />
-        <StatsCard
-          icon={UsersIcon}
-          title="Total Users"
-          value={totalUsers}
-          color="orange"
+        <StatusCard
+          label="Users"
+          state={users.state}
+          value={users.state === 'ready' ? users.data.toLocaleString() : null}
         />
       </div>
 
-      {/* Two-column section: Top Products & Low Stock */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Top Selling Products */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Top Selling Products</h2>
+      {/* NEEDS ATTENTION — reuses GET /reports/executive's alerts feed
+          verbatim (severity, sorting, message, link, empty state all
+          computed server-side in buildAlertsFeed) — nothing here decides
+          what counts as an alert. Always rendered, never customizable. */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-3">Needs Attention</h2>
+        {executive.state === 'loading' ? (
+          <div className="space-y-2">
+            {[1, 2].map((i) => <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse" />)}
           </div>
-          <div className="p-6">
-            {orderStats?.topSellingProducts?.length > 0 ? (
-              <div className="space-y-4">
-                {orderStats.topSellingProducts.map((product, index) => (
-                  <div key={product._id || index} className="flex items-center gap-4">
-                    <span className="text-sm font-bold text-gray-400 w-5 text-right">
-                      {index + 1}
-                    </span>
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-10 h-10 rounded-lg object-cover bg-gray-100"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {product.totalQuantity} units sold
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 text-center py-4">No sales data yet</p>
-            )}
+        ) : executive.state !== 'ready' ? (
+          <p className="text-sm text-gray-400">{UNAVAILABLE_TEXT[executive.state]}</p>
+        ) : alerts.length === 0 ? (
+          <p className="text-sm text-gray-500">Nothing flagged — operations look healthy.</p>
+        ) : (
+          <div className="space-y-2">
+            {alerts.map((alert, i) => {
+              const style = alertStyles[alert.severity];
+              const AlertIcon = style.Icon;
+              return (
+                <Link
+                  key={i}
+                  to={alert.link}
+                  className={`flex items-center gap-2.5 px-4 py-3 rounded-lg border ${style.border} ${style.bg} hover:opacity-80 transition-opacity`}
+                >
+                  <AlertIcon className={`w-5 h-5 flex-shrink-0 ${style.iconColor}`} />
+                  <span className={`text-sm font-medium ${style.text}`}>{alert.message}</span>
+                </Link>
+              );
+            })}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Low Stock Alerts */}
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="flex items-center gap-2 p-6 border-b border-gray-200">
-            <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Low Stock Alerts</h2>
-          </div>
-          <div className="p-6">
-            {orderStats?.lowStockProducts?.length > 0 ? (
-              <div className="space-y-3">
-                {orderStats.lowStockProducts.map((product) => (
-                  <div key={product._id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
+      {/* PERFORMANCE — Top Selling Products (fixed) alongside the
+          customizable widgets (PinnedWidgets, now scoped to Performance-
+          only widgets — see that component's own comment). Customization
+          never applies to STATUS or NEEDS ATTENTION above. */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <p className="text-sm font-semibold text-gray-900 mb-3">Top Selling Products</p>
+            {topSelling.state === 'ready' ? (
+              topSelling.data.length > 0 ? (
+                <div className="space-y-4">
+                  {topSelling.data.map((product, index) => (
+                    <div key={product._id || index} className="flex items-center gap-4">
+                      <span className="text-sm font-bold text-gray-400 w-5 text-right">
+                        {index + 1}
+                      </span>
                       <img
-                        src={product.images?.[0]}
+                        src={product.image}
                         alt={product.name}
                         className="w-10 h-10 rounded-lg object-cover bg-gray-100"
                       />
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {product.name}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {product.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {product.totalQuantity} units sold
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                        product.totalStock === 0
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {product.totalStock === 0 ? 'Out of stock' : `${product.totalStock} left`}
-                      </span>
-                      <Link
-                        to={`/admin/products/${product._id}/edit`}
-                        className="text-xs text-primary-600 hover:text-primary-700 font-medium"
-                      >
-                        Edit
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-4">No sales data yet</p>
+              )
+            ) : topSelling.state === 'loading' ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded animate-pulse" />)}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">All products well stocked</p>
+              <p className="text-sm text-gray-400 py-4">{UNAVAILABLE_TEXT[topSelling.state]}</p>
             )}
           </div>
+
+          <PinnedWidgets />
         </div>
       </div>
 
-      {/* Recent Orders */}
+      {/* RECENT ACTIVITY */}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
@@ -208,10 +226,36 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {recentOrders.map((order) => (
+              {recentOrders.state === 'loading' && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center">
+                    <div className="w-6 h-6 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  </td>
+                </tr>
+              )}
+              {(recentOrders.state === 'forbidden' || recentOrders.state === 'error') && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
+                    {UNAVAILABLE_TEXT[recentOrders.state]}
+                  </td>
+                </tr>
+              )}
+              {recentOrders.state === 'ready' && recentOrders.data.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
+                    No orders yet
+                  </td>
+                </tr>
+              )}
+              {recentOrders.state === 'ready' && recentOrders.data.map((order) => (
                 <tr key={order._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {order.orderNumber}
+                  <td className="px-6 py-4 text-sm font-medium">
+                    <Link
+                      to={`/admin/orders/${order.orderNumber}`}
+                      className="text-primary-600 hover:text-primary-800 hover:underline"
+                    >
+                      {order.orderNumber}
+                    </Link>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {order.user ? `${order.user.firstName} ${order.user.lastName}` : order.email}
@@ -225,7 +269,7 @@ const AdminDashboard = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.orderStatus]}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_COLORS[order.orderStatus]}`}>
                       {orderStatusLabel(order.orderStatus)}
                     </span>
                   </td>
@@ -234,13 +278,6 @@ const AdminDashboard = () => {
                   </td>
                 </tr>
               ))}
-              {recentOrders.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
-                    No orders yet
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

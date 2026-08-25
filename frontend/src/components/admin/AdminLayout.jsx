@@ -129,14 +129,23 @@ const AdminLayout = () => {
     [user]
   );
 
+  // Sidebar scrolling fix (Admin Dashboard Phase 2) — a flex column child
+  // sized with `flex-1` alone won't shrink below its own content height
+  // (flex items default to `min-height: auto`), so on a short viewport the
+  // nav's real content height silently overflowed the fixed-position
+  // sidebar container with no scrollbar anywhere to reach it. `min-h-0` on
+  // every flex-1 link in the chain lets `nav` actually be clamped to the
+  // remaining space, and `overflow-y-auto` on `nav` itself is what makes
+  // that remaining space scrollable — while header/footer, having no
+  // flex-1 of their own, keep their natural size and stay put.
   const SidebarContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="p-6 border-b border-gray-200">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="p-6 border-b border-gray-200 flex-shrink-0">
         <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
         <p className="text-xs text-gray-500 mt-1">Puso Pilipinas</p>
       </div>
 
-      <nav aria-label="Admin" className="flex-1 p-4 space-y-5">
+      <nav aria-label="Admin" className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
         {visibleSections.map((section) => (
           <div key={section.heading}>
             <h2 className="px-4 mb-1.5 text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -150,14 +159,14 @@ const AdminLayout = () => {
                   end={item.end}
                   onClick={() => setSidebarOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-primary-50 text-primary-700'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                     }`
                   }
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="w-4 h-4" />
                   {item.label}
                 </NavLink>
               ))}
@@ -166,21 +175,21 @@ const AdminLayout = () => {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-200 space-y-1">
+      <div className="p-4 border-t border-gray-200 space-y-1 flex-shrink-0">
         <a
           href="https://mail.pusostore.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
         >
-          <EnvelopeIcon className="w-5 h-5" />
+          <EnvelopeIcon className="w-4 h-4" />
           Employee Mail
         </a>
         <NavLink
           to="/"
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
         >
-          <ArrowLeftIcon className="w-5 h-5" />
+          <ArrowLeftIcon className="w-4 h-4" />
           Back to Shop
         </NavLink>
       </div>
@@ -210,7 +219,7 @@ const AdminLayout = () => {
 
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex-1 bg-white border-r border-gray-200">
+        <div className="flex-1 min-h-0 bg-white border-r border-gray-200">
           <SidebarContent />
         </div>
       </div>

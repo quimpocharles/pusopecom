@@ -230,6 +230,43 @@ describe('GET /reports/executive', () => {
     }
   }, 15000);
 
+  describe('returns-awaiting-approval alert (Admin Dashboard Phase 2)', () => {
+    let returnOrder;
+    let returnRequest;
+
+    beforeAll(async () => {
+      returnOrder = await prisma.order.create({
+        data: {
+          orderNumber: `${MARKER}-RETURN-ORDER`, email: `${MARKER}-return@test.local`,
+          shipToFullName: 'Returns Test', shipToPhone: '09170000004', shipToAddress: '1 St',
+          shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+          subtotal: 500, total: 500, paymentStatus: 'paid', orderStatus: 'delivered',
+        },
+      });
+      // Default status is 'requested' — one of the two statuses
+      // buildFulfillmentSection's returnsAwaitingApproval counts.
+      returnRequest = await prisma.returnRequest.create({
+        data: { orderId: returnOrder.id, reason: `${MARKER} test reason` },
+      });
+    });
+
+    afterAll(async () => {
+      await prisma.returnRequest.delete({ where: { id: returnRequest.id } }).catch(() => {});
+      await prisma.order.delete({ where: { id: returnOrder.id } }).catch(() => {});
+    });
+
+    it('surfaces "N returns awaiting approval" as a warning alert linking to Returns & Refunds', async () => {
+      const res = await request(app).get(`/api/reports/executive?${rangeQS}`);
+      expect(res.status).toBe(200);
+
+      const alert = res.body.data.alerts.find((a) => /returns? awaiting approval/i.test(a.message));
+      expect(alert).toBeTruthy();
+      expect(alert.severity).toBe('warning');
+      expect(alert.link).toBe('/admin/returns');
+      expect(alert.message).toMatch(/^\d+ returns? awaiting approval$/);
+    }, 15000);
+  });
+
   it('returns a non-empty, deterministic executive summary referencing the real revenue figure', async () => {
     const res = await request(app).get(`/api/reports/executive?${rangeQS}`);
     expect(res.status).toBe(200);

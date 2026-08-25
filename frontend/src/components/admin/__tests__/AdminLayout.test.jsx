@@ -130,4 +130,47 @@ describe('AdminLayout — Phase 1 sidebar IA (sections, no route/permission chan
     expect(within(nav).getByRole('link', { name: /^Events$/ }).getAttribute('href')).toBe('/admin/pass-events');
     expect(within(nav).getByRole('link', { name: /^Check-In$/ }).getAttribute('href')).toBe('/admin/pass-checkin');
   });
+
+  // Sidebar scrolling fix — jsdom doesn't lay elements out, so an actual
+  // "does it scroll at 720px tall" check isn't something a unit test can
+  // observe. What IS verifiable here: the specific classes that make the
+  // fix work are present on the right elements, so a future edit can't
+  // silently drop them without a test failing. Real short-viewport
+  // behavior still needs the visual check called out in the final report.
+  it('g. the nav is independently scrollable and clamped, while the header/footer stay fixed-size', () => {
+    renderAt('/admin');
+    const nav = getNav();
+
+    // `min-h-0` is what lets a flex-1 child actually shrink below its
+    // content height instead of pushing the sidebar past the viewport;
+    // `overflow-y-auto` is what makes the now-clamped remainder scrollable.
+    expect(nav.className).toContain('flex-1');
+    expect(nav.className).toContain('min-h-0');
+    expect(nav.className).toContain('overflow-y-auto');
+
+    // Header ("Admin Panel") and footer (Employee Mail / Back to Shop)
+    // must not be part of that scrolling region, and must not shrink to
+    // make room for it. Mobile drawer is closed by default, so there's
+    // exactly one instance of each on the page here.
+    const header = screen.getByText('Admin Panel').closest('div');
+    expect(header.className).toContain('flex-shrink-0');
+    expect(within(header).queryByRole('navigation')).toBeNull();
+
+    const footerLink = screen.getByText('Employee Mail').closest('div');
+    expect(footerLink.className).toContain('flex-shrink-0');
+  });
+
+  it('h. every sidebar item remains present (reachable) regardless of the scroll-fix classes, for a full-access admin', () => {
+    renderAt('/admin');
+    const nav = getNav();
+    // 1 (Dashboard) + 5 (Merchandise) + 4 (Events & Passes) + 3 (Content) + 1 (Customers) + 1 (Reporting) + 1 (System)
+    expect(within(nav).getAllByRole('link')).toHaveLength(16);
+  });
+
+  it('h2. and remains present for a limited-department admin too, just fewer of them', () => {
+    renderAt('/admin', WAREHOUSE_ADMIN);
+    const nav = getNav();
+    expect(within(nav).getAllByRole('link').length).toBeGreaterThan(0);
+    expect(within(nav).getAllByRole('link').length).toBeLessThan(16);
+  });
 });
