@@ -172,34 +172,36 @@ const QuickAddModal = () => {
           </div>
         )}
 
-        {/* Quantity */}
+        {/* Quantity + Add to Cart share one row — the stepper stays a fixed
+            width, the button fills whatever's left. */}
         <div className="mb-2">
           <h4 className="text-sm font-semibold text-gray-900 mb-2">Quantity</h4>
-          <div className="inline-flex items-center border border-gray-200 rounded-lg">
-            <button
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="p-2.5 hover:bg-gray-50 transition-colors"
-              aria-label="Decrease quantity"
-            >
-              <MinusIcon className="w-4 h-4 text-gray-500" />
-            </button>
-            <span className="px-5 text-sm font-semibold min-w-[3rem] text-center">{quantity}</span>
-            <button
-              onClick={() => setQuantity((q) => Math.min(selectedStock || 99, q + 1))}
-              disabled={availableSizes.length > 0 && quantity >= selectedStock}
-              className="p-2.5 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Increase quantity"
-            >
-              <PlusIcon className="w-4 h-4 text-gray-500" />
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center border border-gray-200 rounded-lg flex-shrink-0">
+              <button
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="p-2.5 hover:bg-gray-50 transition-colors"
+                aria-label="Decrease quantity"
+              >
+                <MinusIcon className="w-4 h-4 text-gray-500" />
+              </button>
+              <span className="px-5 text-sm font-semibold min-w-[3rem] text-center">{quantity}</span>
+              <button
+                onClick={() => setQuantity((q) => Math.min(selectedStock || 99, q + 1))}
+                disabled={availableSizes.length > 0 && quantity >= selectedStock}
+                className="p-2.5 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Increase quantity"
+              >
+                <PlusIcon className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <button onClick={handleAddToCart} className="btn-primary flex-1">
+              Add to Cart
             </button>
           </div>
         </div>
 
         {error && <p className="text-sm text-accent-500 mt-2">{error}</p>}
-
-        <button onClick={handleAddToCart} className="btn-primary w-full mt-5">
-          Add to Cart
-        </button>
 
         <Link
           to={`/products/${product.slug}`}

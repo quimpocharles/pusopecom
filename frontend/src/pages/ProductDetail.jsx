@@ -621,23 +621,39 @@ const ProductDetail = () => {
               );
             })()}
 
-            {/* Quantity */}
+            {/* Quantity + Add to Cart share one row — the stepper stays a
+                fixed width, the button fills whatever's left. */}
             <div className="mb-8">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Quantity</h3>
-              <div className="inline-flex items-center border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center border border-gray-200 rounded-xl flex-shrink-0">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    −
+                  </button>
+                  <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(Math.min(selectedSizeStock, quantity + 1))}
+                    disabled={quantity >= selectedSizeStock}
+                    className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors disabled:text-gray-300"
+                  >
+                    +
+                  </button>
+                </div>
                 <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors"
+                  onClick={handleAddToCart}
+                  disabled={product.totalStock === 0 || selectedSizeStock === 0}
+                  className={`flex-1 py-4 rounded-xl font-semibold text-base transition-all duration-300 ${
+                    addedToCart
+                      ? 'bg-green-600 text-white'
+                      : product.totalStock === 0
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : 'hover-fill hover-fill-dark bg-[#0a0a0a] text-white active:scale-[0.98]'
+                  }`}
                 >
-                  −
-                </button>
-                <span className="w-10 text-center text-sm font-semibold">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(Math.min(selectedSizeStock, quantity + 1))}
-                  disabled={quantity >= selectedSizeStock}
-                  className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-900 transition-colors disabled:text-gray-300"
-                >
-                  +
+                  {addedToCart ? 'Added to Cart ✓' : product.totalStock === 0 ? 'Out of Stock' : 'Add to Cart'}
                 </button>
               </div>
             </div>
@@ -646,21 +662,6 @@ const ProductDetail = () => {
             {error && (
               <p className="text-sm text-accent-500 mb-4">{error}</p>
             )}
-
-            {/* Add to Cart */}
-            <button
-              onClick={handleAddToCart}
-              disabled={product.totalStock === 0 || selectedSizeStock === 0}
-              className={`w-full py-4 rounded-xl font-semibold text-base transition-all duration-300 ${
-                addedToCart
-                  ? 'bg-green-600 text-white'
-                  : product.totalStock === 0
-                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  : 'hover-fill hover-fill-dark bg-[#0a0a0a] text-white active:scale-[0.98]'
-              }`}
-            >
-              {addedToCart ? 'Added to Cart ✓' : product.totalStock === 0 ? 'Out of Stock' : 'Add to Cart'}
-            </button>
 
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3 mt-6 pt-6 border-t border-gray-100">
