@@ -32,41 +32,100 @@ const SETTINGS_ANY = Object.values(PERMISSIONS).filter((p) => p.startsWith('sett
 // visible (Dashboard, and "Back to Shop" below). This only hides links a
 // backend requirePermission() call would 403 anyway; it's not itself the
 // enforcement.
-const navItems = [
-  { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
-  { label: 'Products', to: '/admin/products', icon: CubeIcon, permission: PERMISSIONS.PRODUCTS_VIEW },
-  { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon, permission: PERMISSIONS.LEAGUES_MANAGE },
-  { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon, permission: PERMISSIONS.HOMEPAGE_MANAGE },
-  { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon, permission: PERMISSIONS.CAMPAIGNS_MANAGE },
-  { label: 'Promo Codes', to: '/admin/promo-codes', icon: TicketIcon, permission: PERMISSIONS.PROMOTIONS_MANAGE },
-  { label: 'Venues', to: '/admin/venues', icon: MapIcon, permission: PERMISSIONS.PASSES_MANAGE },
-  { label: 'Pass Events', to: '/admin/pass-events', icon: CalendarDaysIcon, permission: PERMISSIONS.PASSES_MANAGE },
-  { label: 'Pass Check-In', to: '/admin/pass-checkin', icon: QrCodeIcon, permission: PERMISSIONS.PASSES_CHECKIN },
-  { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon, permission: PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE },
-  { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon, permission: PERMISSIONS.ORDERS_VIEW },
-  { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon, permission: PERMISSIONS.FULFILLMENT_MANAGE },
-  { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon, permission: PERMISSIONS.RETURNS_VIEW },
-  { label: 'Users', to: '/admin/users', icon: UsersIcon, permission: PERMISSIONS.USERS_VIEW },
-  // Single entry for the whole Reports module — 9 workspaces (Executive
-  // Dashboard, Sales, Products, Customers, Operations, Fit Check
-  // Analytics, Organizations, Finance, Exports) live inside ReportsLayout's
-  // own sub-nav, same pattern as Settings' single sidebar entry. Visible if
-  // any single workspace is reachable — ReportsLayout's own sub-nav hides
-  // the rest.
-  { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon, anyOf: REPORTS_ANY },
-  { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon, anyOf: SETTINGS_ANY },
+//
+// Admin IA audit, Phase 1 — items are grouped into domain sections purely
+// for sidebar presentation. `to`, `permission`/`anyOf`, and every route
+// this points at are unchanged from the prior flat list; only the grouping
+// and two labels ("Events", "Check-In" — see their own comments) are new.
+// A section's own heading is never itself permission-gated — it's derived
+// from whether any of its items survive the same per-item filter the flat
+// list always used, so a section with nothing visible in it just doesn't
+// render (see visibleSections below), the same way an individual item
+// always has.
+const navSections = [
+  {
+    heading: 'Core',
+    items: [
+      { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
+    ],
+  },
+  {
+    heading: 'Merchandise',
+    items: [
+      { label: 'Products', to: '/admin/products', icon: CubeIcon, permission: PERMISSIONS.PRODUCTS_VIEW },
+      { label: 'Orders', to: '/admin/orders', icon: ShoppingCartIcon, permission: PERMISSIONS.ORDERS_VIEW },
+      { label: 'Fulfillment', to: '/admin/shipments', icon: ClipboardDocumentListIcon, permission: PERMISSIONS.FULFILLMENT_MANAGE },
+      { label: 'Returns & Refunds', to: '/admin/returns', icon: ArrowUturnLeftIcon, permission: PERMISSIONS.RETURNS_VIEW },
+      { label: 'Promo Codes', to: '/admin/promo-codes', icon: TicketIcon, permission: PERMISSIONS.PROMOTIONS_MANAGE },
+    ],
+  },
+  {
+    heading: 'Events & Passes',
+    items: [
+      // Label-only rename (IA audit, Deliverable D) — route stays
+      // /admin/pass-events, component stays AdminPassEvents, permission
+      // stays passes.manage. "Events" is what this already is once it's
+      // under an "Events & Passes" heading; nothing else about it changed.
+      { label: 'Events', to: '/admin/pass-events', icon: CalendarDaysIcon, permission: PERMISSIONS.PASSES_MANAGE },
+      // Same: route stays /admin/pass-checkin, component stays
+      // AdminPassCheckin, permission stays passes.checkin.
+      { label: 'Check-In', to: '/admin/pass-checkin', icon: QrCodeIcon, permission: PERMISSIONS.PASSES_CHECKIN },
+      { label: 'Venues', to: '/admin/venues', icon: MapIcon, permission: PERMISSIONS.PASSES_MANAGE },
+      { label: 'Leagues', to: '/admin/leagues', icon: TrophyIcon, permission: PERMISSIONS.LEAGUES_MANAGE },
+    ],
+  },
+  {
+    heading: 'Content',
+    items: [
+      { label: 'Homepage', to: '/admin/homepage', icon: RectangleGroupIcon, permission: PERMISSIONS.HOMEPAGE_MANAGE },
+      { label: 'Campaigns', to: '/admin/campaigns', icon: SparklesIcon, permission: PERMISSIONS.CAMPAIGNS_MANAGE },
+      { label: 'Fit Check Campaigns', to: '/admin/fit-check-campaigns', icon: MegaphoneIcon, permission: PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE },
+    ],
+  },
+  {
+    heading: 'Customers',
+    items: [
+      { label: 'Users', to: '/admin/users', icon: UsersIcon, permission: PERMISSIONS.USERS_VIEW },
+    ],
+  },
+  {
+    heading: 'Reporting',
+    items: [
+      // Single entry for the whole Reports module — 9 workspaces (Executive
+      // Dashboard, Sales, Products, Customers, Operations, Fit Check
+      // Analytics, Organizations, Finance, Exports) live inside
+      // ReportsLayout's own sub-nav, unchanged by this reorg. Visible if
+      // any single workspace is reachable — ReportsLayout's own sub-nav
+      // hides the rest.
+      { label: 'Reports', to: '/admin/reports', icon: ChartBarIcon, anyOf: REPORTS_ANY },
+    ],
+  },
+  {
+    heading: 'System',
+    items: [
+      { label: 'Settings', to: '/admin/settings', icon: Cog6ToothIcon, anyOf: SETTINGS_ANY },
+    ],
+  },
 ];
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
 
-  const visibleNavItems = useMemo(
-    () => navItems.filter((item) => {
-      if (item.permission) return hasPermission(user, item.permission);
-      if (item.anyOf) return hasAnyPermission(user, item.anyOf);
-      return true;
-    }),
+  const isItemVisible = (item) => {
+    if (item.permission) return hasPermission(user, item.permission);
+    if (item.anyOf) return hasAnyPermission(user, item.anyOf);
+    return true;
+  };
+
+  // Filtering is still per-item, exactly as before — a section is just
+  // whatever's left of it once its items go through that same check, and
+  // drops out entirely when nothing survives (requirement: no empty
+  // section headings).
+  const visibleSections = useMemo(
+    () => navSections
+      .map((section) => ({ ...section, items: section.items.filter(isItemVisible) }))
+      .filter((section) => section.items.length > 0),
     [user]
   );
 
@@ -77,24 +136,33 @@ const AdminLayout = () => {
         <p className="text-xs text-gray-500 mt-1">Puso Pilipinas</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
-        {visibleNavItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={() => setSidebarOpen(false)}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`
-            }
-          >
-            <item.icon className="w-5 h-5" />
-            {item.label}
-          </NavLink>
+      <nav aria-label="Admin" className="flex-1 p-4 space-y-5">
+        {visibleSections.map((section) => (
+          <div key={section.heading}>
+            <h2 className="px-4 mb-1.5 text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {section.heading}
+            </h2>
+            <div className="space-y-1">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`
+                  }
+                >
+                  <item.icon className="w-5 h-5" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
