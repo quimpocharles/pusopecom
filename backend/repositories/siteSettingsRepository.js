@@ -56,6 +56,9 @@ function toNestedShape(row) {
     payment: {
       orderExpirationEnabled: row.orderExpirationEnabled,
       orderRetentionHours: row.orderRetentionHours,
+      // Which paymentService.js GATEWAYS entry new orders are created
+      // against — see the schema comment on this column.
+      defaultPaymentGateway: row.defaultPaymentGateway,
     },
     updatedBy: row.updatedByUser
       ? { firstName: row.updatedByUser.firstName, lastName: row.updatedByUser.lastName }
@@ -97,6 +100,7 @@ function flattenPartialUpdate(existingNested, { tryOnAd, fitCheck, payment } = {
     fitCheckTrendingLimit: merged.fitCheck.trending.limit,
     orderExpirationEnabled: merged.payment.orderExpirationEnabled,
     orderRetentionHours: merged.payment.orderRetentionHours,
+    defaultPaymentGateway: merged.payment.defaultPaymentGateway,
   };
 }
 

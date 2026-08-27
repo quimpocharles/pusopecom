@@ -1624,6 +1624,15 @@ model SiteSettings {
   orderExpirationEnabled Boolean @default(true)
   orderRetentionHours    Int     @default(48)
 
+  // ePayGames evaluation (see docs/decisions/0000-decision-log.md) — which
+  // paymentService.js GATEWAYS entry new orders are created against.
+  // Admin-editable so the operational gateway can change without a deploy;
+  // defaults to 'xendit' to preserve today's hardcoded behavior exactly
+  // when this has never been set. A plain string, not an enum, matching
+  // Payment.provider/Order.paymentMethod's existing "never needs a schema
+  // migration just to add a gateway name" convention.
+  defaultPaymentGateway String @default("xendit")
+
   // Settings IA redesign — "Last Updated / Updated By" on every category
   // page. updatedAt already existed; this is the first real writer of who.
   updatedByUserId String?

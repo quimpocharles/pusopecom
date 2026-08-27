@@ -1,7 +1,11 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import prisma from '../../lib/prisma.js';
+// Real (unmocked) — Phase 1 of the ePayGames evaluation reads this at order
+// creation to pick the gateway; these tests exercise the real singleton
+// row, same as prisma above, not a stubbed-out version of it.
+import * as siteSettingsRepository from '../../repositories/siteSettingsRepository.js';
 
 vi.mock('../../middleware/auth.js', () => ({
   authenticate: (req, res, next) => {
@@ -128,6 +132,93 @@ async function makeOwnedOrder({ userId, email = `owned-${Date.now()}@test.local`
   });
   createdOwnedOrderIds.push(order.id);
   return order;
+}
+
+// Test-performance optimization pass — many tests below only need "an
+// order exists in some state," not a real checkout. This creates one
+// directly (bypassing the atomic stock/promo/Pass transaction, the
+// mocked-gateway round trip, the OrderEvent writes, and the dual-write
+// Payment row — all real ~1.5-2s network round trips each against the
+// remote test database) for tests that don't assert on any of those
+// checkout-time side effects. Tests that DO assert on them (stock
+// reservation/release, the Admin Order Timeline's event sequence, the
+// dual-write Payment row's own content, Pass capacity) stay on the real
+// POST /api/orders path — see each converted test's own reasoning.
+async function makeOrderFixture({
+  userId = null,
+  email = `fixture-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`,
+  paymentStatus = 'pending',
+  orderStatus = 'awaiting_payment',
+  paymentMethod = 'xendit',
+  paymentChannel = 'GCASH',
+  mayaPaymentId = `chk_fixture_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  mayaCheckoutUrl = 'https://pay.example/chk_fixture',
+  subtotal = 500,
+  shippingFee = 99,
+  gatewayFeeAmount = 0,
+  total,
+  shippingMethod,
+  shippingRegion = '13',
+} = {}) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const order = await prisma.order.create({
+    data: {
+      orderNumber: `PS-MARKERFIX-${suffix}`,
+      userId,
+      email,
+      shipToFullName: 'Fixture Buyer',
+      shipToPhone: '09171234567',
+      shipToAddress: '1 St',
+      shipToCity: 'QC',
+      shipToProvince: 'Metro Manila',
+      shipToZipCode: '1100',
+      subtotal,
+      shippingFee,
+      gatewayFeeAmount,
+      total: total ?? subtotal + shippingFee + gatewayFeeAmount,
+      paymentStatus,
+      orderStatus,
+      paymentMethod,
+      paymentChannel,
+      mayaPaymentId,
+      mayaCheckoutUrl,
+      shippingMethod,
+      shippingRegion,
+    },
+  });
+  createdOwnedOrderIds.push(order.id);
+  return order;
+}
+
+// Same as makeOrderFixture, plus a real OrderItem (and the Product it
+// references) and a matching dual-write Payment row — only for the one
+// test that reads the response's nested items[].product / payment shape
+// rather than just the Order's own status fields.
+async function makeOrderFixtureWithItemAndPayment(fixtureOverrides = {}) {
+  const product = await makeProduct({ name: 'FixtureItem' });
+  const order = await makeOrderFixture(fixtureOverrides);
+  await prisma.orderItem.create({
+    data: {
+      orderId: order.id,
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      size: 'M',
+      image: product.images[0],
+    },
+  });
+  await prisma.payment.create({
+    data: {
+      orderId: order.id,
+      provider: order.paymentMethod,
+      status: 'pending',
+      checkoutReference: order.mayaPaymentId,
+      checkoutUrl: order.mayaCheckoutUrl,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+  return { order, product };
 }
 
 beforeAll(async () => {
@@ -448,6 +539,39 @@ describe('POST /orders — Xendit gateway fee (ADR-010)', () => {
   });
 });
 
+describe('POST /orders — gateway selection via siteSettings.payment.defaultPaymentGateway (ePayGames evaluation, Phase 1)', () => {
+  // This is a real, shared singleton row (siteSettingsRepository) — restore
+  // it immediately after each test so no other describe block in this file,
+  // or any other suite hitting the same test database, ever observes
+  // anything but the historical 'xendit' default from this block.
+  afterEach(async () => {
+    await siteSettingsRepository.update({ payment: { defaultPaymentGateway: 'xendit' } });
+  });
+
+  it('defaults new orders to xendit when the setting has never been explicitly changed', async () => {
+    const product = await makeProduct({ name: 'GatewayDefault' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_gw1', redirectUrl: 'https://pay.example/chk_gw1' });
+
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product));
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.paymentMethod).toBe('xendit');
+  }, 15000);
+
+  it('creates new orders against whichever gateway the site setting names, not a hardcoded literal', async () => {
+    await siteSettingsRepository.update({ payment: { defaultPaymentGateway: 'epaygames' } });
+    const product = await makeProduct({ name: 'GatewaySelected' });
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_gw2', redirectUrl: 'https://pay.example/chk_gw2' });
+
+    const res = await request(app).post('/api/orders').send(validOrderPayload(product));
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    expect(order.paymentMethod).toBe('epaygames');
+  }, 15000);
+});
+
 describe('POST /orders — Pass (event admission) checkout, always separate from Merchandise (ADR-011 addendum)', () => {
   const createdOrgIds = [];
   const createdVenueIds = [];
@@ -662,10 +786,7 @@ describe('POST /orders — Pass (event admission) checkout, always separate from
 
 describe('Webhook signature/authenticity — the platform audit\'s critical fix', () => {
   it('a forged webhook body claiming PAYMENT_SUCCESS does NOT mark the order paid unless Maya\'s own API confirms it', async () => {
-    const product = await makeProduct({ name: 'ForgedWebhook' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_forge', redirectUrl: 'https://pay.example/chk_forge' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     // The attacker's payload claims success, but the authenticated pull
     // against Maya (mocked here) says otherwise — this is the entire
@@ -690,10 +811,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
   }, 15000);
 
   it('a genuine webhook (real Maya status confirms success) marks the order paid, records a shipping event, and emails once', async () => {
-    const product = await makeProduct({ name: 'RealWebhook' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_real', redirectUrl: 'https://pay.example/chk_real' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValue({ status: 'succeeded' });
 
@@ -721,10 +839,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
   }, 20000);
 
   it('a confirmation-email failure does not change the paid outcome (email is fire-and-forget)', async () => {
-    const product = await makeProduct({ name: 'EmailFailIsolation' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_iso', redirectUrl: 'https://pay.example/chk_iso' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValue({ status: 'succeeded' });
     // Phase 6's confirmation email is fire-and-forget with a .catch: an SMTP
@@ -758,10 +873,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
   }, 15000);
 
   it('resolves an order from a requestReferenceNumber carrying mayaGateway.js\'s attempt-unique "#" suffix', async () => {
-    const product = await makeProduct({ name: 'HashSuffixWebhook' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_hash', redirectUrl: 'https://pay.example/chk_hash' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     const res = await request(app).post('/api/orders/webhooks/maya').send({
@@ -787,10 +899,7 @@ describe('Webhook signature/authenticity — the platform audit\'s critical fix'
 
 describe('POST /orders/webhooks/xendit — token-verified, payload trusted directly (ADR-010)', () => {
   it('rejects a webhook with a missing/invalid x-callback-token before ever touching the order', async () => {
-    const product = await makeProduct({ name: 'XenditNoToken' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xno', redirectUrl: 'https://pay.example/chk_xno' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     const res = await request(app)
       .post('/api/orders/webhooks/xendit')
@@ -803,10 +912,7 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
   }, 15000);
 
   it('a token-verified payment_session.completed event marks the order paid, trusting the payload directly (no re-pull)', async () => {
-    const product = await makeProduct({ name: 'XenditCompleted' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xok', redirectUrl: 'https://pay.example/chk_xok' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     const res = await request(app)
       .post('/api/orders/webhooks/xendit')
@@ -824,11 +930,8 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
   }, 15000);
 
   it('a duplicate token-verified payment_session.completed webhook is idempotent — one shipment, one confirmation email', async () => {
-    const product = await makeProduct({ name: 'XenditDuplicate' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xdup', redirectUrl: 'https://pay.example/chk_xdup' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
-    const order = await prisma.order.findUnique({ where: { orderNumber } });
+    const order = await makeOrderFixture();
+    const { orderNumber } = order;
 
     const send = () => request(app)
       .post('/api/orders/webhooks/xendit')
@@ -876,10 +979,7 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
   }, 15000);
 
   it('resolves an order from a reference_id carrying xenditGateway.js\'s attempt-unique "#" suffix', async () => {
-    const product = await makeProduct({ name: 'XenditHashSuffix' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_xhash', redirectUrl: 'https://pay.example/chk_xhash' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     const res = await request(app)
       .post('/api/orders/webhooks/xendit')
@@ -902,22 +1002,16 @@ describe('POST /orders/webhooks/xendit — token-verified, payload trusted direc
 
 describe('POST /orders/:orderNumber/verify-payment', () => {
   it('resolves a pending order to paid via the authenticated Maya pull', async () => {
-    const product = await makeProduct({ name: 'VerifyPaid' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_verify', redirectUrl: 'https://pay.example/chk_verify' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     const res = await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
     expect(res.status).toBe(200);
     expect(res.body.data.paymentStatus).toBe('paid');
-  }, 15000);
+  }, 10000);
 
   it('does not call Maya again once already resolved', async () => {
-    const product = await makeProduct({ name: 'VerifyAlreadyResolved' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_ar', redirectUrl: 'https://pay.example/chk_ar' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
@@ -1000,10 +1094,7 @@ describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => 
   }, 15000);
 
   it('an expired checkout session marks the order expired, distinct from a failed one', async () => {
-    const product = await makeProduct({ name: 'ExpiredStatus' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_expired_status', redirectUrl: 'https://pay.example/chk_expired_status' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'expired' });
     await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
@@ -1019,27 +1110,21 @@ describe('Order status granularity (Payment Platform Redesign, Phase 2)', () => 
   }, 20000);
 
   it('PATCH /:id/status 400s on an orderStatus value outside the valid set, and never touches the order', async () => {
-    const product = await makeProduct({ name: 'InvalidStatus' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_invalid_status', redirectUrl: 'https://pay.example/chk_invalid_status' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    const order = await makeOrderFixture();
 
     const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: 'not_a_real_status' });
     expect(res.status).toBe(400);
 
     const unchanged = await prisma.order.findUnique({ where: { id: order.id } });
     expect(unchanged.orderStatus).toBe(order.orderStatus);
-  }, 15000);
+  }, 10000);
 
   it('PATCH /:id/status rejects the legacy "confirmed" value — nothing may set it again', async () => {
-    const product = await makeProduct({ name: 'LegacyStatus' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_legacy_status', redirectUrl: 'https://pay.example/chk_legacy_status' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    const order = await makeOrderFixture();
 
     const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: 'confirmed' });
     expect(res.status).toBe(400);
-  }, 15000);
+  }, 10000);
 });
 
 describe('Fit Check bonus grants (Phase 2)', () => {
@@ -1049,16 +1134,10 @@ describe('Fit Check bonus grants (Phase 2)', () => {
     });
     createdUserIds.push(buyer.id);
 
-    const product = await makeProduct({ name: 'FirstPurchaseBonus' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fp', redirectUrl: 'https://pay.example/chk_fp' });
-    const createRes = await request(app)
-      .post('/api/orders')
-      .set('x-test-userid', buyer.id)
-      .send(validOrderPayload(product));
-
+    const order1 = await makeOrderFixture({ userId: buyer.id });
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     await request(app)
-      .post(`/api/orders/${createRes.body.data.orderNumber}/verify-payment`)
+      .post(`/api/orders/${order1.orderNumber}/verify-payment`)
       .set('x-test-userid', buyer.id);
 
     // Fire-and-forget, same pattern as the guest-migration/email-verified
@@ -1075,43 +1154,34 @@ describe('Fit Check bonus grants (Phase 2)', () => {
     // A second paid order for the same buyer must not grant a second time —
     // grantEventBonus's own once-per-user idempotency, not an order-history
     // query, is what makes this correctly "first purchase only."
-    const product2 = await makeProduct({ name: 'SecondPurchase' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_fp2', redirectUrl: 'https://pay.example/chk_fp2' });
-    const createRes2 = await request(app)
-      .post('/api/orders')
-      .set('x-test-userid', buyer.id)
-      .send(validOrderPayload(product2));
+    const order2 = await makeOrderFixture({ userId: buyer.id });
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
     await request(app)
-      .post(`/api/orders/${createRes2.body.data.orderNumber}/verify-payment`)
+      .post(`/api/orders/${order2.orderNumber}/verify-payment`)
       .set('x-test-userid', buyer.id);
     await new Promise((r) => setTimeout(r, 300));
 
     const grants = await prisma.bonusFitCheckGrant.findMany({ where: { userId: buyer.id, reason: 'first_purchase' } });
     expect(grants).toHaveLength(1);
-  }, 40000);
+  }, 15000);
 
   it('a guest checkout (no account) never grants a first-purchase bonus', async () => {
-    const product = await makeProduct({ name: 'GuestNoBonus' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_guest_bonus', redirectUrl: 'https://pay.example/chk_guest_bonus' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product)); // no x-test-userid — a guest order
+    const order = await makeOrderFixture();
 
     paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
-    const res = await request(app).post(`/api/orders/${createRes.body.data.orderNumber}/verify-payment`);
+    const res = await request(app).post(`/api/orders/${order.orderNumber}/verify-payment`);
     await new Promise((r) => setTimeout(r, 300));
 
     expect(res.body.data.paymentStatus).toBe('paid');
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
-    expect(order.userId).toBeNull(); // nothing to grant against — grantEventBonus is never even reachable
-  }, 20000);
+    const updated = await prisma.order.findUnique({ where: { orderNumber: order.orderNumber } });
+    expect(updated.userId).toBeNull(); // nothing to grant against — grantEventBonus is never even reachable
+  }, 10000);
 });
 
 describe('GET /orders/:orderNumber — access control', () => {
   it('a guest (no owning user) order is readable by anyone', async () => {
-    const product = await makeProduct({ name: 'GuestOrder' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_guest', redirectUrl: 'https://pay.example/chk_guest' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { order, product } = await makeOrderFixtureWithItemAndPayment({ mayaCheckoutUrl: 'https://pay.example/chk_guest' });
+    const { orderNumber } = order;
 
     const res = await request(app).get(`/api/orders/${orderNumber}`);
     expect(res.status).toBe(200);
@@ -1121,16 +1191,10 @@ describe('GET /orders/:orderNumber — access control', () => {
     // customer-safe fields, nested alongside the order.
     expect(res.body.data.payment).toMatchObject({ provider: 'xendit', status: 'pending', checkoutUrl: 'https://pay.example/chk_guest' });
     expect(res.body.data.payment.expiresAt).not.toBeNull();
-  }, 15000);
+  }, 10000);
 
   it('an owned order is forbidden to a different logged-in user, allowed to its owner and to an admin', async () => {
-    const product = await makeProduct({ name: 'OwnedOrder' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_owned', redirectUrl: 'https://pay.example/chk_owned' });
-    const createRes = await request(app)
-      .post('/api/orders')
-      .set('x-test-userid', 'test-user')
-      .send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
+    const { orderNumber } = await makeOwnedOrder({ userId: 'test-user' });
 
     const forbidden = await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'someone-else');
     expect(forbidden.status).toBe(403);
@@ -1143,7 +1207,7 @@ describe('GET /orders/:orderNumber — access control', () => {
       .set('x-test-userid', 'someone-else')
       .set('x-test-role', 'admin');
     expect(admin.status).toBe(200);
-  }, 15000);
+  }, 10000);
 
   it('404s for a non-existent order number', async () => {
     const res = await request(app).get('/api/orders/PS-NOSUCHORDER');
@@ -1241,30 +1305,18 @@ describe('POST /orders/:orderNumber/pay — resume or regenerate checkout (Payme
   }, 15000);
 
   it('400s when the order is already paid', async () => {
-    const product = await makeProduct({ name: 'PayAlreadyPaid' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_paid', redirectUrl: 'https://pay.example/chk_paid' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
-
-    paymentService.getPaymentStatus.mockResolvedValueOnce({ status: 'succeeded' });
-    await request(app).post(`/api/orders/${orderNumber}/verify-payment`);
+    const { orderNumber } = await makeOrderFixture({ paymentStatus: 'paid', orderStatus: 'paid' });
 
     const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
     expect(res.status).toBe(400);
-  }, 15000);
+  }, 10000);
 
   it('400s when the order has been cancelled', async () => {
-    const product = await makeProduct({ name: 'PayCancelled' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_cancel', redirectUrl: 'https://pay.example/chk_cancel' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const { orderNumber } = createRes.body.data;
-    const order = await prisma.order.findUnique({ where: { orderNumber } });
-
-    await prisma.order.update({ where: { id: order.id }, data: { orderStatus: 'cancelled' } });
+    const { orderNumber } = await makeOrderFixture({ orderStatus: 'cancelled' });
 
     const res = await request(app).post(`/api/orders/${orderNumber}/pay`);
     expect(res.status).toBe(400);
-  }, 15000);
+  }, 10000);
 
   it('404s for an unknown order number', async () => {
     const res = await request(app).post('/api/orders/PS-NOSUCHORDER/pay');
@@ -1292,10 +1344,7 @@ describe('admin order routes', () => {
   // rejecting a value this endpoint no longer owns, and silently ignoring
   // courier/trackingNumber if sent (never reading or applying them).
   it('PATCH /:id/status updates a payment-side orderStatus value', async () => {
-    const product = await makeProduct({ name: 'AdminStatusUpdate' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin', redirectUrl: 'https://pay.example/chk_admin' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    const order = await makeOrderFixture();
 
     const res = await request(app)
       .patch(`/api/orders/${order.id}/status`)
@@ -1305,13 +1354,10 @@ describe('admin order routes', () => {
     // Sent but never read by this endpoint anymore — no longer applied.
     expect(res.body.data.trackingNumber).toBeFalsy();
     expect(res.body.data.courier).toBeFalsy();
-  }, 15000);
+  }, 10000);
 
   it('PATCH /:id/status rejects a fulfillment-side value — that only exists behind routes/shipments.js now', async () => {
-    const product = await makeProduct({ name: 'AdminStatusFulfillmentRejected' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin_reject', redirectUrl: 'https://pay.example/chk_admin_reject' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    const order = await makeOrderFixture();
 
     for (const status of ['processing', 'packed', 'shipped', 'delivered', 'cancelled', 'returned']) {
       const res = await request(app).patch(`/api/orders/${order.id}/status`).send({ orderStatus: status });
@@ -1320,13 +1366,10 @@ describe('admin order routes', () => {
 
     const unchanged = await prisma.order.findUnique({ where: { id: order.id } });
     expect(unchanged.orderStatus).toBe('awaiting_payment');
-  }, 15000);
+  }, 10000);
 
   it('PATCH /:id/status does not email — sendOrderStatusEmail only ever covers fulfillment values, all outside this endpoint\'s scope now', async () => {
-    const product = await makeProduct({ name: 'AdminStatusUnchanged' });
-    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_admin2', redirectUrl: 'https://pay.example/chk_admin2' });
-    const createRes = await request(app).post('/api/orders').send(validOrderPayload(product));
-    const order = await prisma.order.findUnique({ where: { orderNumber: createRes.body.data.orderNumber } });
+    const order = await makeOrderFixture();
     emailService.sendOrderStatusEmail.mockClear();
 
     const res = await request(app)

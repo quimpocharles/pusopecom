@@ -13,6 +13,7 @@ import * as passRepository from '../repositories/passRepository.js';
 import { ensurePassQrCode, getPassQrCodeDataUrl } from '../lib/passQrCode.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
+import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
 import { getDomesticRate, getInternationalRate, isSlotActive } from '../lib/shipping/calculateShipping.js';
 import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
@@ -590,6 +591,13 @@ router.post('/',
 
       const total = Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount);
 
+      // Admin-configurable (siteSettingsRepository) instead of hardcoded, so
+      // the operational gateway can change without a deploy — e.g. while
+      // Xendit's business verification is pending. Defaults to 'xendit',
+      // preserving today's behavior exactly when never explicitly set.
+      const { payment: paymentSettings } = await siteSettingsRepository.get();
+      const paymentMethod = paymentSettings.defaultPaymentGateway;
+
       // Pass 2 — atomic: reserve stock for every item and create the order
       // together, or none of it happens. This is the direct fix for the
       // original per-item read-then-write loop, which could both oversell
@@ -638,7 +646,7 @@ router.post('/',
               shippingFee,
               promoCodeId: promoCodeRecord?._id,
               discountAmount,
-              paymentMethod: 'xendit',
+              paymentMethod,
               paymentChannel,
               gatewayFeeAmount,
               total,
