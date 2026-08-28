@@ -6,7 +6,16 @@ import Modal from '../../../components/ui/Modal';
 import Toast from '../../../components/admin/settings/Toast';
 import useToast from '../../../components/admin/settings/useToast';
 
-const DEPARTMENTS = ['warehouse', 'support', 'finance', 'operations', 'marketing', 'executive'];
+const DEPARTMENTS = ['warehouse', 'support', 'finance', 'operations', 'marketing', 'executive', 'scanner', 'order_management'];
+
+// Every existing department has always displayed as its raw value here —
+// no label map existed before this. Rather than restyle departments nobody
+// asked to change, this only translates the two new ones (their raw enum
+// values, `scanner`/`order_management`, aren't names an admin should have
+// to parse) and falls through to the raw string for everything else,
+// exactly matching prior behavior.
+const DEPARTMENT_LABEL = { scanner: 'Scanner', order_management: 'Order Management' };
+const departmentLabel = (d) => DEPARTMENT_LABEL[d] || d;
 
 // Presentation-only grouping — the permission strings themselves come from
 // the backend (staffService.getPermissionVocabulary, backed by
@@ -136,7 +145,7 @@ const SecuritySettings = () => {
                             className="input-field py-1.5 text-sm"
                           >
                             <option value="">Unassigned (full access)</option>
-                            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                            {DEPARTMENTS.map((d) => <option key={d} value={d}>{departmentLabel(d)}</option>)}
                           </select>
                         </td>
                         <td className="px-4 py-2.5">
@@ -235,7 +244,7 @@ const PermissionPickerModal = ({ row, allPermissions, departmentDefault, onClose
     <Modal open={!!row} onClose={onClose} title={`Permissions — ${row.firstName} ${row.lastName}`} size="lg">
       <div className="p-4">
         <p className="text-xs text-gray-500 mb-4">
-          Greyed-out, checked permissions come from the <strong>{row.department}</strong> department default and can't
+          Greyed-out, checked permissions come from the <strong>{departmentLabel(row.department)}</strong> department default and can't
           be removed here — change department to change those. Anything else is an individual addition.
         </p>
         <div className="space-y-5 max-h-96 overflow-y-auto pr-1">

@@ -91,6 +91,16 @@ describe('PATCH /admin/staff/:userId', () => {
     expect(row.staffProfile.department).toBe('support');
   });
 
+  it('accepts the two launch-readiness departments (scanner, order_management)', async () => {
+    const scannerRes = await request(app).patch(`/api/admin/staff/${targetAdmin.id}`).send({ department: 'scanner' });
+    expect(scannerRes.status).toBe(200);
+    expect(scannerRes.body.data.department).toBe('scanner');
+
+    const orderMgmtRes = await request(app).patch(`/api/admin/staff/${targetAdmin.id}`).send({ department: 'order_management' });
+    expect(orderMgmtRes.status).toBe(200);
+    expect(orderMgmtRes.body.data.department).toBe('order_management');
+  });
+
   it('rejects a permission string outside the defined vocabulary', async () => {
     const res = await request(app).patch(`/api/admin/staff/${targetAdmin.id}`).send({
       department: 'support', permissions: ['can_assign_totally_made_up'],
@@ -107,5 +117,7 @@ describe('GET /admin/staff/permissions', () => {
     expect(res.body.data.permissions).toContain('reports.finance.view');
     expect(res.body.data.departmentDefaults.warehouse).toContain('products.view');
     expect(res.body.data.departmentDefaults.executive).toEqual(['*']);
+    expect(res.body.data.departmentDefaults.scanner).toEqual(['passes.checkin']);
+    expect(res.body.data.departmentDefaults.order_management).toEqual(['orders.view', 'orders.manage']);
   });
 });

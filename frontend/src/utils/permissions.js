@@ -76,6 +76,9 @@ const DEPARTMENT_DEFAULTS = Object.freeze({
     PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ORDERS_VIEW,
     PERMISSIONS.RETURNS_VIEW, PERMISSIONS.RETURNS_APPROVE, PERMISSIONS.REPORTS_CUSTOMERS_VIEW,
   ],
+  // Launch-readiness permission-model fix — mirrors backend/lib/permissions.js exactly.
+  scanner: [PERMISSIONS.PASSES_CHECKIN],
+  order_management: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE],
 });
 
 function getEffectivePermissions(staffProfile) {

@@ -9,7 +9,9 @@ import { PERMISSIONS, ALL_PERMISSIONS, DEPARTMENT_DEFAULTS } from '../lib/permis
 const router = express.Router();
 router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_SECURITY_MANAGE));
 
-const VALID_DEPARTMENTS = new Set(['warehouse', 'support', 'finance', 'operations', 'marketing', 'executive']);
+// Derived from DEPARTMENT_DEFAULTS itself, not a separately hardcoded list —
+// a new department now only needs adding in one place (lib/permissions.js).
+const VALID_DEPARTMENTS = new Set(Object.keys(DEPARTMENT_DEFAULTS));
 
 /**
  * Settings IA redesign — the first real route ever wired to
