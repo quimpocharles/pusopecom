@@ -125,6 +125,21 @@ export const DEPARTMENT_DEFAULTS = Object.freeze({
     PERMISSIONS.RETURNS_APPROVE,
     PERMISSIONS.REPORTS_CUSTOMERS_VIEW,
   ],
+
+  // Launch-readiness permission-model fix — `operations`/`warehouse` are
+  // each a fixed bundle of several permissions; additive overrides can only
+  // ever add to a department's default, never subtract from it, so neither
+  // one can produce a true "checkin only" or "order status only" account.
+  // These two departments exist purely to be that minimum: no permission
+  // beyond what each role's title implies.
+  scanner: [
+    PERMISSIONS.PASSES_CHECKIN,
+  ],
+
+  order_management: [
+    PERMISSIONS.ORDERS_VIEW,
+    PERMISSIONS.ORDERS_MANAGE,
+  ],
 });
 
 /** The full set of permissions a StaffProfile actually grants: department default (with .manage->.view implied) unioned with its own explicit overrides. */

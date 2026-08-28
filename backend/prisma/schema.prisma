@@ -1324,6 +1324,15 @@ enum StaffDepartment {
   operations
   marketing
   executive
+
+  // Launch-readiness permission-model fix — narrowly scoped departments so
+  // a Pass-checkin scanner or an order-status clerk doesn't have to be
+  // handed the entire warehouse/operations bundle just to get the one
+  // permission they actually need (see DEPARTMENT_DEFAULTS in
+  // lib/permissions.js — no new permission strings were needed, only these
+  // two new bundles of existing ones).
+  scanner
+  order_management
 }
 
 model StaffProfile {
