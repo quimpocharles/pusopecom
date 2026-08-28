@@ -10,10 +10,27 @@ import * as fitCheckBonus from '../lib/fitCheckBonus.js';
 import { normalizePagination } from '../lib/pagination.js';
 import { canonicalEmail } from '../lib/email.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
-import { authenticate, isAdmin, AUTH_INCLUDE, requirePermission } from '../middleware/auth.js';
+import { authenticate, isAdmin, AUTH_INCLUDE, requirePermission, requireFounder } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
+
+// Shared by both POST /forgot-password (public, anonymous) and
+// POST /admin/send-password-setup (founder-triggered, below) — the exact
+// same token generation/persistence/send steps either way, so a founder
+// triggering this for a new hire produces a real, ordinary reset email
+// indistinguishable from one the employee requested themselves. A new
+// token always overwrites whatever was already stored, which is what
+// already made the previous token stop working — no separate
+// invalidation step needed here or in forgot-password.
+async function initiatePasswordReset(user) {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  await userRepository.updateById(user._id, {
+    resetPasswordToken: resetToken,
+    resetPasswordExpires: new Date(Date.now() + 3600000) // 1 hour
+  });
+  await sendPasswordResetEmail(user.email, user.firstName, resetToken);
+}
 
 // Helper to generate auth response with JWT
 const generateAuthResponse = (user) => {
@@ -299,13 +316,7 @@ router.post('/forgot-password',
         });
       }
 
-      const resetToken = crypto.randomBytes(32).toString('hex');
-      await userRepository.updateById(user._id, {
-        resetPasswordToken: resetToken,
-        resetPasswordExpires: new Date(Date.now() + 3600000) // 1 hour
-      });
-
-      await sendPasswordResetEmail(email, user.firstName, resetToken);
+      await initiatePasswordReset(user);
 
       res.json({
         success: true,
@@ -368,6 +379,44 @@ router.post('/reset-password',
         success: false,
         message: 'Failed to reset password'
       });
+    }
+  }
+);
+
+// Send Password Setup Email (founder-only) — lets the founder get a newly
+// provisioned staff/admin account (created with no password, per the
+// launch-readiness provisioning task) a real setup email on demand,
+// without ever generating, choosing, or seeing that account's password
+// themselves. Reuses initiatePasswordReset() verbatim — this produces the
+// exact same email a "Forgot password?" click would, nothing custom. The
+// target must be an admin: customers already have a fully working,
+// unauthenticated self-service path for this (POST /forgot-password) and
+// have no demonstrated need for admin involvement in their own reset.
+router.post('/admin/send-password-setup',
+  authenticate,
+  isAdmin,
+  requireFounder,
+  async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, message: 'userId is required' });
+      }
+
+      const targetUser = await userRepository.findById(userId);
+      if (!targetUser || targetUser.role !== 'admin') {
+        return res.status(404).json({ success: false, message: 'Admin user not found' });
+      }
+
+      await initiatePasswordReset(targetUser);
+
+      logger.info({ actorUserId: req.user._id, targetUserId: targetUser._id }, 'Password setup email triggered');
+
+      res.json({ success: true, message: `Password setup email sent to ${targetUser.email}` });
+    } catch (error) {
+      logger.error({ err: error, actorUserId: req.user?._id, targetUserId: req.body?.userId }, 'Send password setup email error');
+      Sentry.captureException(error);
+      res.status(500).json({ success: false, message: 'Failed to send password setup email' });
     }
   }
 );

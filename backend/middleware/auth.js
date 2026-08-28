@@ -128,3 +128,33 @@ export const requireAnyPermission = (...permissions) => (req, res, next) => {
   }
   next();
 };
+
+// Launch-readiness audit fix — some capabilities (staff permission
+// administration, and now triggering another admin's password-setup
+// email) need to be narrower than "any executive," and `executive` is a
+// wildcard department, so no permission string can express "this specific
+// executive, not that one." These are gated by exact User ID instead — the
+// single canonical list, shared by every route that needs this, so the
+// allowlist can never drift between two independently-maintained copies.
+//
+// TRANSITION PERIOD: both Charles Quimpo identities are listed —
+// quimpo.charles@gmail.com (the original account, currently the only one
+// with a usable login) and charles.quimpo@pusostore.com (the new
+// production identity, not yet activated). Remove the first once the
+// second is confirmed operational; do not add anyone else here without an
+// explicit, separate decision.
+export const FOUNDER_USER_IDS = new Set([
+  '8b30ff12-5e33-4553-b6a6-9bad88752a17', // quimpo.charles@gmail.com
+  'e682f916-44b1-48ab-971b-799836608c87', // charles.quimpo@pusostore.com
+]);
+
+/** Requires authenticate+isAdmin to have already run — narrows access to the exact founder ids above, independent of department/permissions. */
+export const requireFounder = (req, res, next) => {
+  if (!FOUNDER_USER_IDS.has(req.user._id)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. This action is restricted to the founder account.',
+    });
+  }
+  next();
+};
