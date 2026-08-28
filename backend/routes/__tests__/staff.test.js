@@ -5,14 +5,21 @@ import prisma from '../../lib/prisma.js';
 
 // requirePermission is the real implementation (via importActual), not a
 // stub — the mocked actor below has no staffProfile, so the bootstrap rule
-// (no StaffProfile = executive) is what actually lets these requests
-// through settings.security.manage, the same way it would in production
-// for an admin nobody has assigned a department to yet.
+// (no StaffProfile = executive) is what lets it through settings.security
+// .manage. Since the launch-readiness founder-only fix, staff.js also
+// requires the actor's id to be one of the hardcoded founder ids — the
+// bootstrap rule alone is no longer sufficient for THIS router specifically
+// — so the mocked actor id must be a real founder id for these
+// (otherwise-unrelated) tests to exercise anything past that gate. See
+// routes/__tests__/staffFounderAuthorization.test.js for the dedicated
+// founder-authorization coverage itself.
+const FOUNDER_ACTOR_ID = '8b30ff12-5e33-4553-b6a6-9bad88752a17'; // quimpo.charles@gmail.com
+
 vi.mock('../../middleware/auth.js', async () => {
   const actual = await vi.importActual('../../middleware/auth.js');
   return {
     ...actual,
-    authenticate: (req, res, next) => { req.user = { _id: 'test-staff-admin', role: 'admin' }; next(); },
+    authenticate: (req, res, next) => { req.user = { _id: FOUNDER_ACTOR_ID, role: 'admin' }; next(); },
     isAdmin: (req, res, next) => next(),
   };
 });
@@ -31,9 +38,15 @@ let targetAdmin;
 // list target) plus the mocked actor's own User row (staffUserId/
 // updatedByUserId are real FKs).
 beforeAll(async () => {
+  // Upserted, never deleted — same persistent-fixture treatment this
+  // codebase already gives 'test-admin' elsewhere (settings.test.js,
+  // reports.test.js). This id is also managed by
+  // staffFounderAuthorization.test.js; both files only ever upsert it, so
+  // running concurrently in separate workers is safe — neither ever
+  // deletes a row the other might still be relying on.
   await prisma.user.upsert({
-    where: { id: 'test-staff-admin' },
-    create: { id: 'test-staff-admin', email: `staff-route-actor-${Date.now()}@test.local`, firstName: 'Actor', lastName: 'Tester', role: 'admin' },
+    where: { id: FOUNDER_ACTOR_ID },
+    create: { id: FOUNDER_ACTOR_ID, email: `staff-route-actor-${Date.now()}@test.local`, firstName: 'Actor', lastName: 'Tester', role: 'admin' },
     update: {},
   });
   targetAdmin = await prisma.user.create({
@@ -42,9 +55,8 @@ beforeAll(async () => {
 }, 15000);
 
 afterAll(async () => {
-  await prisma.staffProfile.deleteMany({ where: { userId: { in: [targetAdmin.id, 'test-staff-admin'] } } });
+  await prisma.staffProfile.deleteMany({ where: { userId: targetAdmin.id } });
   await prisma.user.delete({ where: { id: targetAdmin.id } });
-  await prisma.user.delete({ where: { id: 'test-staff-admin' } });
 });
 
 describe('GET /admin/staff', () => {
@@ -83,7 +95,7 @@ describe('PATCH /admin/staff/:userId', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.department).toBe('support');
     expect(res.body.data.permissions).toEqual(['returns.approve', 'reports.finance.view']);
-    expect(res.body.data.updatedByUserId).toBe('test-staff-admin');
+    expect(res.body.data.updatedByUserId).toBe(FOUNDER_ACTOR_ID);
 
     // GET reflects it now
     const list = await request(app).get('/api/admin/staff');

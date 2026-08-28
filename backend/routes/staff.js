@@ -7,7 +7,37 @@ import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js'
 import { PERMISSIONS, ALL_PERMISSIONS, DEPARTMENT_DEFAULTS } from '../lib/permissions.js';
 
 const router = express.Router();
-router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_SECURITY_MANAGE));
+
+// Launch-readiness audit fix — settings.security.manage stays the broad
+// gate (any admin lacking it gets the normal 403 above), but staff
+// permission administration itself is narrowed further to specific founder
+// User IDs, not "any executive." `executive` is a wildcard department, so
+// department alone can't express "this executive, not that one" — Chris
+// Quimpo (department: executive) is meant to keep full access to
+// everything else on the platform, just not this one capability.
+//
+// TRANSITION PERIOD: both Charles Quimpo identities are listed —
+// quimpo.charles@gmail.com (the original account, currently the only one
+// with a usable login) and charles.quimpo@pusostore.com (the new
+// production identity, not yet activated). Remove the first once the
+// second is confirmed operational; do not add anyone else here without an
+// explicit, separate decision.
+const FOUNDER_USER_IDS = new Set([
+  '8b30ff12-5e33-4553-b6a6-9bad88752a17', // quimpo.charles@gmail.com
+  'e682f916-44b1-48ab-971b-799836608c87', // charles.quimpo@pusostore.com
+]);
+
+function requireFounder(req, res, next) {
+  if (!FOUNDER_USER_IDS.has(req.user._id)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Staff permission administration is restricted to the founder account.',
+    });
+  }
+  next();
+}
+
+router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.SETTINGS_SECURITY_MANAGE), requireFounder);
 
 // Derived from DEPARTMENT_DEFAULTS itself, not a separately hardcoded list —
 // a new department now only needs adding in one place (lib/permissions.js).

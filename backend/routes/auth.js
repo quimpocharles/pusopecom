@@ -661,8 +661,23 @@ router.get('/admin/users',
         role
       } = req.query;
 
+      // Launch-readiness audit fix — users.view is also held by `support`
+      // (a real, demonstrated need: looking up a customer for order/return
+      // help), but the same permission was letting them flip ?role=admin
+      // and browse admin/staff identity fields, which support has no need
+      // for. Only an executive-department caller (or the no-StaffProfile
+      // bootstrap case, already treated as executive-equivalent everywhere
+      // else in this codebase) may request anything other than customers;
+      // everyone else is forced to role=customer regardless of what they
+      // send, so a crafted ?role=admin can't bypass this.
+      const isExecutive = !req.user.staffProfile || req.user.staffProfile.department === 'executive';
+
       const where = {};
-      if (role) where.role = role;
+      if (isExecutive) {
+        if (role) where.role = role;
+      } else {
+        where.role = 'customer';
+      }
       if (search) {
         where.OR = [
           { firstName: { contains: search, mode: 'insensitive' } },
