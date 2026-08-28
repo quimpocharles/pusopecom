@@ -67,6 +67,20 @@ export const isAdmin = async (req, res, next) => {
         message: 'Access denied. Admin privileges required.'
       });
     }
+    // Launch-readiness audit fix — StaffProfile.active existed in the
+    // schema but nothing ever read it; deactivating a staff member had no
+    // actual access-control effect. authenticate() above re-fetches
+    // staffProfile fresh from the DB on every request (never cached in the
+    // JWT itself), so this takes effect immediately on the very next
+    // request — including one made with a token issued before the account
+    // was deactivated. A user with no StaffProfile at all (the bootstrap
+    // rule — see lib/permissions.js) is untouched by this check.
+    if (req.user.staffProfile && req.user.staffProfile.active === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This staff account has been deactivated.'
+      });
+    }
     next();
   } catch (error) {
     res.status(500).json({

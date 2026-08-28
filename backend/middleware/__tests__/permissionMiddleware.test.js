@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { requirePermission, requireAnyPermission } from '../auth.js';
+import { requirePermission, requireAnyPermission, isAdmin } from '../auth.js';
 import { PERMISSIONS } from '../../lib/permissions.js';
 
 function mockReqRes(user) {
@@ -28,6 +28,40 @@ describe('requirePermission', () => {
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(403);
     expect(res.body.success).toBe(false);
+  });
+});
+
+describe('isAdmin', () => {
+  it('rejects a non-admin role', async () => {
+    const { req, res, next } = mockReqRes({ role: 'customer' });
+    await isAdmin(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('11. allows an admin whose StaffProfile is active', async () => {
+    const { req, res, next } = mockReqRes({ role: 'admin', staffProfile: { department: 'operations', active: true } });
+    await isAdmin(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBeNull();
+  });
+
+  it('12. denies an admin whose StaffProfile has been deactivated', async () => {
+    const { req, res, next } = mockReqRes({ role: 'admin', staffProfile: { department: 'operations', active: false } });
+    await isAdmin(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+    expect(res.body.message).toMatch(/deactivated/i);
+  });
+
+  // Bootstrap rule (lib/permissions.js) must survive this fix untouched —
+  // an admin with no StaffProfile at all is not "inactive", it's
+  // unassigned, and this check must not treat the two the same.
+  it('does not reject an admin with no StaffProfile at all (bootstrap rule preserved)', async () => {
+    const { req, res, next } = mockReqRes({ role: 'admin', staffProfile: null });
+    await isAdmin(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBeNull();
   });
 });
 
