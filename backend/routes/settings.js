@@ -4,7 +4,7 @@ import Sentry from '../lib/sentry.js';
 import * as siteSettingsRepository from '../repositories/siteSettingsRepository.js';
 import * as venuePickupConfigRepository from '../repositories/venuePickupConfigRepository.js';
 import { authenticate, isAdmin, requireAnyPermission } from '../middleware/auth.js';
-import { PERMISSIONS } from '../lib/permissions.js';
+import { PERMISSIONS, hasPermission } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -26,6 +26,24 @@ router.get('/', async (req, res) => {
 // hit this same endpoint for their own slice of it.
 router.put('/', authenticate, isAdmin, requireAnyPermission(PERMISSIONS.SETTINGS_FITCHECK_MANAGE, PERMISSIONS.SETTINGS_COMMERCE_MANAGE), async (req, res) => {
   try {
+    // Launch-readiness audit fix — `payment` also carries
+    // defaultPaymentGateway, which of Operations/Marketing's shared
+    // permissions above should NOT be enough to change: which gateway new
+    // orders are created against is an integrations decision, not a
+    // Commerce/Fit Check settings one. Checked on the key's mere presence
+    // (not its value, and not diffed against the current setting) so a
+    // resubmit of an unrelated field can never accidentally carry this one
+    // through, and a crafted request naming it is rejected outright rather
+    // than silently dropped.
+    if (req.body.payment && Object.prototype.hasOwnProperty.call(req.body.payment, 'defaultPaymentGateway')) {
+      if (!hasPermission(req.user, PERMISSIONS.SETTINGS_INTEGRATIONS_MANAGE)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Changing the payment gateway requires settings.integrations.manage.',
+        });
+      }
+    }
+
     // siteSettingsRepository.update() accepts the same { tryOnAd, fitCheck,
     // payment } shape the request body already has, and does the
     // partial-merge + flatten-to-columns + reshape-back internally — this
