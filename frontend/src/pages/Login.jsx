@@ -16,7 +16,14 @@ const Login = () => {
 
   const { register, handleSubmit, formState: { errors } } = useForm();
 
-  const getRedirectPath = () => {
+  // A scanner's entire admin surface is Pass Check-In — there's no other
+  // page for them to legitimately land on, so this always wins over any
+  // preserved destination (a ?redirect= or an AdminRoute bounce-from).
+  const SCANNER_LANDING_PATH = '/admin/pass-checkin';
+  const isScannerAdmin = (user) => user?.role === 'admin' && user?.staffProfile?.department === 'scanner';
+
+  const getRedirectPath = (user) => {
+    if (isScannerAdmin(user)) return SCANNER_LANDING_PATH;
     const searchParams = new URLSearchParams(location.search);
     const redirectParam = searchParams.get('redirect');
     if (redirectParam) return redirectParam;
@@ -29,8 +36,13 @@ const Login = () => {
     return '/';
   };
 
-  // Check if profile needs completion
+  // Check if profile needs completion — age verification, phone, and a
+  // shipping address are customer/checkout requirements, meaningless for a
+  // staff account (a scanner or Order Manager was never going to have a
+  // shipping address), so admins are exempt entirely rather than getting
+  // funneled through customer onboarding.
   const isProfileIncomplete = (user) => {
+    if (user?.role === 'admin') return false;
     return !user?.ageVerified || !user?.phone || !user?.addresses?.length;
   };
 
@@ -44,7 +56,7 @@ const Login = () => {
       if (isProfileIncomplete(response.user)) {
         navigate('/complete-profile', { replace: true });
       } else {
-        navigate(getRedirectPath(), { replace: true });
+        navigate(getRedirectPath(response.user), { replace: true });
       }
     } catch (err) {
       if (err.response?.data?.accountLocked) {
@@ -62,7 +74,7 @@ const Login = () => {
     if (isProfileIncomplete(user)) {
       navigate('/complete-profile', { replace: true });
     } else {
-      navigate(getRedirectPath(), { replace: true });
+      navigate(getRedirectPath(user), { replace: true });
     }
   };
 
