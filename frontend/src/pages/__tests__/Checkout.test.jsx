@@ -13,8 +13,45 @@ vi.mock('select-philippines-address', () => ({
   barangays: vi.fn().mockResolvedValue([{ brgy_code: 'B1', brgy_name: 'Barangay 1' }]),
 }));
 
+// Phase 4 (ePayGames evaluation) — Checkout now fetches its payment
+// channels and per-channel fee from the backend (GET /payment-channels[/calculate])
+// instead of a hardcoded frontend list, so `api.get` needs a default,
+// route-aware mock alongside the existing `api.post` one (shipping
+// options). Individual tests below override this default via
+// mockResolvedValueOnce/mockImplementationOnce where the channel set
+// itself is what's under test.
+// vi.mock factories are hoisted above every import/const in this file —
+// referencing an outer variable inside one only works if its name starts
+// with "mock" (Vitest's own convention for exactly this), hence the prefix
+// below rather than the more natural defaultXenditChannels/defaultFeeResponse.
+const mockDefaultXenditChannels = {
+  data: {
+    success: true,
+    data: {
+      gateway: 'xendit',
+      channels: [
+        { code: 'GCASH', label: 'GCash' },
+        { code: 'MAYA', label: 'Maya' },
+        { code: 'CARD', label: 'Credit/Debit Card' },
+        { code: 'APPLE_PAY', label: 'Apple Pay' },
+        { code: 'QRPH', label: 'QR Ph' },
+      ],
+    },
+  },
+};
+const mockDefaultFeeResponse = {
+  data: { success: true, data: { gateway: 'xendit', channel: 'GCASH', amount: 899, fee: 17.98, total: 916.98 } },
+};
+
 vi.mock('../../services/api', () => ({
-  default: { post: vi.fn() },
+  default: {
+    post: vi.fn(),
+    get: vi.fn((url) => {
+      if (url === '/payment-channels') return Promise.resolve(mockDefaultXenditChannels);
+      if (url === '/payment-channels/calculate') return Promise.resolve(mockDefaultFeeResponse);
+      return Promise.resolve({ data: { success: false } });
+    }),
+  },
 }));
 
 vi.mock('../../services/orderService', () => ({
@@ -95,8 +132,12 @@ async function fillRequiredFields(container) {
   fireEvent.change(field(container, 'address'), { target: { value: '123 Rizal St' } });
 
   // The submit button stays disabled until a payment channel is picked
-  // (Xendit, ADR-010) — every caller of this helper needs one selected
-  // before "Proceed to Payment" is clickable at all.
+  // (ADR-010) — every caller of this helper needs one selected before
+  // "Proceed to Payment" is clickable at all. The channel list itself now
+  // comes from a separate backend fetch (Phase 4) that isn't guaranteed to
+  // have resolved by the time the shipping-options fetch has — wait for it
+  // explicitly rather than assuming render-cycle timing.
+  await waitFor(() => expect(screen.getByRole('button', { name: /GCash/ })).toBeInTheDocument());
   fireEvent.click(screen.getByRole('button', { name: /GCash/ }));
 }
 
@@ -184,5 +225,173 @@ describe('Checkout — save address for next time', () => {
     // unmounted for pickup orders, which is itself the guarantee: there's
     // no control left for a pickup order to check in the first place.
     expect(screen.queryByText(/Save this address for faster checkout/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Checkout — payment channels from the backend (Phase 4, ePayGames evaluation)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.post.mockResolvedValue(shippingOptionsResponse);
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') return Promise.resolve(mockDefaultXenditChannels);
+      if (url === '/payment-channels/calculate') return Promise.resolve(mockDefaultFeeResponse);
+      return Promise.resolve({ data: { success: false } });
+    });
+    mockUser = null;
+    delete window.location;
+    window.location = { href: '' };
+  });
+
+  it('renders exactly the channels the backend returns — no leftover hardcoded frontend list', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') {
+        return Promise.resolve({ data: { success: true, data: { gateway: 'xendit', channels: [{ code: 'ONLY_ONE', label: 'Only One Channel' }] } } });
+      }
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Only One Channel/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /GCash/ })).not.toBeInTheDocument();
+  });
+
+  it('shows an ePayGames channel when the backend reports epaygames as the currently active gateway', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              gateway: 'epaygames',
+              // The only two channel mappings actually confirmed for
+              // ePayGames (Phase 2/4) — GCash and Maya QR, not the full
+              // Xendit catalog.
+              channels: [
+                { code: 'GCASH_TRN', label: 'GCash' },
+                { code: 'PAYMAYA_QR', label: 'Maya' },
+              ],
+            },
+          },
+        });
+      }
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByRole('button', { name: /GCash/ })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Maya/ })).toBeInTheDocument();
+    // Reflects the actual active gateway rather than a hardcoded claim —
+    // real ePayGames branding ("ePayGames"), not a generic title-case of
+    // the raw identifier ("Epaygames").
+    await waitFor(() => expect(screen.getByText(/powered by ePayGames/)).toBeInTheDocument());
+  });
+
+  it('shows the authoritative fee from the backend once a channel is selected', async () => {
+    renderCheckout();
+    await waitFor(() => expect(screen.getByText('Standard Delivery')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /GCash/ })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /GCash/ }));
+
+    await waitFor(() => expect(screen.getByText('₱17.98')).toBeInTheDocument());
+  });
+
+  it('shows a clear error state (not a broken/empty selector) if the channel fetch fails, and keeps submit disabled', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') return Promise.reject(new Error('network error'));
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByText('Standard Delivery')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load payment methods/i)).toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: /GCash/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Proceed to Payment/ })).toBeDisabled();
+  });
+
+  it('shows a clear "no payment methods available" state — distinct from the error state — when the backend returns an empty channel list', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') return Promise.resolve({ data: { success: true, data: { gateway: 'epaygames', channels: [] } } });
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByText('Standard Delivery')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/no payment methods are currently available/i)).toBeInTheDocument());
+
+    expect(screen.queryByText(/couldn.t load payment methods/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Proceed to Payment/ })).toBeDisabled();
+  });
+
+  it('shows a loading skeleton for payment methods before the channel fetch resolves', async () => {
+    let resolveChannels;
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') {
+        return new Promise((resolve) => { resolveChannels = resolve; });
+      }
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByText('Standard Delivery')).toBeInTheDocument());
+
+    // Neither the real channels nor either "nothing available" message has
+    // rendered yet — the fetch is still pending.
+    expect(screen.queryByRole('button', { name: /GCash/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no payment methods are currently available/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load payment methods/i)).not.toBeInTheDocument();
+
+    resolveChannels(mockDefaultXenditChannels);
+    await waitFor(() => expect(screen.getByRole('button', { name: /GCash/ })).toBeInTheDocument());
+  });
+
+  it('submits the ePayGames channel code as paymentChannel when ePayGames is the active gateway', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') {
+        return Promise.resolve({
+          data: { success: true, data: { gateway: 'epaygames', channels: [{ code: 'GCASH_TRN', label: 'GCash' }] } },
+        });
+      }
+      if (url === '/payment-channels/calculate') {
+        return Promise.resolve({ data: { success: true, data: { gateway: 'epaygames', channel: 'GCASH_TRN', amount: 899, fee: 0, total: 899 } } });
+      }
+      return Promise.resolve({ data: { success: false } });
+    });
+    orderService.createOrder.mockResolvedValue({
+      success: true,
+      data: { orderNumber: 'PS-20260827-EPAY01', checkoutUrl: 'https://l-stg.epayg.link/abc123' },
+    });
+
+    const { container } = renderCheckout();
+    await waitFor(() => expect(screen.getByText('Standard Delivery')).toBeInTheDocument());
+
+    // fillRequiredFields itself selects the one available payment method
+    // (GCash) as part of filling out the form.
+    await fillRequiredFields(container);
+    fireEvent.click(screen.getByRole('button', { name: /Proceed to Payment/ }));
+
+    await waitFor(() => expect(orderService.createOrder).toHaveBeenCalled());
+    const submitted = orderService.createOrder.mock.calls[0][0];
+    // Exactly the code the backend returned for ePayGames — GCASH_TRN, not
+    // Xendit's own GCASH — the frontend never invents or normalizes a
+    // channel code itself.
+    expect(submitted.paymentChannel).toBe('GCASH_TRN');
+  });
+
+  it('never trusts an unknown/stale channel code — selecting one the backend didn\'t return is simply not possible from the rendered UI', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/payment-channels') {
+        return Promise.resolve({ data: { success: true, data: { gateway: 'xendit', channels: [{ code: 'GCASH', label: 'GCash' }] } } });
+      }
+      return Promise.resolve({ data: { success: false } });
+    });
+
+    renderCheckout();
+    await waitFor(() => expect(screen.getByRole('button', { name: /GCash/ })).toBeInTheDocument());
+    // Nothing else was ever rendered for the user to click — CARD/APPLE_PAY/QRPH
+    // from the old hardcoded list are simply absent, not just unselected.
+    expect(screen.queryByRole('button', { name: /Credit\/Debit Card/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Apple Pay/ })).not.toBeInTheDocument();
   });
 });

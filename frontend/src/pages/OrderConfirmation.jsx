@@ -10,6 +10,7 @@ import orderService from '../services/orderService';
 import useCartStore from '../store/cartStore';
 import usePassCartStore from '../store/passCartStore';
 import { toTitleCase } from '../utils/text';
+import { paymentGatewayDisplayName } from '../utils/paymentGatewayName';
 import { orderStatusLabel } from '../utils/orderStatus';
 import { downloadOrderSummaryPdf } from '../utils/orderPdf';
 import usePaymentCountdown from '../hooks/usePaymentCountdown';
@@ -352,7 +353,7 @@ const OrderConfirmation = () => {
               <div className="card p-6">
                 <h2 className="font-bold mb-4">Payment Information</h2>
                 <dl className="space-y-3">
-                  <InfoRow label="Payment Method" value={toTitleCase(order.paymentMethod)} />
+                  <InfoRow label="Payment Method" value={paymentGatewayDisplayName(order.paymentMethod)} />
                   <InfoRow label="Payment Status" value={toTitleCase(order.paymentStatus)} />
                   <InfoRow label="Order Status" value={orderStatusLabel(order.orderStatus)} />
                   <InfoRow label="Order Date" value={new Date(order.createdAt).toLocaleString('en-PH')} />

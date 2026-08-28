@@ -16,7 +16,8 @@ import promoCodeService from '../services/promoCodeService';
 import authService from '../services/authService';
 import api from '../services/api';
 import { toTitleCase } from '../utils/text';
-import { PAYMENT_CHANNELS, calculateGatewayFee } from '../utils/paymentChannels';
+import { paymentGatewayDisplayName } from '../utils/paymentGatewayName';
+import paymentChannelService from '../services/paymentChannelService';
 import SEO from '../components/common/SEO';
 import { markPaymentInFlight, clearPaymentInFlight } from '../utils/staleChunkRecovery';
 
@@ -93,6 +94,17 @@ const Checkout = () => {
   const [promoApplying, setPromoApplying] = useState(false);
   const [promoError, setPromoError] = useState('');
   const [paymentChannel, setPaymentChannel] = useState(null);
+  // Phase 4 (ePayGames evaluation) — the channel list, and the fee for
+  // whichever one is selected, both come from the backend now (which
+  // channels exist and what they cost is a property of the currently
+  // active gateway, not something this page hardcodes) rather than a
+  // frontend copy of Xendit's own fee table.
+  const [channels, setChannels] = useState([]);
+  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [channelsError, setChannelsError] = useState(false);
+  const [gatewayName, setGatewayName] = useState(null);
+  const [gatewayFeeAmount, setGatewayFeeAmount] = useState(0);
+  const [feeLoading, setFeeLoading] = useState(false);
 
   const defaultAddress = user?.addresses?.find(a => a.isDefault) || user?.addresses?.[0];
 
@@ -153,6 +165,60 @@ const Checkout = () => {
   // Reset to standard delivery whenever the country changes
   useEffect(() => { setDeliveryMethod('standard'); }, [country]);
 
+  // Payment channels for whichever gateway is currently active — fetched
+  // once; unlike shipping options, the active gateway doesn't change
+  // mid-checkout (Phase 4, ePayGames evaluation).
+  useEffect(() => {
+    let cancelled = false;
+    setChannelsLoading(true);
+    setChannelsError(false);
+    paymentChannelService.getChannels()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success) {
+          setChannels(res.data.channels);
+          setGatewayName(res.data.gateway);
+        } else {
+          setChannelsError(true);
+        }
+      })
+      .catch(() => { if (!cancelled) setChannelsError(true); })
+      .finally(() => { if (!cancelled) setChannelsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Derive the currently-selected shipping option from the API response —
+  // moved above the early returns below (unchanged values, just computed
+  // sooner) so the fee-fetch effect that follows can depend on shippingFee/
+  // discountAmount without violating the rules of hooks.
+  const standardOption  = shippingOptions.find(o => o.method !== 'venue_pickup') ?? null;
+  const pickupSlots     = shippingOptions.filter(o => o.method === 'venue_pickup');
+  const effectiveOption = deliveryMethod === 'standard'
+    ? standardOption
+    : (pickupSlots.find(o => o.slotId === deliveryMethod) ?? standardOption);
+  const shippingFee = isPassOnly ? 0 : (effectiveOption?.fee ?? null); // null → contact_us or still loading
+  const discountAmount = appliedPromo?.discountAmount ?? 0;
+
+  // The authoritative fee for the selected channel, from the backend —
+  // Phase 4 (ePayGames evaluation): no frontend copy of any gateway's fee
+  // formula. Re-fetched whenever the channel or the amount it's charged
+  // against changes; never guessed or left stale from a previous selection.
+  useEffect(() => {
+    if (paymentChannel == null || shippingFee == null) {
+      setGatewayFeeAmount(0);
+      return;
+    }
+    let cancelled = false;
+    setFeeLoading(true);
+    paymentChannelService.calculateFee({ channel: paymentChannel, amount: subtotal + shippingFee - discountAmount })
+      .then((res) => {
+        if (!cancelled && res.success) setGatewayFeeAmount(res.data.fee);
+      })
+      .catch(() => { if (!cancelled) setGatewayFeeAmount(0); })
+      .finally(() => { if (!cancelled) setFeeLoading(false); });
+    return () => { cancelled = true; };
+  }, [paymentChannel, subtotal, shippingFee, discountAmount]);
+
   const paymentCancelled = searchParams.get('payment') === 'cancelled';
 
   if (items.length === 0 && passCount === 0 && !paymentCancelled && !redirectingRef.current) {
@@ -169,21 +235,10 @@ const Checkout = () => {
       </div>
     );
   }
-
-  // Derive the currently-selected shipping option from the API response
-  const standardOption  = shippingOptions.find(o => o.method !== 'venue_pickup') ?? null;
-  const pickupSlots     = shippingOptions.filter(o => o.method === 'venue_pickup');
-  const effectiveOption = deliveryMethod === 'standard'
-    ? standardOption
-    : (pickupSlots.find(o => o.slotId === deliveryMethod) ?? standardOption);
-  const shippingFee = isPassOnly ? 0 : (effectiveOption?.fee ?? null); // null → contact_us or still loading
-  const discountAmount = appliedPromo?.discountAmount ?? 0;
-  // Channel picked in our own UI before redirect, not on Xendit's hosted
-  // page — the exact fee for that channel is known and shown here, so
-  // Total never surprises the fan once they get to Xendit. See ADR-010.
-  const gatewayFeeAmount = paymentChannel != null && shippingFee != null
-    ? calculateGatewayFee(paymentChannel, subtotal + shippingFee - discountAmount)
-    : 0;
+  // Channel picked in our own UI before redirect, not on the gateway's
+  // hosted page — the exact fee for that channel is known (fetched above)
+  // and shown here, so Total never surprises the fan once they get to
+  // checkout. See ADR-010.
   const total = shippingFee != null ? Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount) : null;
 
   const dismissCancelledAlert = () => {
@@ -567,19 +622,36 @@ const Checkout = () => {
               {/* Payment Method */}
               <div className="card p-6">
                 <h2 className="text-xl font-bold mb-4">Payment Method</h2>
-                <p className="text-xs text-gray-500 mb-3">
-                  Each method's processing fee is added to your total — shown in the breakdown below before you pay, never as a surprise.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {PAYMENT_CHANNELS.map((channel) => (
-                    <PaymentChannelCard
-                      key={channel.code}
-                      selected={paymentChannel === channel.code}
-                      onClick={() => setPaymentChannel(channel.code)}
-                      label={channel.label}
-                    />
-                  ))}
-                </div>
+                {channelsLoading ? (
+                  <div className="grid grid-cols-2 gap-3 animate-pulse">
+                    <div className="h-14 bg-gray-100 rounded-xl" />
+                    <div className="h-14 bg-gray-100 rounded-xl" />
+                  </div>
+                ) : channelsError ? (
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-sm text-red-700">
+                    We couldn&rsquo;t load payment methods right now. Please refresh the page or try again shortly.
+                  </div>
+                ) : channels.length === 0 ? (
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-800">
+                    No payment methods are currently available. Please check back shortly or contact support.
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Each method's processing fee is added to your total — shown in the breakdown below before you pay, never as a surprise.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {channels.map((channel) => (
+                        <PaymentChannelCard
+                          key={channel.code}
+                          selected={paymentChannel === channel.code}
+                          onClick={() => setPaymentChannel(channel.code)}
+                          label={channel.label}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               {error && (
@@ -621,8 +693,12 @@ const Checkout = () => {
                     </>
                   )}
                 </button>
-                {!paymentChannel && <p className="text-center text-xs text-amber-600 mt-2">Select a payment method above to continue</p>}
-                <p className="text-center text-xs text-gray-400 mt-2">Secure checkout powered by Xendit</p>
+                {!paymentChannel && !channelsLoading && !channelsError && channels.length > 0 && (
+                  <p className="text-center text-xs text-amber-600 mt-2">Select a payment method above to continue</p>
+                )}
+                <p className="text-center text-xs text-gray-400 mt-2">
+                  Secure checkout{gatewayName ? ` powered by ${paymentGatewayDisplayName(gatewayName)}` : ''}
+                </p>
               </div>
             </form>
           </div>
@@ -740,7 +816,7 @@ const Checkout = () => {
                 {paymentChannel && (
                   <div className="flex justify-between text-gray-600">
                     <span>Processing Fee</span>
-                    <span>₱{gatewayFeeAmount.toFixed(2)}</span>
+                    <span>{feeLoading ? '…' : `₱${gatewayFeeAmount.toFixed(2)}`}</span>
                   </div>
                 )}
                 {total != null && (

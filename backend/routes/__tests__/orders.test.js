@@ -23,13 +23,27 @@ vi.mock('../../middleware/auth.js', () => ({
   requireAnyPermission: () => (req, res, next) => next(),
 }));
 
-vi.mock('../../services/paymentService.js', () => ({
-  createCheckoutSession: vi.fn(),
-  getPaymentStatus: vi.fn(),
-  // Real value (Maya's real, verified 1-hour session), not mocked away —
-  // the dual-write tests below assert a real computed expiresAt exists.
-  getSessionDurationMs: vi.fn().mockReturnValue(60 * 60 * 1000),
-}));
+vi.mock('../../services/paymentService.js', async () => {
+  // Phase 4 (ePayGames evaluation) — orders.js now calls
+  // paymentService.calculateFee(gatewayName, channel, amount) to price the
+  // order. Delegating to the REAL lib/payments/xenditFees.js formula here
+  // (imported inside the factory, not as an outer-scope reference — vi.mock
+  // factories are hoisted above every top-level const in this file) rather
+  // than hand-rolling a second copy of it keeps every existing fee-value
+  // assertion below exactly correct, with zero risk of the mock and the
+  // real formula quietly drifting apart. getChannels is not added — nothing
+  // in orders.js's own route calls it, only routes/paymentChannels.js does,
+  // and that has its own dedicated test file.
+  const xenditFees = await import('../../lib/payments/xenditFees.js');
+  return {
+    createCheckoutSession: vi.fn(),
+    getPaymentStatus: vi.fn(),
+    // Real value (Maya's real, verified 1-hour session), not mocked away —
+    // the dual-write tests below assert a real computed expiresAt exists.
+    getSessionDurationMs: vi.fn().mockReturnValue(60 * 60 * 1000),
+    calculateFee: vi.fn((gatewayName, channelCode, amount) => xenditFees.calculateGatewayFee(channelCode, amount)),
+  };
+});
 
 vi.mock('../../services/emailService.js', () => ({
   sendOrderConfirmationEmail: vi.fn().mockResolvedValue(undefined),

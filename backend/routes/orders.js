@@ -19,8 +19,8 @@ import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middl
 import { PERMISSIONS } from '../lib/permissions.js';
 import { mayaWebhookIpAllowlist } from '../middleware/mayaWebhookIpAllowlist.js';
 import { xenditWebhookVerify } from '../middleware/xenditWebhookVerify.js';
+import { epaygamesWebhookVerify } from '../middleware/epaygamesWebhookVerify.js';
 import * as paymentService from '../services/paymentService.js';
-import { calculateGatewayFee, isValidChannel } from '../lib/payments/xenditFees.js';
 import { sendPaymentFailedEmail } from '../services/emailService.js';
 import { sendOrderConfirmation } from '../lib/orderConfirmationEmail.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
@@ -372,11 +372,16 @@ router.post('/',
     body('shippingAddress.region').optional().trim(),
     body('shippingAddress.barangay').optional().trim(),
     body('promoCode').optional({ nullable: true }).trim().isLength({ max: 40 }),
-    // Chosen in our own checkout UI before redirect, not on Xendit's hosted
-    // page — required so the processing fee shown to the fan (and included
-    // in `total`) is exact for the channel they'll actually be charged on,
-    // never a blended guess. See ADR-010.
-    body('paymentChannel').custom((value) => isValidChannel(value)).withMessage('A valid payment channel is required')
+    // Chosen in our own checkout UI before redirect, not on the gateway's
+    // hosted page — required so the processing fee shown to the fan (and
+    // included in `total`) is exact for the channel they'll actually be
+    // charged on, never a blended guess. See ADR-010. Whether this specific
+    // string is actually a real channel FOR THE SELECTED GATEWAY can't be
+    // checked here (Phase 4, ePayGames evaluation) — which gateway is
+    // active is an async site-setting lookup the validator array can't
+    // await, so that check now happens in the handler body, via
+    // paymentService.calculateFee's own per-gateway validation.
+    body('paymentChannel').trim().notEmpty().withMessage('A payment channel is required')
   ],
   async (req, res) => {
     try {
@@ -583,20 +588,32 @@ router.post('/',
         }
       }
 
-      // Gateway fee — computed server-side from the same fee table the
-      // checkout UI previews from, never trusted off the client. Charged
-      // against the amount after the discount, before the fee itself is
-      // added (never a base that includes its own fee).
-      const gatewayFeeAmount = calculateGatewayFee(paymentChannel, subtotal + shippingFee - discountAmount);
-
-      const total = Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount);
-
       // Admin-configurable (siteSettingsRepository) instead of hardcoded, so
       // the operational gateway can change without a deploy — e.g. while
       // Xendit's business verification is pending. Defaults to 'xendit',
       // preserving today's behavior exactly when never explicitly set.
+      // Determined BEFORE the fee calculation below (Phase 4) — which
+      // gateway's channel catalog/fee formula applies depends on it.
       const { payment: paymentSettings } = await siteSettingsRepository.get();
       const paymentMethod = paymentSettings.defaultPaymentGateway;
+
+      // Gateway fee — dispatched per-gateway (Phase 4, ePayGames
+      // evaluation) rather than always assuming Xendit's own fee table.
+      // Xendit's and Maya's real behavior are both unchanged: Xendit's
+      // dispatch still resolves to lib/payments/xenditFees.js's exact
+      // existing channel list and formula; Maya's resolves to its own
+      // historical "no per-channel fee ever surfaced" reality. Computed
+      // server-side either way, never trusted off the client, against the
+      // amount after the discount and before the fee itself is added
+      // (never a base that includes its own fee).
+      let gatewayFeeAmount;
+      try {
+        gatewayFeeAmount = await paymentService.calculateFee(paymentMethod, paymentChannel, subtotal + shippingFee - discountAmount);
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message || 'Invalid payment channel for the selected gateway' });
+      }
+
+      const total = Math.max(0, subtotal + shippingFee - discountAmount + gatewayFeeAmount);
 
       // Pass 2 — atomic: reserve stock for every item and create the order
       // together, or none of it happens. This is the direct fix for the
@@ -1274,6 +1291,116 @@ router.post('/webhooks/xendit', xenditWebhookVerify, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     logger.error({ err: error, referenceId: req.body?.data?.reference_id }, 'Webhook error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Same 2-decimal-place rounding lib/payments/xenditFees.js's
+// calculateGatewayFee already uses for money — comparing two floats
+// directly risks a false mismatch from binary floating-point
+// representation (e.g. 599.10000000001 !== 599.1); rounding both sides to
+// centavos first is this codebase's existing convention for that, not a
+// new one invented for this check.
+function amountsMatch(gatewayAmount, orderTotal) {
+  const round = (value) => Math.round(Number(value) * 100) / 100;
+  return round(gatewayAmount) === round(orderTotal);
+}
+
+// ePayGames webhook handler — a real HMAC signature exists (verified by
+// epaygamesWebhookVerify above), but this still treats the POST as nothing
+// more than a wake-up signal, the same as Maya's handler below rather than
+// Xendit's "trust the verified payload directly" shape (ADR-010). Two
+// reasons this gateway gets the more conservative treatment despite having
+// a real signature: the signature only covers `amount`+`reference_no`, not
+// `status` itself (see epaygamesWebhookVerify.js's own header comment),
+// and this is a newer, less-proven-in-production integration than Xendit.
+// The actual payment status is decided by an authenticated pull against
+// ePayGames' own API (paymentService.getPaymentStatus) — the same trusted
+// mechanism /verify-payment already relies on for every gateway. A forged
+// or replayed webhook can, at worst, trigger one redundant, harmless
+// status check; it can never itself flip an order to paid or failed.
+router.post('/webhooks/epaygames', epaygamesWebhookVerify, async (req, res) => {
+  try {
+    const referenceNo = req.body?.data?.reference_no;
+    if (!referenceNo) {
+      return res.status(400).json({ success: false });
+    }
+
+    // epaygamesGateway.js sends `${orderNumber}__${attempt-unique suffix}` —
+    // attempt-scoped-not-order-scoped, the same shape Maya's
+    // requestReferenceNumber and Xendit's reference_id already established
+    // (ADR-008/ADR-010), but with '__' instead of their shared '#'. ePayGames
+    // is the only gateway using this delimiter — confirmed directly against
+    // the real sandbox (2026-08-28) that a '#' makes ePayGames' own hosted-
+    // checkout page fail to load (their deferred/load step 500s), while
+    // '__' does not; Xendit/Maya's own webhook handlers are untouched and
+    // keep parsing on '#'. The order number is always everything before the
+    // first '__'.
+    const orderNumber = referenceNo.split('__')[0];
+    logger.info({ orderNumber, gateway: 'epaygames' }, 'Webhook received');
+
+    const order = await orderRepository.findByOrderNumber(orderNumber);
+    if (!order || order.paymentStatus === 'paid' || order.paymentStatus === 'failed' || !order.mayaPaymentId) {
+      return res.json({ success: true });
+    }
+
+    await orderEventRepository.create({
+      orderId: order._id,
+      type: 'webhook_received',
+      actor: 'webhook',
+      message: `Webhook received from ${order.paymentMethod}`,
+    });
+
+    // WEBHOOK ≠ PROOF OF PAYMENT — req.body's own status/amount are never
+    // read for the resolution decision below, only for the mismatch checks
+    // that can block it. A lookup failure leaves the order exactly as it
+    // was — no resolution attempted — rather than guessing either way;
+    // the customer's own /verify-payment poll or the hourly expiry sweep
+    // remain the recovery path, same as any other gateway.
+    let statusResult;
+    try {
+      statusResult = await paymentService.getPaymentStatus(order.mayaPaymentId, order.paymentMethod);
+    } catch (error) {
+      logger.error({ err: error, orderNumber, gateway: 'epaygames' }, 'ePayGames webhook status lookup failed — order left unresolved');
+      Sentry.captureException(error);
+      return res.json({ success: true });
+    }
+
+    const { status, raw } = statusResult;
+
+    // Reference check — the transaction the lookup actually returned must
+    // be the same one this order's Payment row is waiting on. Without
+    // this, a valid, correctly-signed webhook for some OTHER transaction
+    // could still resolve THIS order, as long as the two happened to share
+    // an order-number prefix.
+    if (raw?.reference_no && raw.reference_no !== referenceNo) {
+      logger.error(
+        { orderNumber, expectedReference: referenceNo, gotReference: raw.reference_no, gateway: 'epaygames' },
+        'ePayGames webhook reference mismatch — order left unresolved'
+      );
+      return res.json({ success: true });
+    }
+
+    // Amount check — only meaningful for a claimed success; a failed/
+    // expired/pending resolution has no money-movement claim to verify.
+    if (status === 'succeeded' && raw && typeof raw.amount !== 'undefined' && !amountsMatch(raw.amount, order.total)) {
+      logger.error(
+        { orderNumber, expectedAmount: order.total, gotAmount: raw.amount, gateway: 'epaygames' },
+        'ePayGames webhook amount mismatch — order left unresolved'
+      );
+      return res.json({ success: true });
+    }
+
+    logger.info(
+      { orderNumber: order.orderNumber, paymentId: order.mayaPaymentId, gateway: order.paymentMethod, status },
+      'Webhook verified against gateway'
+    );
+    await applyPaymentResolution(order, status, 'webhook');
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, referenceNo: req.body?.data?.reference_no }, 'Webhook error');
     Sentry.captureException(error);
     res.status(500).json({ success: false });
   }
