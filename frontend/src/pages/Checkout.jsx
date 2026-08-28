@@ -255,6 +255,14 @@ const Checkout = () => {
         // Never the merchandise cart's items during a Pass-only checkout —
         // that cart isn't part of this order (see isPassOnly above).
         items: isPassOnly ? [] : items.map((item) => ({ product: item.product._id, price: item.price, quantity: item.quantity })),
+        // EVENT-scope promos match on passEventId — the pass cart is always
+        // scoped to exactly one event at a time (passCartStore.setEvent), so
+        // one aggregate entry carrying the whole cart's pass total is
+        // equivalent to quantity-expanding it the way the real order-
+        // creation call's server-computed passUnits does. This is only the
+        // live preview (see promoCodes.js's own comment) — the authoritative
+        // match happens server-side against real passUnits at submission.
+        passes: isPassOnly && passEvent ? [{ passEventId: passEvent._id, price: passTotal }] : [],
         subtotal,
         shippingFee,
         email: watch('email'),

@@ -575,6 +575,12 @@ router.post('/',
             userId: req.user?._id,
             email,
             items: orderItems,
+            // EVENT-scope matching needs the same server-computed pass units
+            // (never client-supplied) that already feed subtotal/capacity
+            // above — items and passes never mix in one order, but passing
+            // both here costs nothing and keeps validate() gateway-agnostic
+            // about which one an order actually carries.
+            passes: passUnits,
             subtotal,
             shippingFee,
           });

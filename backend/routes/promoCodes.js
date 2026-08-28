@@ -2,13 +2,14 @@ import express from 'express';
 import logger from '../lib/logger.js';
 import Sentry from '../lib/sentry.js';
 import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
+import * as passEventRepository from '../repositories/passEventRepository.js';
 import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
 const DISCOUNT_TYPES = ['PERCENTAGE', 'FIXED_AMOUNT', 'FREE_SHIPPING'];
-const SCOPES = ['ORDER', 'PRODUCT'];
+const SCOPES = ['ORDER', 'PRODUCT', 'EVENT'];
 
 /**
  * Body-shape validation for create/update — kept local rather than pulled
@@ -18,7 +19,7 @@ const SCOPES = ['ORDER', 'PRODUCT'];
  * list of independent per-field rules.
  */
 function validatePromoCodeBody(body) {
-  const { code, discountType, scope = 'ORDER', percentOff, amountOff, productIds } = body;
+  const { code, discountType, scope = 'ORDER', percentOff, amountOff, productIds, passEventIds } = body;
 
   if (!code || typeof code !== 'string' || !code.trim()) return 'Code is required.';
   if (!DISCOUNT_TYPES.includes(discountType)) return 'Invalid discount type.';
@@ -36,6 +37,9 @@ function validatePromoCodeBody(body) {
   if (scope === 'PRODUCT' && (!Array.isArray(productIds) || productIds.length === 0)) {
     return 'Select at least one product for an item-scoped code.';
   }
+  if (scope === 'EVENT' && (!Array.isArray(passEventIds) || passEventIds.length === 0)) {
+    return 'Select at least one event for an event-scoped code.';
+  }
 
   return null;
 }
@@ -49,6 +53,32 @@ router.get('/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.PR
     logger.error({ err: error }, 'Get admin promo codes error');
     Sentry.captureException(error);
     res.status(500).json({ success: false, message: 'Failed to retrieve promo codes' });
+  }
+});
+
+// Lightweight event list for the promo-code "Applies To" picker (admin) —
+// deliberately gated by PROMOTIONS_MANAGE, not PASSES_MANAGE: an admin who
+// can create promo codes shouldn't need Pass/Event management rights just
+// to pick an event to attach one to. Returns only what the picker's chip/
+// result-row needs (id, name, venue name, date) — no organization, tiers,
+// or other event-management fields a promo-code admin has no reason to see.
+router.get('/admin/events', authenticate, isAdmin, requirePermission(PERMISSIONS.PROMOTIONS_MANAGE), async (req, res) => {
+  try {
+    const events = await passEventRepository.find({
+      orderBy: { startsAt: 'desc' },
+      include: { venue: { select: { name: true } } },
+    });
+    const data = events.map((event) => ({
+      _id: event._id,
+      name: event.name,
+      venueName: event.venue?.name ?? null,
+      startsAt: event.startsAt,
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error({ err: error }, 'Get promo-code event picker list error');
+    Sentry.captureException(error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve events' });
   }
 });
 
@@ -112,7 +142,7 @@ router.delete('/:id', authenticate, isAdmin, requirePermission(PERMISSIONS.PROMO
 // redemption slot) happens again inside order creation's own transaction.
 router.post('/validate', optionalAuth, async (req, res) => {
   try {
-    const { code, items, subtotal, shippingFee, email } = req.body;
+    const { code, items, passes, subtotal, shippingFee, email } = req.body;
 
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ success: false, message: 'Promo code is required.' });
@@ -121,11 +151,18 @@ router.post('/validate', optionalAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cart subtotal and shipping fee are required.' });
     }
 
+    // This is the checkout page's own live preview, not the authoritative
+    // check (see this route's header comment) — items/passes/subtotal here
+    // are client-reported cart state, same trust level items already had
+    // before EVENT scope existed. The real order-creation call in
+    // routes/orders.js is what recomputes everything server-side and
+    // actually claims a redemption slot.
     const { promoCode, discountAmount, freeShipping } = await promoCodeRepository.validate({
       code,
       userId: req.user?._id,
       email: req.user?.email || email,
       items: Array.isArray(items) ? items : [],
+      passes: Array.isArray(passes) ? passes : [],
       subtotal,
       shippingFee,
     });

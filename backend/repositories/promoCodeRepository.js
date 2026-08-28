@@ -6,6 +6,8 @@ const DATE_FIELDS = ['startsAt', 'endsAt'];
 
 const DEFAULT_INCLUDE = {
   products: { include: { product: { select: { id: true, name: true, slug: true, images: true } } } },
+  // Only populated when scope = EVENT — mirrors `products` above exactly.
+  passEvents: { include: { passEvent: { select: { id: true, name: true, slug: true, startsAt: true } } } },
 };
 
 export class PromoCodeInvalidError extends Error {
@@ -69,15 +71,28 @@ export async function setProducts(promoCodeId, productIds, { client = prisma } =
   }
 }
 
-export async function create({ productIds, ...data }, { client = prisma } = {}) {
+/** Replace-all for PromoCode.scope = EVENT targeting — mirrors setProducts exactly. */
+export async function setPassEvents(promoCodeId, passEventIds, { client = prisma } = {}) {
+  await client.promoCodePassEvent.deleteMany({ where: { promoCodeId } });
+  if (passEventIds?.length) {
+    await client.promoCodePassEvent.createMany({
+      data: passEventIds.map((passEventId) => ({ promoCodeId, passEventId })),
+      skipDuplicates: true,
+    });
+  }
+}
+
+export async function create({ productIds, passEventIds, ...data }, { client = prisma } = {}) {
   const promoCode = await client.promoCode.create({ data: normalizeDateFields(normalizeCode(data), DATE_FIELDS) });
   if (productIds) await setProducts(promoCode.id, productIds, { client });
+  if (passEventIds) await setPassEvents(promoCode.id, passEventIds, { client });
   return findById(promoCode.id, { client });
 }
 
-export async function updateById(id, { productIds, ...data }, { client = prisma } = {}) {
+export async function updateById(id, { productIds, passEventIds, ...data }, { client = prisma } = {}) {
   await client.promoCode.update({ where: { id }, data: normalizeDateFields(normalizeCode(data), DATE_FIELDS) });
   if (productIds) await setProducts(id, productIds, { client });
+  if (passEventIds) await setPassEvents(id, passEventIds, { client });
   return findById(id, { client });
 }
 
@@ -112,11 +127,17 @@ export async function countCustomerRedemptions({ promoCodeId, userId, email }, {
  * computed shippingFee (not a flat waiver), so Order.total = subtotal +
  * shippingFee - discountAmount stays one formula for every discount type.
  * Otherwise the "base" a percent/fixed amount applies against is either the
- * whole subtotal (ORDER scope) or just the matching line items' total
- * (PRODUCT scope) — capped so the discount can never exceed its own base or
- * go negative.
+ * whole subtotal (ORDER scope), just the matching line items' total
+ * (PRODUCT scope), or just the matching Pass units' total (EVENT scope) —
+ * capped so the discount can never exceed its own base or go negative.
+ *
+ * `passes` mirrors `items`' shape for Merchandise: each entry is one
+ * already-quantity-expanded Pass unit (routes/orders.js's `passUnits`,
+ * `{ passEventId, passTierId, price }` — one entry per admission, not one
+ * entry per requested tier/quantity pair), so summing `.price` directly is
+ * correct without a second `.quantity` multiplier the way `items` needs.
  */
-export function computeDiscount({ promoCode, items = [], subtotal, shippingFee }) {
+export function computeDiscount({ promoCode, items = [], passes = [], subtotal, shippingFee }) {
   if (promoCode.discountType === 'FREE_SHIPPING') {
     return { discountAmount: shippingFee, freeShipping: true };
   }
@@ -127,6 +148,11 @@ export function computeDiscount({ promoCode, items = [], subtotal, shippingFee }
     base = items
       .filter((item) => matchingProductIds.has(item.product))
       .reduce((sum, item) => sum + item.price * item.quantity, 0);
+  } else if (promoCode.scope === 'EVENT') {
+    const matchingPassEventIds = new Set((promoCode.passEvents ?? []).map((p) => p.passEventId));
+    base = passes
+      .filter((unit) => matchingPassEventIds.has(unit.passEventId))
+      .reduce((sum, unit) => sum + unit.price, 0);
   }
 
   const raw = promoCode.discountType === 'PERCENTAGE' ? base * (promoCode.percentOff / 100) : promoCode.amountOff;
@@ -141,7 +167,7 @@ export function computeDiscount({ promoCode, items = [], subtotal, shippingFee }
  * something genuinely changed in between (expired, hit its cap), never
  * because the two paths disagree with each other.
  */
-export async function validate({ code, userId, email, items = [], subtotal, shippingFee }, { client = prisma } = {}) {
+export async function validate({ code, userId, email, items = [], passes = [], subtotal, shippingFee }, { client = prisma } = {}) {
   const promoCode = await findByCode(code, { client });
   if (!promoCode || !promoCode.active) {
     throw new PromoCodeInvalidError('not_found', 'This promo code is invalid.');
@@ -169,6 +195,13 @@ export async function validate({ code, userId, email, items = [], subtotal, ship
     }
   }
 
+  if (promoCode.scope === 'EVENT') {
+    const matchingPassEventIds = new Set((promoCode.passEvents ?? []).map((p) => p.passEventId));
+    if (!passes.some((unit) => matchingPassEventIds.has(unit.passEventId))) {
+      throw new PromoCodeInvalidError('no_matching_items', "This code doesn't apply to any Passes in your cart.");
+    }
+  }
+
   // Only enforced when an identity is actually available — the checkout
   // page's preview call may run before the customer has entered an email.
   // The authoritative enforcement is always the real order-creation call,
@@ -190,7 +223,7 @@ export async function validate({ code, userId, email, items = [], subtotal, ship
     throw new PromoCodeInvalidError('exhausted', 'This promo code has reached its redemption limit.');
   }
 
-  const { discountAmount, freeShipping } = computeDiscount({ promoCode, items, subtotal, shippingFee });
+  const { discountAmount, freeShipping } = computeDiscount({ promoCode, items, passes, subtotal, shippingFee });
   return { promoCode, discountAmount, freeShipping };
 }
 
@@ -234,6 +267,7 @@ export default {
   find,
   count,
   setProducts,
+  setPassEvents,
   create,
   updateById,
   deleteById,

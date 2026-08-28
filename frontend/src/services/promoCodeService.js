@@ -1,13 +1,20 @@
 import api from './api';
 
 const promoCodeService = {
-  validateCode: async ({ code, items, subtotal, shippingFee, email }) => {
-    const response = await api.post('/promo-codes/validate', { code, items, subtotal, shippingFee, email });
+  validateCode: async ({ code, items, passes, subtotal, shippingFee, email }) => {
+    const response = await api.post('/promo-codes/validate', { code, items, passes, subtotal, shippingFee, email });
     return response.data;
   },
 
   getAll: async () => {
     const response = await api.get('/promo-codes/admin/all');
+    return response.data;
+  },
+
+  // Lightweight event list for the "Applies To" event picker (EVENT scope) —
+  // gated by PROMOTIONS_MANAGE server-side, not PASSES_MANAGE.
+  getEvents: async () => {
+    const response = await api.get('/promo-codes/admin/events');
     return response.data;
   },
 

@@ -925,6 +925,8 @@ model PassEvent {
   tiers  PassTier[]
   passes Pass[]
 
+  promoCodePassEvents PromoCodePassEvent[] // PromoCode.scope = EVENT targeting
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2080,6 +2082,10 @@ enum PromoDiscountType {
 enum PromoScope {
   ORDER
   PRODUCT
+  // Targets an entire PassEvent (not a specific PassTier) — the same
+  // whole-commerce-item granularity PRODUCT already uses (a whole Product,
+  // never a specific ProductColorSize variant). See PromoCodePassEvent.
+  EVENT
 }
 
 model PromoCode {
@@ -2106,8 +2112,9 @@ model PromoCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products PromoCodeProduct[]
-  orders   Order[]
+  products   PromoCodeProduct[]
+  passEvents PromoCodePassEvent[]
+  orders     Order[]
 
   @@map("promo_codes")
 }
@@ -2124,6 +2131,23 @@ model PromoCodeProduct {
   @@unique([promoCodeId, productId])
   @@index([productId])
   @@map("promo_code_products")
+}
+
+// Only populated when PromoCode.scope = EVENT — the set of PassEvents a
+// "percent/fixed off this event's Passes" code discounts. Deliberately
+// targets the whole PassEvent, not a specific PassTier — same granularity
+// PromoCodeProduct already uses for Product (never a specific
+// ProductColorSize variant). See the ADR/audit note on PromoScope.EVENT.
+model PromoCodePassEvent {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  passEventId String
+  passEvent   PassEvent @relation(fields: [passEventId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, passEventId])
+  @@index([passEventId])
+  @@map("promo_code_pass_events")
 }
 
 // ---------------------------------------------------------------------------

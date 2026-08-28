@@ -11,11 +11,18 @@ const KINDS = [
   { value: 'FIXED_ORDER', label: 'Fixed amount off order', discountType: 'FIXED_AMOUNT', scope: 'ORDER' },
   { value: 'PERCENT_ITEMS', label: 'Percent off specific items', discountType: 'PERCENTAGE', scope: 'PRODUCT' },
   { value: 'FIXED_ITEMS', label: 'Fixed amount off specific items', discountType: 'FIXED_AMOUNT', scope: 'PRODUCT' },
+  // EVENT scope — no FREE_SHIPPING pairing, same as PRODUCT above: free
+  // shipping only ever makes sense paired with ORDER scope, and a Pass
+  // order's shippingFee is always 0 regardless (orders.js).
+  { value: 'PERCENT_EVENTS', label: 'Percent off specific events', discountType: 'PERCENTAGE', scope: 'EVENT' },
+  { value: 'FIXED_EVENTS', label: 'Fixed amount off specific events', discountType: 'FIXED_AMOUNT', scope: 'EVENT' },
   { value: 'FREE_SHIPPING', label: 'Free shipping', discountType: 'FREE_SHIPPING', scope: 'ORDER' },
 ];
 
 const kindFor = (discountType, scope) =>
   KINDS.find((k) => k.discountType === discountType && k.scope === scope)?.value || 'PERCENT_ORDER';
+
+const scopeLabel = (scope) => (scope === 'PRODUCT' ? 'items' : scope === 'EVENT' ? 'events' : 'order');
 
 const emptyForm = {
   code: '',
@@ -133,6 +140,103 @@ const PromoProductPicker = ({ value, onChange }) => {
   );
 };
 
+const formatEventDate = (iso) => {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+/**
+ * Event-targeting counterpart to PromoProductPicker above — same
+ * multi-select/chip pattern, but a single full list fetched once and
+ * filtered client-side (per the decision on this feature: events are few
+ * enough that a second debounced-search subsystem isn't worth building).
+ */
+const PromoEventPicker = ({ value, onChange }) => {
+  const [query, setQuery] = useState('');
+  const [allEvents, setAllEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    promoCodeService.getEvents()
+      .then((res) => { if (!cancelled) setAllEvents(res.data || []); })
+      .catch(() => { if (!cancelled) setAllEvents([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handlePick = (event) => {
+    if (!value.some((e) => e.id === event._id)) {
+      onChange([...value, { id: event._id, name: event.name, venueName: event.venueName, startsAt: event.startsAt }]);
+    }
+    setQuery('');
+  };
+
+  const remove = (id) => onChange(value.filter((e) => e.id !== id));
+
+  const alreadyPickedIds = new Set(value.map((e) => e.id));
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEvents = allEvents
+    .filter((e) => !alreadyPickedIds.has(e._id))
+    .filter((e) => !normalizedQuery || e.name.toLowerCase().includes(normalizedQuery))
+    .slice(0, 8);
+
+  return (
+    <div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {value.map((e) => (
+            <span
+              key={e.id}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-full text-xs text-gray-800"
+            >
+              {e.name}
+              <button type="button" onClick={() => remove(e.id)} className="text-gray-400 hover:text-red-600">
+                <XMarkIcon className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <div className="relative">
+          <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={(e) => setQuery(e.target.value)}
+            placeholder={loading ? 'Loading events...' : 'Search events to add...'}
+            disabled={loading}
+            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
+          />
+        </div>
+        {!loading && filteredEvents.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+              Events &amp; Passes
+            </p>
+            {filteredEvents.map((event) => (
+              <button
+                key={event._id}
+                type="button"
+                onClick={() => handlePick(event)}
+                className="w-full flex flex-col items-start px-3 py-2 text-sm text-left hover:bg-gray-50"
+              >
+                <span className="truncate font-medium text-gray-900">{event.name}</span>
+                <span className="text-xs text-gray-500">
+                  {formatEventDate(event.startsAt)}
+                  {event.venueName ? ` · ${event.venueName}` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AdminPromoCodes = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -140,6 +244,7 @@ const AdminPromoCodes = () => {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [products, setProducts] = useState([]);
+  const [events, setEvents] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -164,6 +269,7 @@ const AdminPromoCodes = () => {
     setEditingId(null);
     setForm(emptyForm);
     setProducts([]);
+    setEvents([]);
     setError('');
     setModalOpen(true);
   };
@@ -184,6 +290,12 @@ const AdminPromoCodes = () => {
       active: item.active,
     });
     setProducts((item.products || []).map((p) => ({ id: p.productId, name: p.product?.name || 'Product', slug: p.product?.slug })));
+    setEvents((item.passEvents || []).map((e) => ({
+      id: e.passEventId,
+      name: e.passEvent?.name || 'Event',
+      venueName: e.passEvent?.venueName,
+      startsAt: e.passEvent?.startsAt,
+    })));
     setError('');
     setModalOpen(true);
   };
@@ -203,6 +315,7 @@ const AdminPromoCodes = () => {
         percentOff: selectedKind.discountType === 'PERCENTAGE' ? numOrNull(form.percentOff) : null,
         amountOff: selectedKind.discountType === 'FIXED_AMOUNT' ? numOrNull(form.amountOff) : null,
         productIds: selectedKind.scope === 'PRODUCT' ? products.map((p) => p.id) : [],
+        passEventIds: selectedKind.scope === 'EVENT' ? events.map((e) => e.id) : [],
         startsAt: form.startsAt || null,
         endsAt: form.endsAt || null,
         maxRedemptions: numOrNull(form.maxRedemptions),
@@ -291,8 +404,8 @@ const AdminPromoCodes = () => {
                   <tr key={item._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-mono font-medium text-gray-900">{item.code}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.discountType === 'PERCENTAGE' && `${item.percentOff}% off ${item.scope === 'PRODUCT' ? 'items' : 'order'}`}
-                      {item.discountType === 'FIXED_AMOUNT' && `₱${item.amountOff} off ${item.scope === 'PRODUCT' ? 'items' : 'order'}`}
+                      {item.discountType === 'PERCENTAGE' && `${item.percentOff}% off ${scopeLabel(item.scope)}`}
+                      {item.discountType === 'FIXED_AMOUNT' && `₱${item.amountOff} off ${scopeLabel(item.scope)}`}
                       {item.discountType === 'FREE_SHIPPING' && 'Free shipping'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
@@ -419,8 +532,25 @@ const AdminPromoCodes = () => {
 
               {selectedKind.scope === 'PRODUCT' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Applies To</label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                    Applies To
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-blue-100 text-blue-700">
+                      Merchandise
+                    </span>
+                  </label>
                   <PromoProductPicker value={products} onChange={setProducts} />
+                </div>
+              )}
+
+              {selectedKind.scope === 'EVENT' && (
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                    Applies To
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700">
+                      Events &amp; Passes
+                    </span>
+                  </label>
+                  <PromoEventPicker value={events} onChange={setEvents} />
                 </div>
               )}
 
