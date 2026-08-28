@@ -69,14 +69,26 @@ describe('campaigns.js — single-permission router gating', () => {
   }, 20000);
 });
 
-describe('staff.js — executive-only settings.security.manage gate', () => {
+// Launch-readiness audit fix — settings.security.manage is still the
+// broad gate (operations is denied by it, same as always), but staff
+// administration is now further narrowed to specific founder User IDs by
+// requireFounder (middleware/auth.js): department alone, even
+// 'executive' (a wildcard), is no longer sufficient. Full founder-vs-
+// non-founder coverage lives in staffFounderAuthorization.test.js; this
+// file only needs to keep proving the gate is wired into the real router.
+describe('staff.js — settings.security.manage + founder-only gate', () => {
   it('denies every non-executive department, including operations which holds many other permissions', async () => {
     mockUser = { role: 'admin', staffProfile: { department: 'operations', permissions: [] } };
     expect((await request(app).get('/api/admin/staff')).status).toBe(403);
   }, 20000);
 
-  it('allows executive', async () => {
-    mockUser = { role: 'admin', staffProfile: { department: 'executive', permissions: [] } };
+  it('denies a plain executive who is not one of the specific founder ids', async () => {
+    mockUser = { _id: 'some-other-executive-id', role: 'admin', staffProfile: { department: 'executive', permissions: [] } };
+    expect((await request(app).get('/api/admin/staff/permissions')).status).toBe(403);
+  }, 20000);
+
+  it('allows the founder', async () => {
+    mockUser = { _id: '8b30ff12-5e33-4553-b6a6-9bad88752a17', role: 'admin', staffProfile: { department: 'executive', permissions: [] } };
     expect((await request(app).get('/api/admin/staff/permissions')).status).not.toBe(403);
   }, 20000);
 });
