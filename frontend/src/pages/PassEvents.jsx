@@ -5,6 +5,7 @@ import Layout from '../components/layout/Layout';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import passEventService from '../services/passEventService';
 import SEO from '../components/common/SEO';
+import { PH_TIME_ZONE } from '../utils/manilaTime';
 
 const EventCard = ({ event }) => {
   const lowestPrice = event.tiers?.length ? Math.min(...event.tiers.map((t) => t.price)) : null;
@@ -27,7 +28,7 @@ const EventCard = ({ event }) => {
         <h3 className="font-bold text-ink-900 mb-1 line-clamp-2">{event.name}</h3>
         <p className="text-sm text-ink-500 flex items-center gap-1 mb-1">
           <CalendarDaysIcon className="w-4 h-4 flex-shrink-0" />
-          {new Date(event.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+          {new Date(event.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: PH_TIME_ZONE })}
         </p>
         {event.venue?.name && (
           <p className="text-sm text-ink-500 flex items-center gap-1 mb-3">

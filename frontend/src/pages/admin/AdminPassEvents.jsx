@@ -6,6 +6,7 @@ import venueService from '../../services/venueService';
 import organizationService from '../../services/organizationService';
 import leagueService from '../../services/leagueService';
 import ImageField from '../../components/admin/ImageField';
+import { PH_TIME_ZONE, toManilaDateTimeLocal } from '../../utils/manilaTime';
 
 const emptyForm = {
   name: '', slug: '', description: '', organizationId: '', leagueId: '', teamNames: [], venueId: '',
@@ -23,8 +24,10 @@ const ORG_KIND_GROUPS = [
   { kind: 'athlete', label: 'Athletes' },
 ];
 
-// datetime-local inputs need "YYYY-MM-DDTHH:mm", ISO strings have seconds/Z
-const toDateTimeLocal = (iso) => (iso ? iso.slice(0, 16) : '');
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" in Philippine wall-clock
+// time — see utils/manilaTime.js for why this can't just slice the stored
+// UTC ISO string's characters.
+const toDateTimeLocal = toManilaDateTimeLocal;
 
 // Start-of-day "today" in the same reference frame the browser's
 // datetime-local value and `new Date(value)` already use — comparing by
@@ -368,7 +371,7 @@ const AdminPassEvents = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{event.venue?.name}</td>
-                    <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">{new Date(event.startsAt).toLocaleString()}</td>
+                    <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">{new Date(event.startsAt).toLocaleString('en-PH', { timeZone: PH_TIME_ZONE })}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">{event.tiers?.length ?? 0}</td>
                     <td className="px-6 py-4">
                       <span className={`text-xs font-semibold uppercase tracking-wide ${event.active ? 'text-green-700' : 'text-ink-500'}`}>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { QrCodeIcon, CalendarDaysIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import passEventService from '../../services/passEventService';
 import useCheckinSyncStore from '../../store/checkinSyncStore';
+import { PH_TIME_ZONE } from '../../utils/manilaTime';
 
 function formatRelativeTime(iso) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -375,7 +376,7 @@ const EventPicker = ({ events, loading, error, onPick, onCancel }) => (
             <p className="font-semibold text-gray-900">{e.name}</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {e.venue?.name}
-              {e.startsAt && ` · ${new Date(e.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}`}
+              {e.startsAt && ` · ${new Date(e.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: PH_TIME_ZONE })}`}
             </p>
           </button>
         ))}
@@ -414,7 +415,7 @@ const ResultCard = ({ pass, justConfirmed, queued, offlineResult, syncedAt, acti
       )}
       {pass.status === 'checked_in' && pass.checkedInAt && !justConfirmed && !queued && (
         <p className="text-xs text-gray-500 mb-2 lg:mb-4">
-          Checked in {new Date(pass.checkedInAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+          Checked in {new Date(pass.checkedInAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: PH_TIME_ZONE })}
         </p>
       )}
 
@@ -430,7 +431,7 @@ const ResultCard = ({ pass, justConfirmed, queued, offlineResult, syncedAt, acti
         {pass.passEvent?.startsAt && (
           <div className="flex items-center gap-1.5 text-sm text-gray-600">
             <CalendarDaysIcon className="w-4 h-4 flex-shrink-0" />
-            {new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}
+            {new Date(pass.passEvent.startsAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: PH_TIME_ZONE })}
           </div>
         )}
         {pass.passEvent?.venue?.name && (

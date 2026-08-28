@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeftIcon, PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import passEventService from '../../services/passEventService';
 import venueService from '../../services/venueService';
+import { PH_TIME_ZONE } from '../../utils/manilaTime';
 
 const emptyTierForm = { venueSectionId: '', name: '', price: '', capacity: '' };
 
@@ -115,7 +116,7 @@ const AdminPassEventDetail = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
-          <p className="text-sm text-gray-500">{venue?.name} · {new Date(event.startsAt).toLocaleString()}</p>
+          <p className="text-sm text-gray-500">{venue?.name} · {new Date(event.startsAt).toLocaleString('en-PH', { timeZone: PH_TIME_ZONE })}</p>
         </div>
         <button
           onClick={openAdd}

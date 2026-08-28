@@ -253,6 +253,27 @@ describe('AdminPassEvents — Event Create/Edit form', () => {
     });
   });
 
+  describe('timezone handling', () => {
+    // Regression test for the exact bug reported: the storefront (which
+    // correctly localizes to Asia/Manila) showed 4:30 AM the next day for
+    // an event the admin had entered as 8:30 PM — because the edit form
+    // was populating "Starts"/"Ends" straight from the stored UTC ISO
+    // string's own digits, with no timezone conversion at all.
+    it('populates Starts/Ends in Philippine time when opening an existing event for edit, not raw UTC digits', async () => {
+      const event = {
+        ...institutionEvent,
+        startsAt: '2026-08-28T12:30:00.000Z', // 8:30 PM PHT the same calendar day
+        endsAt: '2026-08-28T14:30:00.000Z', // 10:30 PM PHT the same calendar day
+      };
+      setupServices({ events: [event] });
+      renderPage();
+      await openEditModalFor('FEU Scrimmage');
+
+      expect(fieldByLabel('Starts').value).toBe('2026-08-28T20:30');
+      expect(fieldByLabel('Ends').value).toBe('2026-08-28T22:30');
+    });
+  });
+
   describe('organization / team persistence on edit', () => {
     it('8. populates the existing organization when editing an institution-sourced event', async () => {
       setupServices({ events: [institutionEvent] });

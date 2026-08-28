@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import promoCodeService from '../../services/promoCodeService';
 import productService from '../../services/productService';
+import { PH_TIME_ZONE } from '../../utils/manilaTime';
 
 // Maps the admin-facing "kind" dropdown (one thing to pick) onto the two
 // underlying schema fields (discountType + scope) — keeps an admin from ever
@@ -142,7 +143,7 @@ const PromoProductPicker = ({ value, onChange }) => {
 
 const formatEventDate = (iso) => {
   if (!iso) return '';
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: PH_TIME_ZONE });
 };
 
 /**

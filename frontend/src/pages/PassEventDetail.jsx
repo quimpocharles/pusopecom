@@ -7,6 +7,7 @@ import passEventService from '../services/passEventService';
 import usePassCartStore from '../store/passCartStore';
 import useCartStore from '../store/cartStore';
 import SEO from '../components/common/SEO';
+import { PH_TIME_ZONE } from '../utils/manilaTime';
 
 const TierPicker = ({ tier }) => {
   const selections = usePassCartStore((s) => s.selections);
@@ -96,7 +97,7 @@ const PassEventDetail = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-gray-500">
               <span className="flex items-center gap-1.5">
                 <CalendarDaysIcon className="w-4 h-4" />
-                {new Date(event.startsAt).toLocaleString('en-PH', { dateStyle: 'full', timeStyle: 'short' })}
+                {new Date(event.startsAt).toLocaleString('en-PH', { dateStyle: 'full', timeStyle: 'short', timeZone: PH_TIME_ZONE })}
               </span>
               {event.venue && (
                 <span className="flex items-center gap-1.5">
