@@ -65,7 +65,8 @@ router.get('/admin/all', authenticate, isAdmin, requirePermission(PERMISSIONS.PR
 router.get('/admin/events', authenticate, isAdmin, requirePermission(PERMISSIONS.PROMOTIONS_MANAGE), async (req, res) => {
   try {
     const events = await passEventRepository.find({
-      orderBy: { startsAt: 'desc' },
+      where: { active: true },
+      orderBy: { startsAt: 'asc' },
       include: { venue: { select: { name: true } } },
     });
     const data = events.map((event) => ({

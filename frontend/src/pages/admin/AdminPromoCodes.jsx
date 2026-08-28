@@ -146,13 +146,14 @@ const formatEventDate = (iso) => {
 };
 
 /**
- * Event-targeting counterpart to PromoProductPicker above — same
- * multi-select/chip pattern, but a single full list fetched once and
- * filtered client-side (per the decision on this feature: events are few
- * enough that a second debounced-search subsystem isn't worth building).
+ * Event-targeting counterpart to PromoProductPicker above — a plain dropdown
+ * of every active event rather than a type-to-search box. Unlike Merchandise,
+ * the active-event list is small enough on this platform to just show in
+ * full (backend already scopes it to `active: true`, soonest first), so a
+ * search box only added friction (a stray typo silently produced zero
+ * matches with no feedback) for no real benefit at this volume.
  */
 const PromoEventPicker = ({ value, onChange }) => {
-  const [query, setQuery] = useState('');
   const [allEvents, setAllEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -165,21 +166,17 @@ const PromoEventPicker = ({ value, onChange }) => {
     return () => { cancelled = true; };
   }, []);
 
-  const handlePick = (event) => {
-    if (!value.some((e) => e.id === event._id)) {
+  const handlePick = (eventId) => {
+    const event = allEvents.find((e) => e._id === eventId);
+    if (event && !value.some((e) => e.id === event._id)) {
       onChange([...value, { id: event._id, name: event.name, venueName: event.venueName, startsAt: event.startsAt }]);
     }
-    setQuery('');
   };
 
   const remove = (id) => onChange(value.filter((e) => e.id !== id));
 
   const alreadyPickedIds = new Set(value.map((e) => e.id));
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredEvents = allEvents
-    .filter((e) => !alreadyPickedIds.has(e._id))
-    .filter((e) => !normalizedQuery || e.name.toLowerCase().includes(normalizedQuery))
-    .slice(0, 8);
+  const pickableEvents = allEvents.filter((e) => !alreadyPickedIds.has(e._id));
 
   return (
     <div>
@@ -198,41 +195,26 @@ const PromoEventPicker = ({ value, onChange }) => {
           ))}
         </div>
       )}
-      <div className="relative">
-        <div className="relative">
-          <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={(e) => setQuery(e.target.value)}
-            placeholder={loading ? 'Loading events...' : 'Search events to add...'}
-            disabled={loading}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
-          />
-        </div>
-        {!loading && filteredEvents.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-            <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-              Events &amp; Passes
-            </p>
-            {filteredEvents.map((event) => (
-              <button
-                key={event._id}
-                type="button"
-                onClick={() => handlePick(event)}
-                className="w-full flex flex-col items-start px-3 py-2 text-sm text-left hover:bg-gray-50"
-              >
-                <span className="truncate font-medium text-gray-900">{event.name}</span>
-                <span className="text-xs text-gray-500">
-                  {formatEventDate(event.startsAt)}
-                  {event.venueName ? ` · ${event.venueName}` : ''}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <select
+        value=""
+        onChange={(e) => handlePick(e.target.value)}
+        disabled={loading || pickableEvents.length === 0}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white disabled:bg-gray-50"
+      >
+        <option value="" disabled>
+          {loading
+            ? 'Loading events...'
+            : pickableEvents.length === 0
+            ? (allEvents.length === 0 ? 'No active events' : 'All active events added')
+            : 'Add an event...'}
+        </option>
+        {pickableEvents.map((event) => (
+          <option key={event._id} value={event._id}>
+            {event.name} — {formatEventDate(event.startsAt)}
+            {event.venueName ? ` · ${event.venueName}` : ''}
+          </option>
+        ))}
+      </select>
     </div>
   );
 };

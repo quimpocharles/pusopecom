@@ -32,6 +32,7 @@ let venueId;
 let eventId;
 let secondEventId;
 let eventName;
+let inactiveEvent;
 const createdPromoCodeIds = [];
 
 beforeAll(async () => {
@@ -71,13 +72,27 @@ beforeAll(async () => {
     },
   });
   secondEventId = secondEvent.id;
+
+  inactiveEvent = await prisma.passEvent.create({
+    data: {
+      name: `${MARKER} Cancelled Game`,
+      slug: `${MARKER.toLowerCase()}-cancelled-game`,
+      organizationId: orgId,
+      venueId,
+      teamNames: [],
+      startsAt: new Date(Date.now() + 86400000),
+      endsAt: new Date(Date.now() + 90000000),
+      active: false,
+    },
+  });
 });
 
 afterAll(async () => {
-  await prisma.promoCodePassEvent.deleteMany({ where: { passEventId: { in: [eventId, secondEventId] } } });
+  await prisma.promoCodePassEvent.deleteMany({ where: { passEventId: { in: [eventId, secondEventId, inactiveEvent.id] } } });
   await prisma.promoCode.deleteMany({ where: { id: { in: createdPromoCodeIds } } });
   await prisma.passEvent.delete({ where: { id: eventId } }).catch(() => {});
   await prisma.passEvent.delete({ where: { id: secondEventId } }).catch(() => {});
+  await prisma.passEvent.delete({ where: { id: inactiveEvent.id } }).catch(() => {});
   await prisma.venue.delete({ where: { id: venueId } }).catch(() => {});
   await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
@@ -112,6 +127,14 @@ describe('GET /promo-codes/admin/events — picker endpoint', () => {
     const res = await request(app).get('/api/promo-codes/admin/events');
     expect(res.status).toBe(403);
   });
+
+  it('excludes inactive (e.g. cancelled) events — only active events are pickable for a new promo', async () => {
+    asMarketing();
+    const res = await request(app).get('/api/promo-codes/admin/events');
+    expect(res.status).toBe(200);
+    expect(res.body.data.some((e) => e._id === inactiveEvent.id)).toBe(false);
+    expect(res.body.data.some((e) => e._id === eventId)).toBe(true);
+  }, 10000);
 });
 
 describe('POST/PUT /promo-codes — EVENT scope', () => {
