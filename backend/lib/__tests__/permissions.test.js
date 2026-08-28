@@ -77,6 +77,78 @@ describe('getEffectivePermissions', () => {
   });
 });
 
+// Launch-readiness permission-model fix — `scanner` and `order_management`
+// exist specifically because neither `warehouse` nor `operations` can be
+// narrowed to just one capability (additive overrides only ever add to a
+// department's default, never subtract from it).
+describe('scanner department', () => {
+  const scanner = { role: 'admin', staffProfile: { department: 'scanner', permissions: [] } };
+
+  it('1. has passes.checkin', () => {
+    expect(hasPermission(scanner, PERMISSIONS.PASSES_CHECKIN)).toBe(true);
+  });
+
+  it('2. does not have orders.view', () => {
+    expect(hasPermission(scanner, PERMISSIONS.ORDERS_VIEW)).toBe(false);
+  });
+
+  it('3. does not have fulfillment.manage', () => {
+    expect(hasPermission(scanner, PERMISSIONS.FULFILLMENT_MANAGE)).toBe(false);
+  });
+
+  it('4. does not have passes.manage', () => {
+    expect(hasPermission(scanner, PERMISSIONS.PASSES_MANAGE)).toBe(false);
+  });
+
+  it('5. does not have returns.approve', () => {
+    expect(hasPermission(scanner, PERMISSIONS.RETURNS_APPROVE)).toBe(false);
+  });
+
+  it('6. does not have any settings.* permission', () => {
+    for (const p of ALL_PERMISSIONS.filter((p) => p.startsWith('settings.'))) {
+      expect(hasPermission(scanner, p)).toBe(false);
+    }
+  });
+
+  it('holds exactly one effective permission — nothing else, additive or otherwise', () => {
+    const effective = getEffectivePermissions(scanner.staffProfile);
+    expect([...effective]).toEqual([PERMISSIONS.PASSES_CHECKIN]);
+  });
+});
+
+describe('order_management department', () => {
+  const orderManager = { role: 'admin', staffProfile: { department: 'order_management', permissions: [] } };
+
+  it('7. has orders.view', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.ORDERS_VIEW)).toBe(true);
+  });
+
+  it('8. has orders.manage', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.ORDERS_MANAGE)).toBe(true);
+  });
+
+  it('9. does not have fulfillment.manage', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.FULFILLMENT_MANAGE)).toBe(false);
+  });
+
+  it('10. does not have returns.approve', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.RETURNS_APPROVE)).toBe(false);
+  });
+
+  it('11. does not have settings.integrations.manage (cannot touch the payment gateway)', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.SETTINGS_INTEGRATIONS_MANAGE)).toBe(false);
+  });
+
+  it('12. does not have passes.manage', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.PASSES_MANAGE)).toBe(false);
+  });
+
+  it('holds exactly its two named permissions — nothing else', () => {
+    const effective = getEffectivePermissions(orderManager.staffProfile);
+    expect([...effective].sort()).toEqual([PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.ORDERS_VIEW].sort());
+  });
+});
+
 describe('DEPARTMENT_DEFAULTS', () => {
   it('every permission referenced in a department bundle is a real, known permission', () => {
     for (const [department, bundle] of Object.entries(DEPARTMENT_DEFAULTS)) {
@@ -92,5 +164,61 @@ describe('DEPARTMENT_DEFAULTS', () => {
       if (department === 'executive') continue;
       expect(bundle.length).toBeLessThan(ALL_PERMISSIONS.length);
     }
+  });
+
+  // 13–15. Regression — adding `scanner`/`order_management` must not have
+  // touched a single existing department's bundle. Exact array equality
+  // (not just "still contains X") so any accidental edit anywhere in this
+  // object fails loudly, not just a missing-permission edit.
+  it('13. warehouse is unchanged', () => {
+    expect(DEPARTMENT_DEFAULTS.warehouse).toEqual([
+      PERMISSIONS.ORDERS_VIEW, PERMISSIONS.FULFILLMENT_MANAGE, PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PASSES_CHECKIN,
+    ]);
+  });
+
+  it('14. operations is unchanged', () => {
+    expect(DEPARTMENT_DEFAULTS.operations).toEqual([
+      PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.FULFILLMENT_MANAGE,
+      PERMISSIONS.RETURNS_VIEW, PERMISSIONS.RETURNS_APPROVE,
+      PERMISSIONS.REPORTS_SALES_VIEW, PERMISSIONS.REPORTS_PRODUCTS_VIEW, PERMISSIONS.REPORTS_OPERATIONS_VIEW,
+      PERMISSIONS.SETTINGS_COMMERCE_MANAGE, PERMISSIONS.PASSES_CHECKIN,
+    ]);
+  });
+
+  it('15. marketing, finance, and support are unchanged', () => {
+    expect(DEPARTMENT_DEFAULTS.marketing).toEqual([
+      PERMISSIONS.HOMEPAGE_MANAGE, PERMISSIONS.CAMPAIGNS_MANAGE, PERMISSIONS.FITCHECK_CAMPAIGNS_MANAGE,
+      PERMISSIONS.PROMOTIONS_MANAGE, PERMISSIONS.PASSES_MANAGE,
+      PERMISSIONS.REPORTS_FITCHECK_VIEW, PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW, PERMISSIONS.REPORTS_CUSTOMERS_VIEW,
+      PERMISSIONS.SETTINGS_FITCHECK_MANAGE,
+    ]);
+    expect(DEPARTMENT_DEFAULTS.finance).toEqual([
+      PERMISSIONS.REPORTS_EXECUTIVE_VIEW, PERMISSIONS.REPORTS_SALES_VIEW, PERMISSIONS.REPORTS_FINANCE_VIEW,
+      PERMISSIONS.ORDERS_VIEW, PERMISSIONS.RETURNS_VIEW, PERMISSIONS.RETURNS_APPROVE,
+    ]);
+    expect(DEPARTMENT_DEFAULTS.support).toEqual([
+      PERMISSIONS.USERS_VIEW, PERMISSIONS.USERS_MANAGE, PERMISSIONS.ORDERS_VIEW,
+      PERMISSIONS.RETURNS_VIEW, PERMISSIONS.RETURNS_APPROVE, PERMISSIONS.REPORTS_CUSTOMERS_VIEW,
+    ]);
+  });
+
+  it('16. executive is still the wildcard', () => {
+    expect(DEPARTMENT_DEFAULTS.executive).toEqual(['*']);
+  });
+
+  it('exactly eight departments exist — six original plus the two new ones, no accidental extras', () => {
+    expect(Object.keys(DEPARTMENT_DEFAULTS).sort()).toEqual(
+      ['executive', 'finance', 'marketing', 'operations', 'order_management', 'scanner', 'support', 'warehouse'].sort()
+    );
+  });
+});
+
+// 17. Bootstrap rule (no StaffProfile at all) — already covered by
+// 'treats an admin with no StaffProfile as executive' above; asserted here
+// too, explicitly against the launch-readiness spec's own numbering.
+describe('bootstrap rule (regression)', () => {
+  it('17. an admin with no StaffProfile is still treated as executive after this change', () => {
+    expect(hasPermission({ role: 'admin', staffProfile: null }, PERMISSIONS.PASSES_CHECKIN)).toBe(true);
+    expect(hasPermission({ role: 'admin', staffProfile: null }, PERMISSIONS.ORDERS_MANAGE)).toBe(true);
   });
 });
