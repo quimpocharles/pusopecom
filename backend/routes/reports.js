@@ -30,7 +30,7 @@ import {
 } from '../services/dailyBusinessReportService.js';
 import { body, validationResult } from 'express-validator';
 import { authenticate, isAdmin, requirePermission, requireAnyPermission } from '../middleware/auth.js';
-import { PERMISSIONS, ALL_PERMISSIONS } from '../lib/permissions.js';
+import { PERMISSIONS, ALL_PERMISSIONS, hasPermission } from '../lib/permissions.js';
 
 const router = express.Router();
 
@@ -41,6 +41,35 @@ router.use(authenticate, isAdmin);
 // own workspace with its own permission (per the roles design), so seeing
 // it at all just requires being able to view at least one report.
 const ANY_REPORT_VIEW = ALL_PERMISSIONS.filter((p) => p.startsWith('reports.') && p.endsWith('.view'));
+
+// Launch-readiness audit fix — the archive/regenerate endpoints below used
+// to accept ANY_REPORT_VIEW, meaning holding just one report-view
+// permission (e.g. Fit Check) let an admin list/download/regenerate an
+// archived run of ANY type, including Finance/Executive. Each ReportRunType
+// now maps to the exact same permission its own live workspace already
+// requires (mirrors SCHEDULED_REPORT_DEFS' dashboardPath in
+// dailyBusinessReportService.js). The three bundled cadence types
+// (weekly/monthly/quarterly, plus the unused legacy daily_business_report
+// default) aren't a single workspace — they're a full cross-department
+// digest — so they map to the most senior view permission rather than any
+// one workspace's, the same fail-closed choice permissionForReportType()
+// falls back to for a type this map doesn't recognize at all.
+const REPORT_TYPE_PERMISSION = Object.freeze({
+  daily_business_report: PERMISSIONS.REPORTS_EXECUTIVE_VIEW,
+  weekly_business_report: PERMISSIONS.REPORTS_EXECUTIVE_VIEW,
+  monthly_business_report: PERMISSIONS.REPORTS_EXECUTIVE_VIEW,
+  quarterly_business_report: PERMISSIONS.REPORTS_EXECUTIVE_VIEW,
+  executive_daily_report: PERMISSIONS.REPORTS_EXECUTIVE_VIEW,
+  sales_report: PERMISSIONS.REPORTS_SALES_VIEW,
+  inventory_report: PERMISSIONS.REPORTS_PRODUCTS_VIEW,
+  fulfillment_report: PERMISSIONS.REPORTS_OPERATIONS_VIEW,
+  fit_check_analytics_report: PERMISSIONS.REPORTS_FITCHECK_VIEW,
+  organization_performance_report: PERMISSIONS.REPORTS_ORGANIZATIONS_VIEW,
+});
+
+function permissionForReportType(type) {
+  return REPORT_TYPE_PERMISSION[type] ?? PERMISSIONS.REPORTS_EXECUTIVE_VIEW;
+}
 
 // router.use(path, middleware) applies to every HTTP method under that
 // prefix — one line gates a whole workspace (base route + /export) instead
@@ -133,8 +162,21 @@ router.delete('/recipients/:id', async (req, res) => {
 router.get('/archive', async (req, res) => {
   try {
     const { type, status } = req.query;
+
+    // A specific type was requested — the caller must hold that exact
+    // type's own permission (not just "some report permission"), or this
+    // is exactly the cross-type read the fix closes.
+    if (type && !hasPermission(req.user, permissionForReportType(type))) {
+      return res.status(403).json({ success: false, message: 'Access denied. You do not have permission to perform this action.' });
+    }
+
     const where = {};
-    if (type) where.type = type;
+    if (type) {
+      where.type = type;
+    } else {
+      // No type filter — never leak rows of a type the caller can't view.
+      where.type = { in: Object.keys(REPORT_TYPE_PERMISSION).filter((t) => hasPermission(req.user, REPORT_TYPE_PERMISSION[t])) };
+    }
     if (status) where.status = status;
     const { page, limit, skip } = normalizePagination(req.query, 20);
 
@@ -176,6 +218,13 @@ router.post('/archive/regenerate', async (req, res) => {
     const frequency = REGENERATE_BY_FREQUENCY[req.body.frequency] ? req.body.frequency : 'daily';
     const { type, run } = REGENERATE_BY_FREQUENCY[frequency];
 
+    // 'daily' has no single type (it fans out into all six workspace
+    // reports at once — see the map above) — permissionForReportType(null)
+    // falls back to the same senior permission the bundled cadences use.
+    if (!hasPermission(req.user, permissionForReportType(type))) {
+      return res.status(403).json({ success: false, message: 'Access denied. You do not have permission to perform this action.' });
+    }
+
     await run();
     const latest = type ? (await reportRunRepository.find({ where: { type }, take: 1 }))[0] ?? null : null;
     res.status(201).json({ success: true, data: latest });
@@ -191,6 +240,9 @@ router.get('/archive/:id', async (req, res) => {
     const run = await reportRunRepository.findById(req.params.id);
     if (!run) {
       return res.status(404).json({ success: false, message: 'Report run not found' });
+    }
+    if (!hasPermission(req.user, permissionForReportType(run.type))) {
+      return res.status(403).json({ success: false, message: 'Access denied. You do not have permission to perform this action.' });
     }
     res.json({ success: true, data: run });
   } catch (error) {
@@ -212,6 +264,9 @@ router.get('/archive/:id/download', async (req, res) => {
     const run = await reportRunRepository.findById(req.params.id);
     if (!run) {
       return res.status(404).json({ success: false, message: 'Report run not found' });
+    }
+    if (!hasPermission(req.user, permissionForReportType(run.type))) {
+      return res.status(403).json({ success: false, message: 'Access denied. You do not have permission to perform this action.' });
     }
     if (!run.data) {
       return res.status(404).json({ success: false, message: 'This run has no data to download (skipped, or failed before the report was computed)' });
