@@ -3,6 +3,16 @@ import request from 'supertest';
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 
+// Per-test timeouts here are generous (40s/25s) on purpose, not a sign of a
+// hang — each test does many sequential real round trips against the
+// shared dev Postgres (multi-row fixture creation, the route's own several
+// internal queries per request, then cleanup), and measured round-trip
+// latency to it is variable enough (observed 300ms-3.6s per call) that the
+// previous 15-20s budget intermittently ran out even though every
+// operation completed successfully (confirmed via server-side success
+// logs on a "timed out" run). Bumped after two consecutive CI failures on
+// this exact flake, unrelated to any logic change.
+
 vi.mock('../../middleware/auth.js', () => ({
   authenticate: (req, res, next) => {
     req.user = { _id: req.headers['x-test-userid'] || 'test-admin', role: 'admin' };
@@ -37,7 +47,7 @@ beforeAll(async () => {
     create: { id: 'test-admin', email: `shipment-route-admin-${Date.now()}@test.local`, firstName: 'Admin', lastName: 'Tester', role: 'admin' },
     update: {},
   });
-}, 15000);
+}, 25000);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -134,7 +144,7 @@ describe('POST /admin/shipments/:id/cancel — the Fulfillment Audit\'s #1 findi
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 
   it('rejects cancelling a shipment already past the point where cancellation is legal (e.g. delivered)', async () => {
     const { product, order, payment, shipment } = await makePaidOrderWithShipment();
@@ -156,7 +166,7 @@ describe('POST /admin/shipments/:id/cancel — the Fulfillment Audit\'s #1 findi
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 
   it('404s for a non-existent shipment', async () => {
     const res = await request(app).post('/api/admin/shipments/00000000-0000-0000-0000-000000000000/cancel').send({});
@@ -198,7 +208,7 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 
   it('rejects an illegal jump with 400, and rejects "cancelled" specifically — that only ever happens via /cancel', async () => {
     const { product, order, payment, shipment } = await makePaidOrderWithShipment();
@@ -216,7 +226,7 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 
   // Enterprise Fulfillment Blueprint, Phase 3
   it('resolving a courierAccountId dual-writes the account displayName onto both Shipment.courier and Order.courier', async () => {
@@ -246,7 +256,7 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 
   it('rejects an unknown courierAccountId', async () => {
     const { product, order, payment, shipment } = await makePaidOrderWithShipment();
@@ -262,7 +272,7 @@ describe('PATCH /admin/shipments/:id/status — queue-advance action', () => {
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 20000);
+  }, 40000);
 });
 
 describe('POST /admin/shipments/:id/notes', () => {
@@ -289,5 +299,5 @@ describe('POST /admin/shipments/:id/notes', () => {
       await prisma.order.delete({ where: { id: order.id } });
       await prisma.product.delete({ where: { id: product.id } });
     }
-  }, 15000);
+  }, 25000);
 });
