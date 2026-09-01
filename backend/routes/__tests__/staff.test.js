@@ -130,6 +130,6 @@ describe('GET /admin/staff/permissions', () => {
     expect(res.body.data.departmentDefaults.warehouse).toContain('products.view');
     expect(res.body.data.departmentDefaults.executive).toEqual(['*']);
     expect(res.body.data.departmentDefaults.scanner).toEqual(['passes.checkin']);
-    expect(res.body.data.departmentDefaults.order_management).toEqual(['orders.view', 'orders.manage']);
+    expect(res.body.data.departmentDefaults.order_management).toEqual(['orders.view', 'orders.manage', 'fulfillment.status_manage']);
   });
 });
