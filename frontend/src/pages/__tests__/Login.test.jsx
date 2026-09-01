@@ -46,6 +46,14 @@ const SCANNER_USER = {
   staffProfile: { department: 'scanner', permissions: [] },
 };
 
+const ORDER_MANAGEMENT_USER = {
+  role: 'admin',
+  ageVerified: false,
+  phone: null,
+  addresses: [],
+  staffProfile: { department: 'order_management', permissions: [] },
+};
+
 const INCOMPLETE_CUSTOMER_USER = {
   role: 'customer',
   ageVerified: false,
@@ -261,5 +269,85 @@ describe('Login — scanner admin lands directly on Pass Check-In', () => {
     await waitFor(() => {
       expect(screen.getByText('Report download page reached')).toBeTruthy();
     });
+  });
+});
+
+describe('Login — order_management admin lands directly on Orders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    googleCallbacks = {};
+  });
+
+  it('an order_management admin with no preserved destination lands on /admin/orders, not "/"', async () => {
+    mockLogin.mockResolvedValue({ user: ORDER_MANAGEMENT_USER });
+
+    renderLoginAt('/login');
+    await submitLoginForm();
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders page reached')).toBeTruthy();
+    });
+  });
+
+  it('the order_management redirect overrides an explicit ?redirect= param', async () => {
+    mockLogin.mockResolvedValue({ user: ORDER_MANAGEMENT_USER });
+
+    renderLoginAt({ pathname: '/login', search: '?redirect=%2Fadmin%2Freports%2Fexports%2Fdownload' });
+    await submitLoginForm();
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders page reached')).toBeTruthy();
+    });
+    expect(screen.queryByText('Report download page reached')).toBeNull();
+  });
+
+  it('the order_management redirect overrides location.state.from set by AdminRoute', async () => {
+    mockLogin.mockResolvedValue({ user: ORDER_MANAGEMENT_USER });
+
+    renderLoginAt({
+      pathname: '/login',
+      state: { from: { pathname: '/admin/reports/exports/download', search: '?runId=run-123&format=csv' } },
+    });
+    await submitLoginForm();
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders page reached')).toBeTruthy();
+    });
+    expect(screen.queryByText('Report download page reached')).toBeNull();
+  });
+
+  it('an order_management admin with no age/phone/address on file still bypasses /complete-profile', async () => {
+    mockLogin.mockResolvedValue({ user: ORDER_MANAGEMENT_USER });
+
+    renderLoginAt('/login');
+    await submitLoginForm();
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders page reached')).toBeTruthy();
+    });
+    expect(screen.queryByText('Complete profile reached')).toBeNull();
+  });
+
+  it('the social-login (Google) success path sends order_management straight to Orders too, overriding ?redirect=', async () => {
+    renderLoginAt({ pathname: '/login', search: '?redirect=%2Fadmin%2Freports%2Fexports%2Fdownload' });
+
+    act(() => { googleCallbacks.onSuccess(ORDER_MANAGEMENT_USER); });
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders page reached')).toBeTruthy();
+    });
+    expect(screen.queryByText('Report download page reached')).toBeNull();
+  });
+
+  it('does not affect the scanner redirect — scanner still lands on Pass Check-In, not Orders', async () => {
+    mockLogin.mockResolvedValue({ user: SCANNER_USER });
+
+    renderLoginAt('/login');
+    await submitLoginForm();
+
+    await waitFor(() => {
+      expect(screen.getByText('Pass Check-In reached')).toBeTruthy();
+    });
+    expect(screen.queryByText('Orders page reached')).toBeNull();
   });
 });

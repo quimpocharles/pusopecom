@@ -23,8 +23,18 @@ const Login = () => {
   const SCANNER_LANDING_PATH = '/admin/pass-checkin';
   const isScannerAdmin = (user) => user?.role === 'admin' && user?.staffProfile?.department === 'scanner';
 
+  // Same reasoning as scanner above — Order Management's entire admin
+  // surface is the Orders list/detail (orders.view + orders.manage, see
+  // lib/permissions.js's DEPARTMENT_DEFAULTS), so this wins over ?redirect=
+  // and an AdminRoute bounce-from too. Landing on /admin's index first would
+  // show dashboard widgets this department has no permission to see much
+  // of — going straight to /admin/orders (routes/App.jsx) avoids that.
+  const ORDER_MANAGEMENT_LANDING_PATH = '/admin/orders';
+  const isOrderManagementAdmin = (user) => user?.role === 'admin' && user?.staffProfile?.department === 'order_management';
+
   const getRedirectPath = (user) => {
     if (isScannerAdmin(user)) return SCANNER_LANDING_PATH;
+    if (isOrderManagementAdmin(user)) return ORDER_MANAGEMENT_LANDING_PATH;
     const searchParams = new URLSearchParams(location.search);
     const redirectParam = searchParams.get('redirect');
     if (redirectParam) return redirectParam;
