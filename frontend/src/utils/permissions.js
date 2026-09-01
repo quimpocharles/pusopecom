@@ -20,6 +20,9 @@ export const PERMISSIONS = Object.freeze({
   ORDERS_VIEW: 'orders.view',
   ORDERS_MANAGE: 'orders.manage',
   FULFILLMENT_MANAGE: 'fulfillment.manage',
+  // Mirrors backend/lib/permissions.js exactly — order_management only,
+  // read shipment state + advance status, not assign/notes/cancel/courier.
+  FULFILLMENT_STATUS_MANAGE: 'fulfillment.status_manage',
   RETURNS_VIEW: 'returns.view',
   RETURNS_APPROVE: 'returns.approve',
 
@@ -78,7 +81,7 @@ const DEPARTMENT_DEFAULTS = Object.freeze({
   ],
   // Launch-readiness permission-model fix — mirrors backend/lib/permissions.js exactly.
   scanner: [PERMISSIONS.PASSES_CHECKIN],
-  order_management: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE],
+  order_management: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.FULFILLMENT_STATUS_MANAGE],
 });
 
 function getEffectivePermissions(staffProfile) {

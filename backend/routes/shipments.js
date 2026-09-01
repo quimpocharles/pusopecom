@@ -14,8 +14,8 @@ import * as notificationRepository from '../repositories/notificationRepository.
 import * as courierAccountRepository from '../repositories/courierAccountRepository.js';
 import * as accountCache from '../lib/accountCache.js';
 import { sendOrderStatusEmail } from '../services/emailService.js';
-import { authenticate, isAdmin, requirePermission } from '../middleware/auth.js';
-import { PERMISSIONS } from '../lib/permissions.js';
+import { authenticate, isAdmin, requirePermission, requireAnyPermission } from '../middleware/auth.js';
+import { PERMISSIONS, hasPermission } from '../lib/permissions.js';
 import { normalizePagination } from '../lib/pagination.js';
 
 const router = express.Router();
@@ -24,7 +24,17 @@ const router = express.Router();
 // staff-facing Shipment queue. Nothing customer-facing is served from this
 // file (compare routes/orders.js, which mixes customer + admin routes
 // because Order itself is customer-facing) — Shipment never is.
-router.use(authenticate, isAdmin, requirePermission(PERMISSIONS.FULFILLMENT_MANAGE));
+//
+// Launch-readiness permission-model fix — no longer a single blanket gate.
+// FULFILLMENT_STATUS_MANAGE (order_management) is authorized for reading
+// shipment state and advancing its status only; assign/notes/cancel — the
+// actions with real side effects beyond a status write (reassigning staff,
+// an internal note thread, or cancellation's stock-release/Refund-creation
+// transaction) — stay FULFILLMENT_MANAGE-only, spelled out per-route below.
+router.use(authenticate, isAdmin);
+
+const READ_OR_ADVANCE = requireAnyPermission(PERMISSIONS.FULFILLMENT_MANAGE, PERMISSIONS.FULFILLMENT_STATUS_MANAGE);
+const MANAGE_ONLY = requirePermission(PERMISSIONS.FULFILLMENT_MANAGE);
 
 // A subset of shipmentRepository.SHIPMENT_TRANSITIONS reachable through
 // this generic transition endpoint. 'cancelled' is deliberately excluded
@@ -104,7 +114,7 @@ async function syncOrderStatus(order, toShipmentStatus, actorUserId) {
 }
 
 // GET / — the queue view. ?status=picking&warehouseId=&assignedToUserId=&mine=true
-router.get('/', async (req, res) => {
+router.get('/', READ_OR_ADVANCE, async (req, res) => {
   try {
     const { status, warehouseId, assignedToUserId } = req.query;
     const where = {
@@ -138,7 +148,7 @@ router.get('/', async (req, res) => {
 
 // Must be registered before GET /:id — otherwise Express would match
 // "by-order" itself as the :id param.
-router.get('/by-order/:orderId', async (req, res) => {
+router.get('/by-order/:orderId', READ_OR_ADVANCE, async (req, res) => {
   try {
     const shipment = await shipmentRepository.findByOrderId(req.params.orderId);
     if (!shipment) return res.status(404).json({ success: false, message: 'No shipment for this order yet' });
@@ -150,7 +160,7 @@ router.get('/by-order/:orderId', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', READ_OR_ADVANCE, async (req, res) => {
   try {
     const shipment = await shipmentRepository.findById(req.params.id);
     if (!shipment) return res.status(404).json({ success: false, message: 'Shipment not found' });
@@ -162,7 +172,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/events', async (req, res) => {
+router.get('/:id/events', READ_OR_ADVANCE, async (req, res) => {
   try {
     const events = await shipmentEventRepository.findByShipment(req.params.id);
     res.json({ success: true, data: events });
@@ -174,7 +184,7 @@ router.get('/:id/events', async (req, res) => {
 });
 
 // PATCH /:id/assign — { userId: string | null }
-router.patch('/:id/assign', async (req, res) => {
+router.patch('/:id/assign', MANAGE_ONLY, async (req, res) => {
   try {
     const { userId } = req.body;
     const shipment = await shipmentRepository.updateById(req.params.id, { assignedToUserId: userId || null });
@@ -200,7 +210,7 @@ router.patch('/:id/assign', async (req, res) => {
 // splitting yet — one shared thread is enough until real multi-department
 // usage actually shows it isn't (see the Blueprint's own "no abstraction
 // before the second real use case" discipline, applied here too).
-router.post('/:id/notes', async (req, res) => {
+router.post('/:id/notes', MANAGE_ONLY, async (req, res) => {
   try {
     const { message } = req.body;
     if (!message || !message.trim()) {
@@ -226,11 +236,26 @@ router.post('/:id/notes', async (req, res) => {
 // adjacency map, so an illegal jump (e.g. awaiting_picking -> delivered)
 // 400s instead of silently succeeding the way the old Order-level endpoint
 // let any status follow any other.
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', READ_OR_ADVANCE, async (req, res) => {
   try {
     const { status, courier, trackingNumber, courierAccountId } = req.body;
     if (!status || !GENERIC_TRANSITIONS.has(status)) {
       return res.status(400).json({ success: false, message: `status must be one of: ${[...GENERIC_TRANSITIONS].join(', ')}` });
+    }
+
+    // FULFILLMENT_STATUS_MANAGE (order_management) authorizes the status
+    // advance only — courier/tracking editing is a FULFILLMENT_MANAGE-only
+    // capability that happens to be bundled into this same endpoint's body.
+    // A status_manage-only caller supplying any of these fields is rejected
+    // outright rather than having them silently dropped, so an order_management
+    // staffer gets a clear signal their courier/tracking edit didn't happen,
+    // not a false impression it did.
+    if (!hasPermission(req.user, PERMISSIONS.FULFILLMENT_MANAGE) &&
+        (courier !== undefined || trackingNumber !== undefined || courierAccountId !== undefined)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Setting courier/tracking fields requires fulfillment.manage.',
+      });
     }
 
     const before = await shipmentRepository.findById(req.params.id);
@@ -308,7 +333,7 @@ router.patch('/:id/status', async (req, res) => {
  * Refund in `pending`; it records that money is owed back, not that it's
  * already been returned.
  */
-router.post('/:id/cancel', async (req, res) => {
+router.post('/:id/cancel', MANAGE_ONLY, async (req, res) => {
   try {
     const { reason } = req.body;
     const shipment = await shipmentRepository.findById(req.params.id, { include: { order: { include: { items: true } } } });

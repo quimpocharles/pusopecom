@@ -131,6 +131,15 @@ describe('order_management department', () => {
     expect(hasPermission(orderManager, PERMISSIONS.FULFILLMENT_MANAGE)).toBe(false);
   });
 
+  // Launch-readiness permission-model fix, follow-up — order_management can
+  // read shipment state and advance its status (routes/shipments.js), but
+  // never the assign/notes/cancel/courier actions fulfillment.manage alone
+  // still gates. See routes/__tests__/shipmentsPermissions.test.js for the
+  // real route-level boundary this permission enforces.
+  it('9b. has the narrow fulfillment.status_manage', () => {
+    expect(hasPermission(orderManager, PERMISSIONS.FULFILLMENT_STATUS_MANAGE)).toBe(true);
+  });
+
   it('10. does not have returns.approve', () => {
     expect(hasPermission(orderManager, PERMISSIONS.RETURNS_APPROVE)).toBe(false);
   });
@@ -143,9 +152,11 @@ describe('order_management department', () => {
     expect(hasPermission(orderManager, PERMISSIONS.PASSES_MANAGE)).toBe(false);
   });
 
-  it('holds exactly its two named permissions — nothing else', () => {
+  it('holds exactly its three named permissions — nothing else', () => {
     const effective = getEffectivePermissions(orderManager.staffProfile);
-    expect([...effective].sort()).toEqual([PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.ORDERS_VIEW].sort());
+    expect([...effective].sort()).toEqual(
+      [PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.ORDERS_VIEW, PERMISSIONS.FULFILLMENT_STATUS_MANAGE].sort()
+    );
   });
 });
 

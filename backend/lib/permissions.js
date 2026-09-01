@@ -36,6 +36,14 @@ export const PERMISSIONS = Object.freeze({
   ORDERS_VIEW: 'orders.view',
   ORDERS_MANAGE: 'orders.manage',
   FULFILLMENT_MANAGE: 'fulfillment.manage',
+  // Launch-readiness permission-model fix — deliberately narrower than
+  // FULFILLMENT_MANAGE: authorizes reading shipment state and advancing its
+  // status only (routes/shipments.js's read routes + PATCH /:id/status).
+  // Assign/notes/cancel — and courier/tracking fields bundled into the
+  // status PATCH itself — stay FULFILLMENT_MANAGE-only. Exists so
+  // order_management can run day-to-day order-status work without becoming
+  // a Warehouse/Fulfillment administrator (see DEPARTMENT_DEFAULTS below).
+  FULFILLMENT_STATUS_MANAGE: 'fulfillment.status_manage',
   RETURNS_VIEW: 'returns.view',
   RETURNS_APPROVE: 'returns.approve',
 
@@ -139,6 +147,7 @@ export const DEPARTMENT_DEFAULTS = Object.freeze({
   order_management: [
     PERMISSIONS.ORDERS_VIEW,
     PERMISSIONS.ORDERS_MANAGE,
+    PERMISSIONS.FULFILLMENT_STATUS_MANAGE,
   ],
 });
 

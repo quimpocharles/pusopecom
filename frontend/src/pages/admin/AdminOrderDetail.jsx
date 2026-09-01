@@ -4,6 +4,8 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import orderService from '../../services/orderService';
 import shipmentService from '../../services/shipmentService';
 import authService from '../../services/authService';
+import useAuthStore from '../../store/authStore';
+import { hasPermission, hasAnyPermission, PERMISSIONS } from '../../utils/permissions';
 import { ORDER_STATUS_COLORS, orderStatusLabel } from '../../utils/orderStatus';
 import { SHIPMENT_STATUS_LABELS, SHIPMENT_STATUS_COLORS, shipmentStatusLabel } from '../../utils/shipmentStatus';
 
@@ -57,10 +59,25 @@ function actorLabel(event) {
 
 const AdminOrderDetail = () => {
   const { orderNumber } = useParams();
+  const user = useAuthStore((state) => state.user);
+  // FULFILLMENT_STATUS_MANAGE (order_management) authorizes reading
+  // shipment state and advancing its status only; every other Fulfillment
+  // control (courier/tracking, reassignment, cancellation, notes) stays
+  // gated on the full FULFILLMENT_MANAGE a Warehouse/Operations account
+  // holds — see the launch-readiness permission-model fix in
+  // routes/shipments.js.
+  const canAdvanceStatus = hasAnyPermission(user, [PERMISSIONS.FULFILLMENT_MANAGE, PERMISSIONS.FULFILLMENT_STATUS_MANAGE]);
+  const canManageFulfillment = hasPermission(user, PERMISSIONS.FULFILLMENT_MANAGE);
   const [order, setOrder] = useState(null);
   const [events, setEvents] = useState([]);
   const [shipment, setShipment] = useState(null);
   const [shipmentEvents, setShipmentEvents] = useState([]);
+  // Distinguishes "no Shipment exists yet" (a real business state — order
+  // unpaid, or Shipment creation still in flight) from "the shipment fetch
+  // was denied/failed" — a 403 must never be silently relabeled as the
+  // former, or a genuine authorization problem reads as normal business
+  // state to the operator looking at the page.
+  const [shipmentError, setShipmentError] = useState(null);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,17 +105,26 @@ const AdminOrderDetail = () => {
       setCourierDraft(orderRes.data.courier || '');
       setTrackingDraft(orderRes.data.trackingNumber || '');
 
+      setShipmentError(null);
       try {
         const shipmentRes = await shipmentService.getShipmentByOrder(orderRes.data._id);
         setShipment(shipmentRes.data);
         setStatusDraft(shipmentRes.data.status);
         const shipmentEventsRes = await shipmentService.getShipmentEvents(shipmentRes.data._id);
         setShipmentEvents(shipmentEventsRes.data);
-      } catch {
-        // No Shipment yet — order hasn't been paid, or creation is still
-        // in flight (it's fire-and-forget on the backend). Not an error.
+      } catch (shipmentErr) {
         setShipment(null);
         setShipmentEvents([]);
+        const status = shipmentErr.response?.status;
+        if (status === 404) {
+          // Genuinely no Shipment yet — order hasn't been paid, or creation
+          // is still in flight (fire-and-forget on the backend). Not an error.
+          setShipmentError(null);
+        } else if (status === 403) {
+          setShipmentError('forbidden');
+        } else {
+          setShipmentError('error');
+        }
       }
     } catch (err) {
       setError('Failed to load order');
@@ -122,8 +148,14 @@ const AdminOrderDetail = () => {
     try {
       await shipmentService.transitionStatus(shipment._id, {
         status: statusDraft,
-        courier: courierDraft,
-        trackingNumber: trackingDraft,
+        // Omitted entirely (not even as empty strings) for a
+        // FULFILLMENT_STATUS_MANAGE-only caller — courier/tracking fields
+        // are hidden from them in the UI below, and the backend rejects
+        // the request outright if either key is present at all for that
+        // caller (routes/shipments.js). Sending real `undefined` here,
+        // not an empty string, is what makes shipmentService.transitionStatus's
+        // own conditional spread actually omit them from the request body.
+        ...(canManageFulfillment && { courier: courierDraft, trackingNumber: trackingDraft }),
       });
       await fetchData();
     } catch (err) {
@@ -308,23 +340,27 @@ const AdminOrderDetail = () => {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-sm font-semibold text-gray-900 mb-4">Fulfillment</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                  <select
-                    value={statusDraft}
-                    onChange={(e) => setStatusDraft(e.target.value)}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    {SHIPMENT_STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>{SHIPMENT_STATUS_LABELS[s]}</option>
-                    ))}
-                  </select>
-                </div>
-                {!isPickup && (
+                {canAdvanceStatus && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                    <select
+                      aria-label="Status"
+                      value={statusDraft}
+                      onChange={(e) => setStatusDraft(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    >
+                      {SHIPMENT_STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{SHIPMENT_STATUS_LABELS[s]}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {!isPickup && canManageFulfillment && (
                   <>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">Courier</label>
                       <select
+                        aria-label="Courier"
                         value={courierDraft}
                         onChange={(e) => setCourierDraft(e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -337,6 +373,7 @@ const AdminOrderDetail = () => {
                       <label className="block text-xs font-medium text-gray-500 mb-1">Tracking #</label>
                       <input
                         type="text"
+                        aria-label="Tracking #"
                         value={trackingDraft}
                         onChange={(e) => setTrackingDraft(e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -345,27 +382,32 @@ const AdminOrderDetail = () => {
                   </>
                 )}
               </div>
-              <button
-                onClick={handleSaveStatus}
-                disabled={savingStatus}
-                className="px-4 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50"
-              >
-                {savingStatus ? 'Saving…' : 'Save'}
-              </button>
-
-              <div className="border-t border-gray-100 mt-4 pt-4">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
-                <select
-                  value={shipment.assignedToUserId || ''}
-                  onChange={(e) => handleAssign(e.target.value)}
-                  className="px-2 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+              {canAdvanceStatus && (
+                <button
+                  onClick={handleSaveStatus}
+                  disabled={savingStatus}
+                  className="px-4 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50"
                 >
-                  <option value="">Unassigned</option>
-                  {staff.map((s) => <option key={s._id} value={s._id}>{s.firstName} {s.lastName}</option>)}
-                </select>
-              </div>
+                  {savingStatus ? 'Saving…' : 'Save'}
+                </button>
+              )}
 
-              {canCancel && (
+              {canManageFulfillment && (
+                <div className="border-t border-gray-100 mt-4 pt-4">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Assigned To</label>
+                  <select
+                    aria-label="Assigned To"
+                    value={shipment.assignedToUserId || ''}
+                    onChange={(e) => handleAssign(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  >
+                    <option value="">Unassigned</option>
+                    {staff.map((s) => <option key={s._id} value={s._id}>{s.firstName} {s.lastName}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {canManageFulfillment && canCancel && (
                 <div className="border-t border-gray-100 mt-4 pt-4">
                   {showCancelForm ? (
                     <div className="space-y-2">
@@ -398,13 +440,21 @@ const AdminOrderDetail = () => {
                 </div>
               )}
             </div>
+          ) : shipmentError === 'forbidden' ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-sm text-red-700">
+              You don't have permission to view fulfillment details for this order.
+            </div>
+          ) : shipmentError === 'error' ? (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-sm text-red-700">
+              Failed to load fulfillment details. Try refreshing the page.
+            </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 p-6 text-sm text-gray-500">
               No fulfillment record yet — this order hasn't been paid for.
             </div>
           )}
 
-          {shipment && (
+          {shipment && canManageFulfillment && (
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-sm font-semibold text-gray-900 mb-4">Internal Notes</h2>
               <div className="space-y-3 mb-4">
