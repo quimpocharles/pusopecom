@@ -6,6 +6,7 @@ import Layout from '../components/layout/Layout';
 import GoogleLoginButton from '../components/auth/GoogleLoginButton';
 import SocialDivider from '../components/auth/SocialDivider';
 import SEO from '../components/common/SEO';
+import PasswordInput from '../components/common/PasswordInput';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -167,9 +168,8 @@ const Register = () => {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
-                <input
+                <PasswordInput
                   id="password"
-                  type="password"
                   {...register('password', {
                     required: 'Password is required',
                     minLength: {
@@ -177,7 +177,6 @@ const Register = () => {
                       message: 'Password must be at least 6 characters'
                     }
                   })}
-                  className="input-field"
                 />
                 {errors.password && (
                   <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>
@@ -188,14 +187,12 @@ const Register = () => {
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                   Confirm Password
                 </label>
-                <input
+                <PasswordInput
                   id="confirmPassword"
-                  type="password"
                   {...register('confirmPassword', {
                     required: 'Please confirm your password',
                     validate: value => value === password || 'Passwords do not match'
                   })}
-                  className="input-field"
                 />
                 {errors.confirmPassword && (
                   <p className="text-red-600 text-sm mt-1">{errors.confirmPassword.message}</p>

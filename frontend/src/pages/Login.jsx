@@ -6,6 +6,7 @@ import Layout from '../components/layout/Layout';
 import GoogleLoginButton from '../components/auth/GoogleLoginButton';
 import SocialDivider from '../components/auth/SocialDivider';
 import SEO from '../components/common/SEO';
+import PasswordInput from '../components/common/PasswordInput';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -141,13 +142,11 @@ const Login = () => {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
-                <input
+                <PasswordInput
                   id="password"
-                  type="password"
                   {...register('password', {
                     required: 'Password is required'
                   })}
-                  className="input-field"
                 />
                 {errors.password && (
                   <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>

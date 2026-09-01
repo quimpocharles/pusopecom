@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import useAuthStore from '../../store/authStore';
 import authService from '../../services/authService';
+import PasswordInput from '../../components/common/PasswordInput';
 
 // Moved verbatim out of the old Account.jsx's PasswordTab — same
 // authService calls, no behavior change, just routed instead of
@@ -40,10 +41,8 @@ const AccountPassword = () => {
       {!hasSocialAuth && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-          <input
-            type="password"
+          <PasswordInput
             {...register('currentPassword', { required: 'Current password is required' })}
-            className="input-field"
           />
           {errors.currentPassword && <p className="text-red-600 text-sm mt-1">{errors.currentPassword.message}</p>}
         </div>
@@ -51,26 +50,22 @@ const AccountPassword = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-        <input
-          type="password"
+        <PasswordInput
           {...register('newPassword', {
             required: 'New password is required',
             minLength: { value: 6, message: 'At least 6 characters' },
           })}
-          className="input-field"
         />
         {errors.newPassword && <p className="text-red-600 text-sm mt-1">{errors.newPassword.message}</p>}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-        <input
-          type="password"
+        <PasswordInput
           {...register('confirmPassword', {
             required: 'Please confirm your password',
             validate: (val) => val === newPassword || 'Passwords do not match',
           })}
-          className="input-field"
         />
         {errors.confirmPassword && <p className="text-red-600 text-sm mt-1">{errors.confirmPassword.message}</p>}
       </div>

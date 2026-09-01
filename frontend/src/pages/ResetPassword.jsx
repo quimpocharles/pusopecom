@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { authService } from '../services/authService';
 import Layout from '../components/layout/Layout';
 import SEO from '../components/common/SEO';
+import PasswordInput from '../components/common/PasswordInput';
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -71,9 +72,8 @@ const ResetPassword = () => {
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                       New Password
                     </label>
-                    <input
+                    <PasswordInput
                       id="password"
-                      type="password"
                       {...register('password', {
                         required: 'Password is required',
                         minLength: {
@@ -81,7 +81,6 @@ const ResetPassword = () => {
                           message: 'Password must be at least 6 characters'
                         }
                       })}
-                      className="input-field"
                     />
                     {errors.password && (
                       <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>
@@ -92,14 +91,12 @@ const ResetPassword = () => {
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
                       Confirm Password
                     </label>
-                    <input
+                    <PasswordInput
                       id="confirmPassword"
-                      type="password"
                       {...register('confirmPassword', {
                         required: 'Please confirm your password',
                         validate: value => value === password || 'Passwords do not match'
                       })}
-                      className="input-field"
                     />
                     {errors.confirmPassword && (
                       <p className="text-red-600 text-sm mt-1">{errors.confirmPassword.message}</p>
