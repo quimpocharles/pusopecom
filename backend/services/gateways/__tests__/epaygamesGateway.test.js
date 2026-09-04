@@ -156,6 +156,100 @@ describe('epaygamesGateway.createCheckoutSession', () => {
     expect(body.channel_code).toBe('PAYMAYA_QR');
   });
 
+  // Regression test (2026-09-04): a real checkout 500'd because Generate
+  // Transaction was sent WITHOUT these customer fields and ePayGames
+  // rejected it 422 ('The email field is required. (and 8 more errors)').
+  // All 9 must be present, sourced from the order's own email and nested
+  // shippingAddress — never a second customer model.
+  it('sends all 9 customer fields ePayGames requires, sourced from order.email and order.shippingAddress', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      email: 'buyer@test.local',
+      shippingAddress: {
+        fullName: 'Juan Dela Cruz',
+        phone: '09171234567',
+        address: '123 Rizal St',
+        city: 'Quezon City',
+        province: 'Metro Manila',
+        zipCode: '1100',
+        country: 'Philippines',
+      },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.email).toBe('buyer@test.local');
+    expect(body.mobile_number).toBe('09171234567');
+    expect(body.first_name).toBe('Juan');
+    expect(body.last_name).toBe('Dela Cruz');
+    expect(body.address).toBe('123 Rizal St');
+    expect(body.city).toBe('Quezon City');
+    expect(body.state).toBe('Metro Manila');
+    expect(body.zip_code).toBe('1100');
+    expect(body.country_code).toBe('PH');
+  });
+
+  it('keeps a multi-word last name intact when splitting fullName', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      shippingAddress: { fullName: 'Maria Clara Santos', phone: '09170000000', country: 'Philippines' },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.first_name).toBe('Maria');
+    expect(body.last_name).toBe('Clara Santos');
+  });
+
+  it('maps a non-Philippines checkout country name to its ISO-2 code (Singapore -> SG)', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      shippingAddress: { fullName: 'Jane Doe', phone: '1234', country: 'Singapore' },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.country_code).toBe('SG');
+  });
+
+  // Regression test (2026-09-04): a real Japan checkout 422'd on
+  // country_code because 'Japan' was passed through unchanged instead of
+  // being mapped to 'JP'. The country field is a full name drawn from the
+  // fixed catalog in lib/config/shipping.js's COUNTRY_REGION_MAP, so the
+  // gateway maps every one of those names to its ISO-2 code.
+  it('maps Japan to JP (the country name that 422\'d a real checkout)', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      shippingAddress: { fullName: 'Taro Yamada', phone: '09012345678', country: 'Japan' },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.country_code).toBe('JP');
+  });
+
+  it('leaves an already-valid ISO-2 code unchanged, normalized to uppercase', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      shippingAddress: { fullName: 'Jane Doe', phone: '1234', country: 'jp' },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.country_code).toBe('JP');
+  });
+
+  it('returns null for a country name outside the checkout catalog rather than guessing a code', async () => {
+    axios.post.mockResolvedValueOnce(mockToken()).mockResolvedValueOnce(mockTransaction());
+
+    await epaygamesGateway.createCheckoutSession(makeOrder({
+      shippingAddress: { fullName: 'Jane Doe', phone: '1234', country: 'Atlantis' },
+    }));
+
+    const [, body] = axios.post.mock.calls.find(([url]) => url.includes('/transactions/generate'));
+    expect(body.country_code).toBeNull();
+  });
+
   // Regression test (2026-08-27): a real sandbox call proved PAYMAYA_QR
   // never round-tripped correctly before this fix — the removed
   // CHANNEL_CODE_MAP only recognized internal 'GCASH'/'MAYA' keys, but

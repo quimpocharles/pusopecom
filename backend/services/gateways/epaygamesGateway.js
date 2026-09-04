@@ -172,13 +172,84 @@ async function lookupTransactionByReference(referenceNo, token) {
   return Array.isArray(transactions) && transactions.length > 0 ? transactions[0] : null;
 }
 
+// ePayGames' Generate Transaction requires a country *code* (ISO 3166-1
+// alpha-2), not the full country name Order.shippingAddress.country stores
+// (e.g. 'Philippines'). The checkout's country field is a full name drawn
+// from the fixed catalog in lib/config/shipping.js's COUNTRY_REGION_MAP
+// (mirrored in frontend/src/utils/shipping.js), plus the 'Philippines'
+// domestic default — so this map covers exactly that set, keyed by
+// lowercased name. Anything already a valid 2-letter code passes through
+// unchanged; anything else unmapped returns null rather than being guessed.
+const COUNTRY_NAME_TO_CODE = {
+  // Domestic default
+  'philippines': 'PH',
+  // SEA
+  'singapore': 'SG', 'malaysia': 'MY', 'thailand': 'TH', 'indonesia': 'ID',
+  'vietnam': 'VN', 'brunei': 'BN', 'cambodia': 'KH', 'laos': 'LA',
+  'myanmar': 'MM', 'timor-leste': 'TL',
+  // Middle East
+  'united arab emirates': 'AE', 'saudi arabia': 'SA', 'qatar': 'QA',
+  'kuwait': 'KW', 'bahrain': 'BH', 'oman': 'OM', 'jordan': 'JO', 'lebanon': 'LB',
+  // North America
+  'united states': 'US', 'canada': 'CA', 'mexico': 'MX',
+  // East Asia
+  'japan': 'JP', 'south korea': 'KR', 'china': 'CN', 'taiwan': 'TW',
+  // Europe
+  'united kingdom': 'GB', 'germany': 'DE', 'france': 'FR', 'italy': 'IT',
+  'spain': 'ES', 'netherlands': 'NL', 'belgium': 'BE', 'switzerland': 'CH',
+  'austria': 'AT', 'sweden': 'SE', 'norway': 'NO', 'denmark': 'DK',
+  'finland': 'FI', 'portugal': 'PT', 'ireland': 'IE', 'poland': 'PL',
+  'greece': 'GR', 'czech republic': 'CZ', 'romania': 'RO', 'hungary': 'HU',
+  'slovakia': 'SK', 'slovenia': 'SI', 'croatia': 'HR', 'bulgaria': 'BG',
+  'estonia': 'EE', 'latvia': 'LV', 'lithuania': 'LT', 'luxembourg': 'LU',
+  'malta': 'MT', 'cyprus': 'CY', 'iceland': 'IS', 'monaco': 'MC',
+  'liechtenstein': 'LI', 'san marino': 'SM', 'vatican city': 'VA',
+};
+
+function toCountryCode(country) {
+  if (!country) return country;
+  const trimmed = String(country).trim();
+  // Already a valid ISO-2 code (e.g. 'PH', 'jp') — normalize to uppercase
+  // and pass through rather than rejecting a value ePayGames would accept.
+  if (/^[A-Za-z]{2}$/.test(trimmed)) return trimmed.toUpperCase();
+  return COUNTRY_NAME_TO_CODE[trimmed.toLowerCase()] || null;
+}
+
+// Order stores a single `fullName`; ePayGames wants it split into
+// first/last. A single whitespace split (first token = first name, the
+// remainder = last name) is the convention already implied by the order's
+// own data — 'Juan Dela Cruz' -> first 'Juan', last 'Dela Cruz'.
+function splitFullName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') || parts[0] };
+}
+
 async function generateTransaction(referenceNo, order, channelCode, token) {
+  // The 9 customer fields ePayGames' Generate Transaction requires (a real
+  // 422 confirmed against the live API 2026-09-04: 'The email field is
+  // required. (and 8 more errors)' — email, mobile_number, first_name,
+  // last_name, address, city, state, zip_code, country_code). All sourced
+  // from the order's existing fields — order.email and the nested
+  // order.shippingAddress that orderRepository.reshapeOrder rebuilds from
+  // the flattened shipTo* columns — never a second customer model.
+  const address = order.shippingAddress || {};
+  const { firstName, lastName } = splitFullName(address.fullName);
   return axios.post(
     `${EPAYGAMES_API_URL}/v1/biller/transactions/generate`,
     {
       channel_code: channelCode,
       amount: order.total,
       reference_no: referenceNo,
+      email: order.email,
+      mobile_number: address.phone,
+      first_name: firstName,
+      last_name: lastName,
+      address: address.address,
+      city: address.city,
+      state: address.province,
+      zip_code: address.zipCode,
+      country_code: toCountryCode(address.country),
       success_redirect_url: `${process.env.FRONTEND_URL}/order/${order.orderNumber}?payment=success`,
       failure_redirect_url: `${process.env.FRONTEND_URL}/order/${order.orderNumber}?payment=failed`,
       // Completes the wiring Phase 2's own header comment flagged as
@@ -209,7 +280,16 @@ async function generateTransaction(referenceNo, order, channelCode, token) {
 function logAndThrowCheckoutError(error, order, logMessage) {
   logger.error({ err: safeErrorLog(error), orderNumber: order.orderNumber, gateway: 'epaygames' }, logMessage);
   Sentry.captureException(error);
-  throw new Error(error.response?.data?.message || 'Failed to create checkout session');
+  // Laravel-style 422s ("The email field is required. (and 8 more errors)")
+  // carry the actual field list in `errors`, NOT `message` — surface it in
+  // the thrown error too, not just the structured log, or whoever hits this
+  // from a checkout attempt has to go spelunking in logs to find out which
+  // fields ePayGames' validator actually wanted.
+  const errors = error.response?.data?.errors;
+  const detail = errors && typeof errors === 'object'
+    ? ` — ${JSON.stringify(errors)}`
+    : '';
+  throw new Error(`${error.response?.data?.message || 'Failed to create checkout session'}${detail}`);
 }
 
 export async function createCheckoutSession(order) {
