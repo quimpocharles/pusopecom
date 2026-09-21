@@ -107,7 +107,18 @@ router.post('/register',
         logger.error({ err }, 'Fit Check guest session migration failed')
       );
 
-      await sendVerificationEmail(email, firstName, verificationToken);
+      // Best-effort — a flaky send (e.g. the email provider rejecting one
+      // specific recipient) must never fail registration itself: the
+      // account is already created above, so blocking here would 500 the
+      // whole request while leaving the user stuck (a retry just hits
+      // "Email already registered" with no verification email ever having
+      // arrived). Same fire-and-forget shape as the guest-session
+      // migration above; the customer still has a self-service recovery
+      // path via POST /resend-verification if this fails.
+      sendVerificationEmail(email, firstName, verificationToken).catch((err) => {
+        logger.error({ err }, 'Verification email send failed');
+        Sentry.captureException(err);
+      });
 
       res.status(201).json({
         success: true,
