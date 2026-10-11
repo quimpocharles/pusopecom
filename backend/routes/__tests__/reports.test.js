@@ -24,7 +24,14 @@ const createdUserIds = [];
 
 // A wide window guaranteed to contain every fixture created below, without
 // pulling in the platform's real historical order data by leaving the
-// range unbounded.
+// range unbounded. Deliberately far enough back that executive's
+// period-over-period delta (services/reportQueries/executive.js
+// previousPeriod()) — an equal-length window immediately *before*
+// startDate — lands before any real order ever existed, so it's always
+// zero revenue. Don't narrow this to "now"-relative: that would still
+// catch every fixture below, but would also drag the previous-period
+// window into recent real CI history, which can be nonzero and flip the
+// delta negative (see "computes a period-over-period delta" below).
 const startDate = '2020-01-01';
 const endDate = '2035-01-01';
 const rangeQS = `startDate=${startDate}&endDate=${endDate}`;
@@ -70,8 +77,13 @@ beforeAll(async () => {
       shipToFullName: shippingAddress.fullName, shipToPhone: shippingAddress.phone,
       shipToAddress: shippingAddress.address, shipToCity: shippingAddress.city,
       shipToProvince: shippingAddress.province, shipToZipCode: shippingAddress.zipCode,
-      subtotal: 1000, shippingFee: 0, total: 1000, paymentStatus: 'paid', orderStatus: 'confirmed',
-      items: { create: [{ productId: productWithLeague.id, name: productWithLeague.name, price: 500, quantity: 2, size: 'M', image: 'x.jpg' }] },
+      // totalSpent deliberately far above any realistic order total (see
+      // the customers-report test's own comment on why top-10 placement
+      // can't rely on a modest value — routes/__tests__/orders.test.js's
+      // makeOrderFixture() leaks ~₱599 'paid' orders into this same
+      // never-truncated DB on every run, uncapped).
+      subtotal: 5000000, shippingFee: 0, total: 5000000, paymentStatus: 'paid', orderStatus: 'confirmed',
+      items: { create: [{ productId: productWithLeague.id, name: productWithLeague.name, price: 2500000, quantity: 2, size: 'M', image: 'x.jpg' }] },
     },
   });
 
@@ -81,8 +93,8 @@ beforeAll(async () => {
       shipToFullName: shippingAddress.fullName, shipToPhone: shippingAddress.phone,
       shipToAddress: shippingAddress.address, shipToCity: shippingAddress.city,
       shipToProvince: shippingAddress.province, shipToZipCode: shippingAddress.zipCode,
-      subtotal: 300, shippingFee: 0, total: 300, paymentStatus: 'paid', orderStatus: 'delivered',
-      items: { create: [{ productId: productPlain.id, name: productPlain.name, price: 300, quantity: 1, size: 'M', image: 'x.jpg' }] },
+      subtotal: 4000000, shippingFee: 0, total: 4000000, paymentStatus: 'paid', orderStatus: 'delivered',
+      items: { create: [{ productId: productPlain.id, name: productPlain.name, price: 4000000, quantity: 1, size: 'M', image: 'x.jpg' }] },
     },
   });
 
@@ -180,7 +192,7 @@ describe('GET /reports/sales', () => {
     const basketballSport = res.body.data.salesBySport.find((s) => s.sport === 'basketball');
     expect(basketballSport.units).toBeGreaterThanOrEqual(2);
 
-    expect(res.body.data.totalRevenue).toBeGreaterThanOrEqual(1300); // 1000 + 300 paid, not the 500 pending or 999 failed
+    expect(res.body.data.totalRevenue).toBeGreaterThanOrEqual(9000000); // owner + guest paid (not the 500 pending or 999 failed)
   }, 15000);
 });
 
@@ -318,12 +330,21 @@ describe('GET /reports/orders', () => {
 
 describe('GET /reports/customers', () => {
   it('resolves a logged-in top customer\'s name, and falls back to email for a guest', async () => {
+    // Exact top-10-by-totalSpent lookup — unlike this file's other
+    // describe blocks (.some()/>= assertions, which tolerate unrelated
+    // data), this breaks if the fixtures below aren't actually in the
+    // top 10. DATABASE_URL here is a real, never-truncated Postgres, and
+    // routes/__tests__/orders.test.js's makeOrderFixture() leaks small
+    // ~₱599 'paid' orders into it on every run with no cleanup — so the
+    // fixtures below use deliberately huge totals (see their own
+    // comment) rather than relying on a narrow date window, which was
+    // tried first and still wasn't enough headroom against that leak.
     const res = await request(app).get(`/api/reports/customers?${rangeQS}`);
     expect(res.status).toBe(200);
 
     const named = res.body.data.topCustomers.find((c) => c.email === `${MARKER}-owner@test.local`);
     expect(named.name).toBe('Report Owner');
-    expect(named.totalSpent).toBeGreaterThanOrEqual(1000);
+    expect(named.totalSpent).toBeGreaterThanOrEqual(5000000);
 
     const guest = res.body.data.topCustomers.find((c) => c.email === `${MARKER}-guest@test.local`);
     expect(guest.name).toBe(`${MARKER}-guest@test.local`); // no user record — falls back to email
