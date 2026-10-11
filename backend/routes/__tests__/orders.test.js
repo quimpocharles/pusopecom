@@ -1205,6 +1205,8 @@ describe('GET /orders/:orderNumber — access control', () => {
     // customer-safe fields, nested alongside the order.
     expect(res.body.data.payment).toMatchObject({ provider: 'xendit', status: 'pending', checkoutUrl: 'https://pay.example/chk_guest' });
     expect(res.body.data.payment.expiresAt).not.toBeNull();
+    // No owning user — Admin Order Detail falls back to order.email.
+    expect(res.body.data.user).toBeNull();
   }, 10000);
 
   it('an owned order is forbidden to a different logged-in user, allowed to its owner and to an admin', async () => {
@@ -1212,6 +1214,8 @@ describe('GET /orders/:orderNumber — access control', () => {
 
     const forbidden = await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'someone-else');
     expect(forbidden.status).toBe(403);
+
+    expect(forbidden.body.data?.user).toBeUndefined(); // a denied read never leaks the owner's identity
 
     const owner = await request(app).get(`/api/orders/${orderNumber}`).set('x-test-userid', 'test-user');
     expect(owner.status).toBe(200);
@@ -1221,6 +1225,15 @@ describe('GET /orders/:orderNumber — access control', () => {
       .set('x-test-userid', 'someone-else')
       .set('x-test-role', 'admin');
     expect(admin.status).toBe(200);
+
+    // Admin Order Detail renders `${order.user.firstName} ${order.user.lastName}`
+    // — a bare id string here is what produced "undefined undefined". The
+    // ownership check above must keep working now that `user` is populated.
+    for (const res of [owner, admin]) {
+      expect(res.body.data.user).toMatchObject({ _id: 'test-user', firstName: 'Order', lastName: 'Owner' });
+      expect(res.body.data.user.email).toEqual(expect.any(String));
+      expect(res.body.data.user).not.toHaveProperty('password'); // explicit select, never the whole row
+    }
   }, 10000);
 
   it('404s for a non-existent order number', async () => {

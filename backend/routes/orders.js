@@ -37,12 +37,14 @@ const router = express.Router();
  * Order ownership check shared by GET /:orderNumber, POST /:orderNumber/pay,
  * and POST /:orderNumber/verify-payment. `userId` is read first so raw
  * (non-serialized) orders work too  — withRelationFallback deletes `userId`
- * and copies it into `user`. An ownerless (guest) order is always allowed:
- * the order number is the bearer secret. A user-owned order needs an
- * authenticated owner, or an admin.
+ * and copies it into `user` — as a bare id, or as the populated
+ * `{ _id, ... }` object when the caller's include asked for it (GET
+ * /:orderNumber does, so the admin Order Detail page can show a name). An
+ * ownerless (guest) order is always allowed: the order number is the bearer
+ * secret. A user-owned order needs an authenticated owner, or an admin.
  */
 function canAccessOrder(order, req) {
-  const orderUserId = order.userId ?? order.user;
+  const orderUserId = order.userId ?? order.user?._id ?? order.user;
   if (orderUserId) {
     return Boolean(req.user) && (orderUserId.toString() === req.user._id.toString() || req.user.role === 'admin');
   }
@@ -1017,7 +1019,14 @@ router.post('/:orderNumber/verify-payment', optionalAuth, async (req, res) => {
 router.get('/:orderNumber', optionalAuth, async (req, res) => {
   try {
     const order = await orderRepository.findByOrderNumber(req.params.orderNumber, {
-      include: { items: { include: { product: true } }, passes: true },
+      // `user` is an explicit select, never `true` — the row carries the
+      // password hash, and the admin Order Detail page only needs a name
+      // and email for its "Customer & Shipping" panel.
+      include: {
+        items: { include: { product: true } },
+        passes: true,
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
     });
 
     if (!order) {
