@@ -54,10 +54,13 @@ beforeAll(async () => {
   });
   createdProductIds.push(productWithLeague.id, productPlain.id);
 
+  // Fixed id, so a run aborted before afterAll strands this row with its
+  // own run's MARKER email — `update` must re-stamp it, or every later
+  // run resolves tryOnLog emails to that stale address.
   await prisma.user.upsert({
     where: { id: 'reports-test-user' },
     create: { id: 'reports-test-user', email: `${MARKER}-owner@test.local`, firstName: 'Report', lastName: 'Owner' },
-    update: {},
+    update: { email: `${MARKER}-owner@test.local`, firstName: 'Report', lastName: 'Owner' },
   });
   createdUserIds.push('reports-test-user');
 
