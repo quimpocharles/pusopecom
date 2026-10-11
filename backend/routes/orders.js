@@ -9,6 +9,7 @@ import * as paymentRepository from '../repositories/paymentRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
 import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
 import * as passEventRepository from '../repositories/passEventRepository.js';
+import { salesWindowStatus } from './passEvents.js';
 import * as passRepository from '../repositories/passRepository.js';
 import { ensurePassQrCode, getPassQrCodeDataUrl } from '../lib/passQrCode.js';
 import * as shippingEventRepository from '../repositories/shippingEventRepository.js';
@@ -523,6 +524,26 @@ router.post('/',
         if (!tier) {
           return res.status(400).json({ success: false, message: `Pass tier not found: ${passTierId}` });
         }
+
+        // Event availability — same rule the public event page enforces via
+        // salesWindowStatus (routes/passEvents.js). Checked before any
+        // capacity math so an unavailable event never leaks the remaining
+        // capacity it must not be selling, and before pricing/reservation so
+        // a rejected request leaves zero side effects. Scalars only, not the
+        // repository's default venue/organization/tiers include — this is
+        // the checkout hot path.
+        const event = await passEventRepository.findById(tier.passEventId, { include: {} });
+        if (!event || !event.active) {
+          return res.status(400).json({ success: false, message: 'This event is no longer available.' });
+        }
+        const salesStatus = salesWindowStatus(event);
+        if (salesStatus === 'not_started') {
+          return res.status(400).json({ success: false, message: 'Sales for this event have not started yet.' });
+        }
+        if (salesStatus === 'ended') {
+          return res.status(400).json({ success: false, message: 'Sales for this event have ended.' });
+        }
+
         if (tier.capacity == null) {
           return res.status(400).json({ success: false, message: `Pass tier ${passTierId} has no capacity configured` });
         }

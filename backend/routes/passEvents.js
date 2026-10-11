@@ -9,10 +9,26 @@ import { PERMISSIONS } from '../lib/permissions.js';
 
 const router = express.Router();
 
-function isOnSale(event, now = new Date()) {
-  if (event.salesStartAt && now < new Date(event.salesStartAt)) return false;
-  if (event.salesEndAt && now > new Date(event.salesEndAt)) return false;
-  return true;
+/**
+ * The single source of truth for an event's on-sale window. Consumed by both
+ * this route's public detail read (`onSale` below) and the authoritative Pass
+ * order-creation path in routes/orders.js, so a fan can never see an event as
+ * on-sale here and still successfully buy it through a direct order request
+ * computed from different rules.
+ *
+ * Returns a reason, not just a boolean, so the order path can tell a fan
+ * "sales haven't started" apart from "sales have ended"; isOnSale is its
+ * boolean convenience form. Null on either bound means no bound, the same
+ * convention the schema documents on PassEvent.salesStartAt/salesEndAt.
+ */
+export function salesWindowStatus(event, now = new Date()) {
+  if (event.salesStartAt && now < new Date(event.salesStartAt)) return 'not_started';
+  if (event.salesEndAt && now > new Date(event.salesEndAt)) return 'ended';
+  return 'on_sale';
+}
+
+export function isOnSale(event, now = new Date()) {
+  return salesWindowStatus(event, now) === 'on_sale';
 }
 
 // --- Public browse/detail ---

@@ -614,12 +614,12 @@ describe('POST /orders — Pass (event admission) checkout, always separate from
   const createdVenueIds = [];
   const createdEventIds = [];
 
-  async function makePassFixture() {
+  async function makePassFixture(eventOverrides = {}) {
     const org = await prisma.organization.create({ data: { name: `${MARKER} Org`, slug: `${MARKER.toLowerCase()}-org-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: 'institution' } });
     const venue = await prisma.venue.create({ data: { name: `${MARKER} Arena`, slug: `${MARKER.toLowerCase()}-arena-${Date.now()}-${Math.random().toString(36).slice(2)}`, address: '1 St', city: 'Pasay' } });
     const section = await prisma.venueSection.create({ data: { venueId: venue.id, name: 'GA' } });
     const event = await prisma.passEvent.create({
-      data: { name: `${MARKER} Game`, slug: `${MARKER.toLowerCase()}-game-${Date.now()}-${Math.random().toString(36).slice(2)}`, organizationId: org.id, venueId: venue.id, startsAt: new Date(Date.now() + 86400000), endsAt: new Date(Date.now() + 90000000) },
+      data: { name: `${MARKER} Game`, slug: `${MARKER.toLowerCase()}-game-${Date.now()}-${Math.random().toString(36).slice(2)}`, organizationId: org.id, venueId: venue.id, startsAt: new Date(Date.now() + 86400000), endsAt: new Date(Date.now() + 90000000), ...eventOverrides },
     });
     const tier = await prisma.passTier.create({ data: { passEventId: event.id, venueSectionId: section.id, name: 'GA', price: 300, capacity: 5, sold: 0 } });
     createdOrgIds.push(org.id); createdVenueIds.push(venue.id); createdEventIds.push(event.id);
@@ -819,6 +819,85 @@ describe('POST /orders — Pass (event admission) checkout, always separate from
     const pass = await prisma.pass.findFirst({ where: { orderId: order.id } });
     expect(pass.status).toBe('cancelled');
   }, 25000);
+
+  // ── Event availability — the readiness assessment's Pass-ordering finding:
+  // the order path only checked tier capacity, never the event's active flag
+  // or sales window. A direct API request could buy admission for an event
+  // that is deactivated or outside its on-sale window.
+
+  it('rejects a purchase for an inactive event — no order, no pass, no capacity change, no checkout session', async () => {
+    const { tier } = await makePassFixture({ active: false });
+
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no longer available/i);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+
+    expect((await prisma.passTier.findUnique({ where: { id: tier.id } })).sold).toBe(0);
+    expect(await prisma.pass.count({ where: { passTierId: tier.id } })).toBe(0);
+  }, 15000);
+
+  it('rejects a purchase before the event\'s sales window opens', async () => {
+    const { tier } = await makePassFixture({ salesStartAt: new Date(Date.now() + 86400000) });
+
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/have not started/i);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+    expect((await prisma.passTier.findUnique({ where: { id: tier.id } })).sold).toBe(0);
+  }, 15000);
+
+  it('rejects a purchase after the event\'s sales window has closed', async () => {
+    const { tier } = await makePassFixture({ salesEndAt: new Date(Date.now() - 86400000) });
+
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/have ended/i);
+    expect(paymentService.createCheckoutSession).not.toHaveBeenCalled();
+    expect((await prisma.passTier.findUnique({ where: { id: tier.id } })).sold).toBe(0);
+  }, 15000);
+
+  it('accepts a purchase inside the sales window — same helper the public event page reads as on-sale', async () => {
+    const { tier, event } = await makePassFixture({
+      salesStartAt: new Date(Date.now() - 86400000),
+      salesEndAt: new Date(Date.now() + 86400000),
+    });
+
+    // The same shared helper drives the public detail read — one rule, never
+    // two drifting copies.
+    const { isOnSale } = await import('../passEvents.js');
+    expect(isOnSale(event)).toBe(true);
+
+    paymentService.createCheckoutSession.mockResolvedValueOnce({ paymentReference: 'chk_pass_window', redirectUrl: 'https://pay.example/chk_pass_window' });
+
+    const res = await request(app).post('/api/orders').send(passOnlyPayload(tier));
+    expect(res.status).toBe(201);
+
+    const order = await prisma.order.findUnique({ where: { orderNumber: res.body.data.orderNumber } });
+    const [updatedTier, issuedPasses] = await Promise.all([
+      prisma.passTier.findUnique({ where: { id: tier.id } }),
+      prisma.pass.findMany({ where: { orderId: order.id } }),
+    ]);
+    expect(updatedTier.sold).toBe(1);
+    expect(issuedPasses).toHaveLength(1);
+    expect(issuedPasses[0].status).toBe('issued');
+  }, 15000);
+
+  it('the actual capacity race: two concurrent orders for the last Pass capacity unit — only one succeeds', async () => {
+    const { tier } = await makePassFixture();
+    await prisma.passTier.update({ where: { id: tier.id }, data: { capacity: 1, sold: 0 } });
+    paymentService.createCheckoutSession.mockResolvedValue({ paymentReference: 'chk_pass_race', redirectUrl: 'https://pay.example/chk_pass_race' });
+
+    const [a, b] = await Promise.allSettled([
+      request(app).post('/api/orders').send(passOnlyPayload(tier)),
+      request(app).post('/api/orders').send(passOnlyPayload(tier)),
+    ]);
+
+    const statuses = [a.value.status, b.value.status].sort();
+    expect(statuses).toEqual([201, 400]);
+    expect((await prisma.passTier.findUnique({ where: { id: tier.id } })).sold).toBe(1);
+    expect(await prisma.pass.count({ where: { passTierId: tier.id } })).toBe(1);
+  }, 20000);
 });
 
 describe('Webhook signature/authenticity — the platform audit\'s critical fix', () => {
