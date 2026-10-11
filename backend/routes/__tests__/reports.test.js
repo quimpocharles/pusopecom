@@ -77,11 +77,9 @@ beforeAll(async () => {
       shipToFullName: shippingAddress.fullName, shipToPhone: shippingAddress.phone,
       shipToAddress: shippingAddress.address, shipToCity: shippingAddress.city,
       shipToProvince: shippingAddress.province, shipToZipCode: shippingAddress.zipCode,
-      // totalSpent deliberately far above any realistic order total (see
+      // totalSpent deliberately far above any realistic order total — see
       // the customers-report test's own comment on why top-10 placement
-      // can't rely on a modest value — routes/__tests__/orders.test.js's
-      // makeOrderFixture() leaks ~₱599 'paid' orders into this same
-      // never-truncated DB on every run, uncapped).
+      // can't rely on a modest value.
       subtotal: 5000000, shippingFee: 0, total: 5000000, paymentStatus: 'paid', orderStatus: 'confirmed',
       items: { create: [{ productId: productWithLeague.id, name: productWithLeague.name, price: 2500000, quantity: 2, size: 'M', image: 'x.jpg' }] },
     },
@@ -333,12 +331,15 @@ describe('GET /reports/customers', () => {
     // Exact top-10-by-totalSpent lookup — unlike this file's other
     // describe blocks (.some()/>= assertions, which tolerate unrelated
     // data), this breaks if the fixtures below aren't actually in the
-    // top 10. DATABASE_URL here is a real, never-truncated Postgres, and
-    // routes/__tests__/orders.test.js's makeOrderFixture() leaks small
-    // ~₱599 'paid' orders into it on every run with no cleanup — so the
-    // fixtures below use deliberately huge totals (see their own
-    // comment) rather than relying on a narrow date window, which was
-    // tried first and still wasn't enough headroom against that leak.
+    // top 10. DATABASE_URL here is a real Postgres shared across every
+    // CI run, and other test files' fixtures occasionally survive past
+    // their own afterAll (aborted runs — see orders.test.js's startup
+    // sweep for why), which is what crowded this test's modest ₱1000/
+    // ₱300 fixtures out of the slice and broke it. A narrow date window
+    // was tried first and still wasn't enough headroom, so the fixtures
+    // below use deliberately huge totals instead (see their own
+    // comment) — no accumulation of ordinary-sized stray orders can
+    // outrank them.
     const res = await request(app).get(`/api/reports/customers?${rangeQS}`);
     expect(res.status).toBe(200);
 

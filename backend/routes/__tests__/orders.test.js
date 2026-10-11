@@ -236,13 +236,36 @@ async function makeOrderFixtureWithItemAndPayment(fixtureOverrides = {}) {
 }
 
 beforeAll(async () => {
+  // Self-healing sweep: afterAll below only runs if this file's process
+  // reaches it — a run killed, crashed, or timed out against this file's
+  // real remote test DB (DATABASE_URL isn't a throwaway per-run instance,
+  // and this suite does hit genuine round-trip-latency timeouts — see
+  // "raise shipments.test.js timeouts to match real DB round-trip
+  // latency" in git history) strands whatever it already created, with
+  // nothing else ever revisiting those rows. One hour comfortably covers
+  // this file's own run time (observed up to ~9 minutes under heavy DB
+  // load) while never touching a genuinely in-flight run — including
+  // ordersPromoCode.test.js, which also uses the 'buyer@test.local'
+  // fixture email.
+  const staleCutoff = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.order.deleteMany({
+    where: {
+      createdAt: { lt: staleCutoff },
+      OR: [
+        { orderNumber: { startsWith: 'PS-MARKERFIX-' } },
+        { orderNumber: { startsWith: 'PS-MARKEROWN-' } },
+        { email: { in: ['buyer@test.local', 'guest@test.local'] } },
+      ],
+    },
+  });
+
   await prisma.user.upsert({
     where: { id: 'test-user' },
     create: { id: 'test-user', email: `order-route-owner-${Date.now()}@test.local`, firstName: 'Order', lastName: 'Owner' },
     update: {},
   });
   createdUserIds.push('test-user');
-}, 15000);
+}, 30000);
 
 // Call-count assertions (e.g. "createCheckout was never called") would
 // otherwise see calls left over from earlier tests in this file — the
