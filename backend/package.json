@@ -8,11 +8,14 @@
     "start": "node server.js",
     "prestart": "prisma migrate deploy",
     "dev": "nodemon server.js",
+    "dev:local": "node --env-file=.env.local node_modules/nodemon/bin/nodemon.js server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "db:local:migrate": "node --env-file=.env.local node_modules/prisma/build/index.js migrate deploy",
+    "db:local:seed": "node --env-file=.env.local scripts/seedLocal.js"
   },
   "keywords": [
     "ecommerce",

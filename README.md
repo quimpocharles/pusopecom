@@ -282,6 +282,31 @@ The application will be available at:
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:5001
 
+### Local database (use this for docs, screenshots, and anything that writes test data)
+
+`npm run dev` uses whatever `DATABASE_URL` is in `backend/.env` — which is the **production** Railway Postgres. Anything done in the app while running that way (sign-ups, orders, stock reservations, admin edits) is real production data, and the backend's background sweeps (order expiry, payment reminder emails) run against production too.
+
+For anything that creates or deletes test data, run the backend against a local Postgres instead:
+
+```bash
+# one-time setup (macOS/Homebrew)
+brew install postgresql@16 && brew services start postgresql@16
+createdb puso_local                      # bin dir: $(brew --prefix postgresql@16)/bin
+cd backend
+cp .env.local.example .env.local         # then replace YOUR_MAC_USERNAME
+npm run db:local:migrate                 # apply every Prisma migration to puso_local
+npm run db:local:seed                    # products, Docs Admin/Customer, sample orders
+
+# every time
+npm run dev:local                        # instead of `npm run dev`; frontend unchanged
+```
+
+- `backend/.env.local` only **overrides** keys (`DATABASE_URL`, plus blank `REDIS_URL`/`EMAIL_*` so local runs stay off production Redis and never email anyone); everything else still comes from `.env`. Switching back to production is just `npm run dev`.
+- Check the boot log: `Connected to PostgreSQL` prints `database: localhost:5432/puso_local` on a local run, the Railway host on a production run.
+- Seeded accounts: `docs-admin@pusostore.com` (executive) and `docs-customer@pusostore.com`, password `PusoDocs2026!`. Seeded orders: `PS-LOCAL-SHIPPED` (in transit, LBC tracking), `PS-LOCAL-PAID` (awaiting picking), `PS-LOCAL-AWAITING` (awaiting payment).
+- `db:local:seed` refuses to run unless `DATABASE_URL` is localhost, and is safe to re-run.
+- Payment gateway keys still come from `.env`, so actually submitting checkout locally still opens a real gateway session. Use the seeded orders for payment/fulfillment states instead.
+
 ## Project Structure
 
 ```

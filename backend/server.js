@@ -475,7 +475,14 @@ async function start() {
 
   try {
     await prisma.$queryRaw`SELECT 1`;
-    logger.info('Connected to PostgreSQL');
+    // Host/database only, never credentials — makes it obvious at boot whether
+    // a local run is on the local database or production (README "Local database").
+    let database;
+    try {
+      const { hostname, port, pathname } = new URL(process.env.DATABASE_URL);
+      database = `${hostname}:${port || 5432}${pathname}`;
+    } catch { /* unparseable URL — the connection itself already succeeded, so just omit it */ }
+    logger.info({ database }, 'Connected to PostgreSQL');
   } catch (error) {
     logger.fatal({ err: error }, 'Database connection error');
     Sentry.captureException(error);
