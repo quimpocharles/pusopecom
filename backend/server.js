@@ -117,8 +117,22 @@ const isDev = process.env.NODE_ENV === 'development';
 // With REDIS_URL set, limits persist and stay consistent across the fleet.
 // Falls back to express-rate-limit's default in-memory store when Redis
 // isn't configured, same as before this change.
+//
+// `!isDev` here too, not just on each limiter's own `skip` — every limiter
+// below already skips entirely in development, so a dev-mode RedisStore
+// is guaranteed dead weight. Dead weight that crashes the process: per
+// lib/redis.js's own comment, RedisStore's constructor sends its Lua-
+// script-preload commands synchronously, before the connection is even
+// established; if REDIS_URL is configured but nothing is listening (a
+// stale local .env, no redis-server installed — the common dev case),
+// those commands exhaust their retries and reject with nothing to catch
+// them, which server.js's own unhandledRejection handler (correctly, for
+// a real unexpected error) treats as fatal and exits. Not constructing a
+// store nothing will ever call removes the crash at its source, with no
+// change to production (isDev is false there) or to the intentional
+// crash-and-report behavior for genuinely unexpected errors.
 const redisStore = (prefix) =>
-  redis ? new RedisStore({ sendCommand: (...args) => redis.call(...args), prefix }) : undefined;
+  redis && !isDev ? new RedisStore({ sendCommand: (...args) => redis.call(...args), prefix }) : undefined;
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
