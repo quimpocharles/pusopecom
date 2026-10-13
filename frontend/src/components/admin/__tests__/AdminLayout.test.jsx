@@ -49,7 +49,7 @@ describe('AdminLayout — Phase 1 sidebar IA (sections, no route/permission chan
     const nav = getNav();
 
     const expected = {
-      Core: ['Dashboard'],
+      Core: ['Dashboard', 'Help Center'],
       Merchandise: ['Products', 'Orders', 'Fulfillment', 'Returns & Refunds', 'Promo Codes'],
       'Events & Passes': ['Events', 'Check-In', 'Venues', 'Leagues'],
       Content: ['Homepage', 'Campaigns', 'Fit Check Campaigns'],
@@ -75,6 +75,8 @@ describe('AdminLayout — Phase 1 sidebar IA (sections, no route/permission chan
     const nav = getNav();
 
     // warehouse has: orders.view, fulfillment.manage, products.view, passes.checkin
+    // Help Center has no permission requirement, so it must still be visible.
+    expect(within(nav).getByRole('link', { name: 'Help Center' })).toBeTruthy();
     expect(within(nav).getByRole('link', { name: /Products/ })).toBeTruthy();
     expect(within(nav).getByRole('link', { name: /Orders/ })).toBeTruthy();
     expect(within(nav).getByRole('link', { name: /Fulfillment/ })).toBeTruthy();
@@ -163,14 +165,14 @@ describe('AdminLayout — Phase 1 sidebar IA (sections, no route/permission chan
   it('h. every sidebar item remains present (reachable) regardless of the scroll-fix classes, for a full-access admin', () => {
     renderAt('/admin');
     const nav = getNav();
-    // 1 (Dashboard) + 5 (Merchandise) + 4 (Events & Passes) + 3 (Content) + 1 (Customers) + 1 (Reporting) + 1 (System)
-    expect(within(nav).getAllByRole('link')).toHaveLength(16);
+    // 2 (Dashboard, Help Center) + 5 (Merchandise) + 4 (Events & Passes) + 3 (Content) + 1 (Customers) + 1 (Reporting) + 1 (System)
+    expect(within(nav).getAllByRole('link')).toHaveLength(17);
   });
 
   it('h2. and remains present for a limited-department admin too, just fewer of them', () => {
     renderAt('/admin', WAREHOUSE_ADMIN);
     const nav = getNav();
     expect(within(nav).getAllByRole('link').length).toBeGreaterThan(0);
-    expect(within(nav).getAllByRole('link').length).toBeLessThan(16);
+    expect(within(nav).getAllByRole('link').length).toBeLessThan(17);
   });
 });

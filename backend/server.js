@@ -36,6 +36,7 @@ import { router as returnRoutes, adminRouter as adminReturnRoutes } from './rout
 import refundRoutes from './routes/refunds.js';
 import courierRoutes from './routes/couriers.js';
 import staffRoutes from './routes/staff.js';
+import helpRoutes from './routes/help.js';
 import integrationsRoutes from './routes/integrations.js';
 import tryonRoutes from './routes/tryon.js';
 import reviewRoutes from './routes/reviews.js';
@@ -215,6 +216,7 @@ app.use('/api/admin/returns', adminReturnRoutes);
 app.use('/api/admin/refunds', refundRoutes);
 app.use('/api/admin/couriers', courierRoutes);
 app.use('/api/admin/staff', staffRoutes);
+app.use('/api/admin/help', helpRoutes);
 app.use('/api/admin/integrations', integrationsRoutes);
 app.use('/api/tryon', tryonRoutes);
 app.use('/api/products', reviewRoutes);

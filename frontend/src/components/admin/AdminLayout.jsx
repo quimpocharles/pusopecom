@@ -20,7 +20,8 @@ import {
   TicketIcon,
   MapIcon,
   CalendarDaysIcon,
-  QrCodeIcon
+  QrCodeIcon,
+  LifebuoyIcon
 } from '@heroicons/react/24/outline';
 import useAuthStore from '../../store/authStore';
 import { PERMISSIONS, hasPermission, hasAnyPermission } from '../../utils/permissions';
@@ -47,6 +48,9 @@ const navSections = [
     heading: 'Core',
     items: [
       { label: 'Dashboard', to: '/admin', icon: HomeIcon, end: true },
+      // No `permission`/`anyOf` — visible to every admin regardless of
+      // department, same as Dashboard. See AdminHelpCenter.jsx.
+      { label: 'Help Center', to: '/admin/help', icon: LifebuoyIcon },
     ],
   },
   {

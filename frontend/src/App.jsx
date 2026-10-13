@@ -49,6 +49,8 @@ const AdminOrderDetail = lazy(() => import('./pages/admin/AdminOrderDetail'));
 const AdminShipments = lazy(() => import('./pages/admin/AdminShipments'));
 const AdminReturns = lazy(() => import('./pages/admin/AdminReturns'));
 const AdminFAQ = lazy(() => import('./pages/admin/AdminFAQ'));
+const AdminHelpCenter = lazy(() => import('./pages/admin/AdminHelpCenter'));
+const AdminHelpArticle = lazy(() => import('./pages/admin/AdminHelpArticle'));
 const AdminPromoMessages = lazy(() => import('./pages/admin/AdminPromoMessages'));
 const AdminHomepageSections = lazy(() => import('./pages/admin/AdminHomepageSections'));
 const AdminFeaturedTeam = lazy(() => import('./pages/admin/AdminFeaturedTeam'));
@@ -144,6 +146,11 @@ function App() {
 
             <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
               <Route index element={<AdminDashboard />} />
+              {/* Staff Help Center — AdminRoute (role === 'admin') is the only
+                  gate, same as Dashboard: every department sees the same
+                  content, no PermissionRoute/permission prop here on purpose. */}
+              <Route path="help" element={<AdminHelpCenter />} />
+              <Route path="help/:slug" element={<AdminHelpArticle />} />
               <Route path="products" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_VIEW}><AdminProducts /></PermissionRoute>} />
               <Route path="products/new" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_MANAGE}><AdminProductForm /></PermissionRoute>} />
               <Route path="products/:id/edit" element={<PermissionRoute permission={PERMISSIONS.PRODUCTS_MANAGE}><AdminProductForm /></PermissionRoute>} />

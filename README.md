@@ -85,6 +85,7 @@ A full-stack ecommerce platform for Philippine sports merchandise, featuring the
 - Soft delete for all admins; hard (permanent) delete restricted to `quimpo.charles@gmail.com`
 - Order management with status updates, courier selection (LBC, J&T Express, Ninja Van, etc.), and tracking number — saved as read-only text with an edit button to revise
 - **Returns & Refunds** — return inspection (restock/quarantine) and manual refund recording/adjustment for Finance (`refunds.manage`); refunds are completed with the provider and *recorded*, never initiated — see `docs/REFUNDS_RUNBOOK.md`
+- **Help Center** (`/admin/help`) — searchable staff onboarding/how-to guide, visible to every admin account regardless of department (no `permission` gate, same as the Dashboard) — see `docs/HELP_CENTER.md`
 - User management with pagination, search, and role filter
 - Site settings management (try-on feature configuration)
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)
@@ -452,6 +453,12 @@ puso-shop/
 - `POST /` - Create league (Admin)
 - `PUT /:id` - Update league (Admin)
 - `DELETE /:id` - Soft-delete league (Admin)
+
+### Help Center (`/api/admin/help`)
+- `GET /categories` - List help categories with article counts (any staff account)
+- `GET /articles` - List/search articles (`?category=`, `?q=`, `?department=`) (any staff account)
+- `GET /articles/:slug` - Get one article's full body (any staff account)
+- Admin-gated (`authenticate` + `isAdmin`) only — deliberately no `requirePermission()`; content is maintained in `backend/data/helpCenterContent.js`, not editable via any admin UI — see `docs/HELP_CENTER.md`
 
 ### Activity (`/api/activity`)
 - `POST /view` - Log product view (increments `totalViews` on product)
