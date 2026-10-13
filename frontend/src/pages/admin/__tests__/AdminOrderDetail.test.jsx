@@ -154,3 +154,24 @@ describe('AdminOrderDetail — 403 vs. genuine no-shipment (bug fix)', () => {
     expect(screen.queryByText(/hasn't been paid for/i)).toBeNull();
   });
 });
+
+describe('AdminOrderDetail — timeline dot color for refund events', () => {
+  it('26. refund_recorded and refund_adjusted get the same semantic green as payment_succeeded, not the gray fallback', async () => {
+    asDepartment('order_management');
+    orderService.getOrderEvents.mockResolvedValue({
+      data: [
+        { _id: 'evt-1', type: 'refund_recorded', actor: 'admin', message: 'Refund recorded', createdAt: '2026-08-28T02:00:00.000Z' },
+        { _id: 'evt-2', type: 'refund_adjusted', actor: 'admin', message: 'Refund adjusted', createdAt: '2026-08-28T03:00:00.000Z' },
+      ],
+    });
+    renderPage();
+
+    const recordedDot = (await screen.findByText('Refund recorded')).closest('li').querySelector('span.rounded-full');
+    const adjustedDot = screen.getByText('Refund adjusted').closest('li').querySelector('span.rounded-full');
+
+    expect(recordedDot.className).toContain('bg-green-500');
+    expect(adjustedDot.className).toContain('bg-green-500');
+    expect(recordedDot.className).not.toContain('bg-gray-300');
+    expect(adjustedDot.className).not.toContain('bg-gray-300');
+  });
+});

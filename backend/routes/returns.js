@@ -9,10 +9,13 @@ import * as refundRepository from '../repositories/refundRepository.js';
 import * as stockAdjustmentRepository from '../repositories/stockAdjustmentRepository.js';
 import * as shipmentRepository from '../repositories/shipmentRepository.js';
 import * as productRepository from '../repositories/productRepository.js';
+import * as promoCodeRepository from '../repositories/promoCodeRepository.js';
+import * as passRepository from '../repositories/passRepository.js';
+import * as refundMath from '../lib/refundMath.js';
 import * as accountCache from '../lib/accountCache.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import { uploadToCloudinary } from './upload.js';
-import { authenticate, isAdmin, optionalAuth, requirePermission } from '../middleware/auth.js';
+import { authenticate, isAdmin, optionalAuth, requirePermission, requireAnyPermission } from '../middleware/auth.js';
 import { PERMISSIONS } from '../lib/permissions.js';
 import { normalizePagination } from '../lib/pagination.js';
 
@@ -218,7 +221,7 @@ adminRouter.use(authenticate, isAdmin);
 
 const GENERIC_TRANSITIONS = new Set(['under_review', 'approved', 'rejected', 'return_shipped', 'received']);
 
-adminRouter.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
+adminRouter.get('/', requireAnyPermission(PERMISSIONS.RETURNS_VIEW, PERMISSIONS.REFUNDS_VIEW), async (req, res) => {
   try {
     const { status } = req.query;
     const where = status ? { status } : undefined;
@@ -235,7 +238,7 @@ adminRouter.get('/', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, re
   }
 });
 
-adminRouter.get('/:id', requirePermission(PERMISSIONS.RETURNS_VIEW), async (req, res) => {
+adminRouter.get('/:id', requireAnyPermission(PERMISSIONS.RETURNS_VIEW, PERMISSIONS.REFUNDS_VIEW), async (req, res) => {
   try {
     const returnRequest = await returnRequestRepository.findById(req.params.id);
     if (!returnRequest) return res.status(404).json({ success: false, message: 'Return request not found' });
@@ -313,8 +316,26 @@ adminRouter.patch('/:id/status', requirePermission(PERMISSIONS.RETURNS_APPROVE),
  * get a zero-quantityDelta row too, so "received but not restocked" is
  * still a real, queryable fact, not a silent gap), the ReturnRequest moves
  * straight to refund_pending, and a Refund(pending) is created for the
- * full returned value — mirrors Phase 1's Shipment /cancel route exactly.
- * Body: { items: [{ returnItemId, condition }] }
+ * attributable value of the returned items — mirrors Phase 1's Shipment
+ * /cancel route exactly, but prices the refund through lib/refundMath.js so
+ * discounts are borne by the returned items rather than refunded at list
+ * price (Stage 2, Step 2).
+ *
+ * Runs under the same order-row lock the refund-recording route takes, and
+ * refuses the inspection outright if the order already carries a
+ * cancellation-origin refund (a return on top of a full cancellation could
+ * only over-refund). The created amount is bounded by the same shared rule as
+ * /record and /adjust: the tighter of this return's own attributable value,
+ * the order-wide attributable balance, and the remaining order-level balance.
+ * The Shipment is mirrored returned -> refund_pending in the same
+ * transaction; a missing/unexpected shipment state is logged and skipped.
+ *
+ * Inspection is ALL-OR-NOTHING: the body must list every item on the request
+ * exactly once (`returnItemId`, `condition`), so the refund can never cover an
+ * uninspected item; an optional `quantity` must equal the requested quantity.
+ * Duplicate, unknown, missing or over-quantity entries are rejected (400)
+ * before any state change.
+ * Body: { items: [{ returnItemId, condition, quantity? }] }
  */
 adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE), async (req, res) => {
   try {
@@ -328,18 +349,53 @@ adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE),
 
     const VALID_CONDITIONS = new Set(['sellable', 'damaged', 'unsellable']);
     const itemMap = new Map(returnRequest.items.map((i) => [i._id, i]));
-    for (const { returnItemId, condition } of items) {
+
+    // Validate the FULL-inspection contract BEFORE any mutation. Inspection is
+    // all-or-nothing: every item on the request must be inspected exactly once,
+    // with a valid condition. A partial inspection would leave items
+    // unconditioned/unrestocked while the return still advances to
+    // refund_pending (and a refund is created) — so it is rejected outright,
+    // which also guarantees the refund can never cover an uninspected item.
+    const inspectedIds = new Set();
+    for (const entry of items) {
+      const { returnItemId, condition, quantity } = entry || {};
       if (!itemMap.has(returnItemId)) {
         return res.status(400).json({ success: false, message: `Return item ${returnItemId} not found on this request` });
       }
+      if (inspectedIds.has(returnItemId)) {
+        return res.status(400).json({ success: false, message: `Return item ${returnItemId} is listed more than once` });
+      }
+      inspectedIds.add(returnItemId);
       if (!VALID_CONDITIONS.has(condition)) {
         return res.status(400).json({ success: false, message: `condition must be one of: ${[...VALID_CONDITIONS].join(', ')}` });
       }
+      if (quantity !== undefined) {
+        const requested = itemMap.get(returnItemId).quantity;
+        if (!Number.isInteger(quantity) || quantity <= 0 || quantity !== requested) {
+          return res.status(400).json({
+            success: false,
+            message: `Inspected quantity for return item ${returnItemId} must equal the requested quantity (${requested})`,
+          });
+        }
+      }
+    }
+    const missingItems = returnRequest.items.filter((i) => !inspectedIds.has(i._id));
+    if (missingItems.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Every item on the return must be inspected; missing: ${missingItems.map((i) => i._id).join(', ')}`,
+      });
     }
 
     let refund;
     try {
       await prisma.$transaction(async (tx) => {
+        // Serialize with every other order-level money mutation — notably a
+        // cancellation refund being recorded (routes/refunds.js's record route
+        // takes this same lock). Without it, an inspection and a recording
+        // could each read the same "already refunded" baseline.
+        await tx.$queryRaw`SELECT id FROM orders WHERE id = ${returnRequest.orderId} FOR UPDATE`;
+
         // received -> inspected -> refund_pending: two legal hops through
         // RETURN_TRANSITIONS, not one direct jump — 'inspected' has no
         // separate admin action of its own (this endpoint IS the
@@ -349,13 +405,86 @@ adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE),
         const result = await returnRequestRepository.transition(req.params.id, 'refund_pending', {}, { client: tx });
         if (!result.applied) throw Object.assign(new Error('Return request changed concurrently'), { code: 'RACE_LOST' });
 
-        let refundAmount = 0;
+        // The order's full pricing context — every checkout line (not just the
+        // returned ones) is needed to allocate the discount correctly, and the
+        // promo row supplies the scope the discount was computed against.
+        const order = await tx.order.findUnique({ where: { id: returnRequest.orderId }, include: { items: true } });
+        const promoCode = order?.promoCodeId
+          ? await promoCodeRepository.findById(order.promoCodeId, { client: tx })
+          : null;
+        const passes = await passRepository.findByOrderId(returnRequest.orderId, { client: tx });
+
+        const merchandiseLines = refundMath.buildMerchandiseLines(order?.items ?? []);
+        const passLines = refundMath.buildPassLines(passes);
+
+        // A cancellation-origin refund (returnRequestId null) that is live or
+        // already recorded means this order's money was reversed in full
+        // outside the returns flow; a return refund on top of it could only
+        // over-refund. Refuse the inspection and let staff reject/close it.
+        const conflictingCancelRefund = await tx.refund.count({
+          where: { orderId: returnRequest.orderId, returnRequestId: null, status: { in: ['pending', 'processing', 'succeeded'] } },
+        });
+        if (conflictingCancelRefund > 0) {
+          throw Object.assign(
+            new Error('This order already has a cancellation refund — reject or close this return instead'),
+            { code: 'CANCEL_REFUND_CONFLICT' }
+          );
+        }
+
+        // The committed aggregates and the inspected items drive BOTH the refund
+        // amount and the ceiling. `processing` refunds have an unknown external
+        // state and are treated conservatively as committed so their capacity
+        // cannot be spent twice.
+        const inspectedReturnItems = items.map((entry) => {
+          const item = itemMap.get(entry.returnItemId);
+          return { orderItemId: item.orderItemId, quantity: item.quantity };
+        });
+        const { committedReturnOriginCentavos, committedAllCentavos } = await refundRepository.getCommittedCentavos(
+          returnRequest.orderId,
+          { client: tx }
+        );
+
+        // Attributable value of the items actually inspected, discount included,
+        // bounded by the same shared per-return + order-wide rule /record and
+        // /adjust use. An unresolvable return is a controlled 409, never a 500.
+        let refundAmountCentavos;
+        let returnCeilingCentavos;
+        try {
+          refundAmountCentavos = refundMath.attributableReturnAmount({
+            merchandiseLines,
+            passLines,
+            discountAmount: order?.discountAmount ?? 0,
+            promoCode,
+            returnItems: inspectedReturnItems,
+          });
+          returnCeilingCentavos = refundMath.returnRefundCeilingCentavos({
+            merchandiseLines,
+            passLines,
+            discountAmount: order?.discountAmount ?? 0,
+            promoCode,
+            returnItems: inspectedReturnItems,
+            committedReturnCentavos: committedReturnOriginCentavos,
+          });
+        } catch (error) {
+          throw Object.assign(new Error('The return\u2019s items no longer resolve to this order'), {
+            code: 'RETURN_UNATTRIBUTABLE',
+            cause: error,
+          });
+        }
+        const remainingOrderCentavos = refundMath.toCentavos(order?.total ?? 0) - committedAllCentavos;
+        const remainingRefundable = Math.min(returnCeilingCentavos, remainingOrderCentavos);
+        if (refundAmountCentavos > remainingRefundable) {
+          throw Object.assign(
+            new Error('This return exceeds the remaining refundable amount for the order'),
+            { code: 'CEILING_EXCEEDED' }
+          );
+        }
+
         for (const { returnItemId, condition } of items) {
           const item = itemMap.get(returnItemId);
           const orderItem = item.orderItem;
 
           await tx.returnItem.update({ where: { id: returnItemId }, data: { condition } });
-          refundAmount += orderItem.price * item.quantity;
 
           if (condition === 'sellable') {
             await productRepository.restoreStock(
@@ -388,14 +517,41 @@ adminRouter.post('/:id/inspect', requirePermission(PERMISSIONS.RETURNS_APPROVE),
           orderId: returnRequest.orderId,
           paymentId: latestPayment?.id || null,
           returnRequestId: req.params.id,
-          amount: refundAmount,
+          amount: refundMath.fromCentavos(refundAmountCentavos),
           reason: `Return ${req.params.id}`,
           initiatedByUserId: req.user._id,
         }, { client: tx });
+
+        // Mirror the return's arrival at refund_pending onto the Shipment queue
+        // an operator watches, so the two never show contradictory states —
+        // 'returned -> refund_pending' is a legal existing edge. A missing or
+        // unexpected shipment state is logged and skipped, never thrown: the
+        // refund is the financial record of truth here.
+        const shipment = await shipmentRepository.findByOrderId(returnRequest.orderId, { client: tx });
+        if (!shipment) {
+          logger.info({ orderId: returnRequest.orderId, returnId: req.params.id }, 'No Shipment to mirror into refund_pending');
+        } else if (shipment.status === 'returned') {
+          await shipmentRepository.transition(shipment._id, 'refund_pending', {
+            actor: 'admin',
+            actorUserId: req.user._id,
+            message: `Return ${req.params.id} inspected`,
+          }, { client: tx });
+        } else {
+          logger.warn({ orderId: returnRequest.orderId, shipmentId: shipment._id, shipmentStatus: shipment.status }, 'Shipment is not at "returned" — skipping refund_pending mirror');
+        }
       }, { timeout: 15000 });
     } catch (txError) {
       if (txError.code === 'RACE_LOST') {
         return res.status(409).json({ success: false, message: 'Return request changed concurrently — refresh and try again' });
+      }
+      if (txError.code === 'CANCEL_REFUND_CONFLICT') {
+        return res.status(409).json({ success: false, message: txError.message });
+      }
+      if (txError.code === 'CEILING_EXCEEDED') {
+        return res.status(409).json({ success: false, message: 'This return exceeds the remaining refundable amount for this order (accounting for refunds already recorded). Reject or adjust it before recording.' });
+      }
+      if (txError.code === 'RETURN_UNATTRIBUTABLE') {
+        return res.status(409).json({ success: false, message: 'The refundable value of this return cannot be established because its items no longer resolve to the order. Reconcile it manually rather than inspecting it.' });
       }
       throw txError;
     }

@@ -132,8 +132,20 @@ export function getSessionDurationMs(gatewayName = 'maya') {
   return gateway.SESSION_DURATION_MS ?? null;
 }
 
-// Enterprise Fulfillment Blueprint, Phase 2 — the "Issue Refund" half of
-// this interface, finally called for real (routes/refunds.js).
+// Enterprise Fulfillment Blueprint, Phase 2 — the "Issue Refund" half of this
+// interface. DELIBERATELY UNUSED today: the platform's only integrated gateway
+// (ePayGames) exposes no automated refund/reversal API, so refunds are moved
+// out-of-band and recorded through routes/refunds.js's POST /:id/record. The
+// legacy automated caller (POST /:id/process) was retired — see
+// docs/decisions/0000-decision-log.md. Retained, not deleted, as the intended
+// integration point for a future gateway that DOES support automated refunds.
+//
+// Any future automated refund route MUST NOT call this directly as the old one
+// did. It must go through the same safeguards POST /:id/record enforces: take
+// the order-row lock, verify the external amount, enforce both the order-level
+// and attributable-merchandise ceilings, perform the status-guarded update and
+// its `refund_recorded` audit event in one transaction, and run the shared
+// lifecycle completion (lib/refundCompletion.js).
 export async function issueRefund(providerPaymentReference, amount, reason, gatewayName = 'maya') {
   const gateway = resolveGateway(gatewayName);
   if (!gateway.issueRefund) {

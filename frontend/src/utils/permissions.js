@@ -25,6 +25,11 @@ export const PERMISSIONS = Object.freeze({
   FULFILLMENT_STATUS_MANAGE: 'fulfillment.status_manage',
   RETURNS_VIEW: 'returns.view',
   RETURNS_APPROVE: 'returns.approve',
+  // Refund-queue capabilities — mirrors backend/lib/permissions.js exactly.
+  // Recording a manually-completed refund / adjusting a pending one is a
+  // Finance (or explicit-override) action, separate from returns.approve.
+  REFUNDS_VIEW: 'refunds.view',
+  REFUNDS_MANAGE: 'refunds.manage',
 
   USERS_VIEW: 'users.view',
   USERS_MANAGE: 'users.manage',
@@ -61,6 +66,7 @@ const DEPARTMENT_DEFAULTS = Object.freeze({
   finance: [
     PERMISSIONS.REPORTS_EXECUTIVE_VIEW, PERMISSIONS.REPORTS_SALES_VIEW, PERMISSIONS.REPORTS_FINANCE_VIEW,
     PERMISSIONS.ORDERS_VIEW, PERMISSIONS.RETURNS_VIEW, PERMISSIONS.RETURNS_APPROVE,
+    PERMISSIONS.REFUNDS_MANAGE,
   ],
   operations: [
     PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_MANAGE, PERMISSIONS.FULFILLMENT_MANAGE,

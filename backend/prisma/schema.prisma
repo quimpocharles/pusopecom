@@ -633,6 +633,15 @@ enum OrderEventType {
   payment_expired
   status_updated
   webhook_received
+  // Stage 1 manual refund recording — a dedicated event rather than reusing
+  // status_updated, so a refund completed by staff out-of-band (ePayGames
+  // exposes no automated refund API) is queryable on its own in the Order
+  // Timeline. See routes/refunds.js's POST /:id/record.
+  refund_recorded
+  // Stage 2, Step 3 — an audited amount-only correction to a pending/failed
+  // refund, made before any external payment (or a bounded reconciliation when
+  // one already happened). See routes/refunds.js's POST /:id/adjust.
+  refund_adjusted
 }
 
 // Who/what caused the event — 'admin' is the only case where actorUserId is

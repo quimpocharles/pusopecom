@@ -27,6 +27,8 @@ No lint or format tooling is configured.
 - `backend/.env` default `DATABASE_URL` is the **production** Railway Postgres. Anything that writes data (sign-ups, orders, admin edits, background cron sweeps) hits production under plain `npm run dev`. For any work creating/mutating test data, use `npm run dev:local`.
 - Even locally, payment gateway keys come from `.env`, so submitting checkout opens a real gateway session. Use seeded orders (`PS-LOCAL-*`) for payment-state work.
 - Verify DB after boot: the "Connected to PostgreSQL" log line shows which database you're on.
+- `Redis connection error ... ECONNREFUSED 127.0.0.1:6379` log spam during backend test runs is expected in any environment without a local Redis instance (rate limiting falls back to in-memory) — it is noise, not a test failure; don't let it mask or get confused with real assertion failures in the same output.
+- If a suite fails inside `beforeAll`/`afterAll` with a `PrismaClientInitializationError` (can't reach the database server) against the isolated `_test` DB, that is usually a transient network blip to the remote Postgres, not a code regression — retry the failed file(s) in isolation before concluding anything broke. Report both the initial failure and the retry result honestly; don't assume every repeated failure is transient without evidence, and don't treat the first failure as "safe to ignore" until the retry confirms it.
 
 ## Deployment & infra quirks
 

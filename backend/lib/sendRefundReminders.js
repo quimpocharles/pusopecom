@@ -37,20 +37,32 @@ export async function sendRefundReminders() {
 
   for (const refund of staleRefunds) {
     try {
+      const body = `A refund of ₱${refund.amount.toFixed(2)} (refund ${refund._id || refund.id}) has been pending for over ${REMINDER_THRESHOLD_HOURS} hours.`;
+
       for (const staff of financeStaff) {
-        const body = `A refund of ₱${refund.amount.toFixed(2)} (refund ${refund._id || refund.id}) has been pending for over ${REMINDER_THRESHOLD_HOURS} hours.`;
+        // staffProfileRepository serializes its rows, so the included user's id
+        // is `user._id` (serialize renames `id` -> `_id` recursively), not
+        // `user.id`. Accept either shape, and skip a profile with no resolvable
+        // id rather than notifying an undefined recipient — which would drop
+        // the user filter on the dedup query and then fail the insert.
+        const userId = staff.user?.id ?? staff.user?._id;
+        if (!userId) {
+          logger.error({ staffProfileId: staff._id ?? staff.id }, 'Finance staff profile has no user id — skipping refund reminder');
+          continue;
+        }
 
         // Dedup: only one reminder per refund per staffer — the body carries
-        // the refund id so a re-sweep can see it was already sent.
+        // the refund id so a re-sweep can see it was already sent, and the
+        // query is scoped to this recipient's userId.
         const alreadyNotified = await prisma.notification.findFirst({
-          where: { userId: staff.user.id, type: 'order', title: 'Refund awaiting processing', body },
+          where: { userId, type: 'order', title: 'Refund awaiting processing', body },
           select: { id: true },
         });
         if (alreadyNotified) continue;
 
         // eslint-disable-next-line no-await-in-loop
         await notificationRepository.create({
-          userId: staff.user.id,
+          userId,
           type: 'order',
           title: 'Refund awaiting processing',
           body,

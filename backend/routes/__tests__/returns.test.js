@@ -416,3 +416,331 @@ describe('POST /admin/returns/:id/inspect — the coordinated reversal', () => {
     }
   }, 45000);
 });
+
+// ── Stage 2, Step 2 — attributable refund pricing and safeguards ──────────
+
+// A discounted-order fixture: one or more products, an explicit discountAmount
+// (the checkout total is assumed = subtotal - discount), an optional real
+// PromoCode row (so the scope-resolution repository path is exercised), and an
+// optional shipment.
+async function makeDiscountedPaidOrder({
+  productsSpec = [{ price: 500, quantities: [1] }],
+  discountAmount = 0,
+  promo = null,
+  shipmentStatus = 'delivered',
+} = {}) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const products = [];
+  const itemCreates = [];
+  let subtotal = 0;
+
+  for (const spec of productsSpec) {
+    const product = await prisma.product.create({
+      data: {
+        name: `${MARKER} D ${suffix}`, slug: `return-discount-test-${suffix}-${products.length}`, description: 'x',
+        price: spec.price, category: 'jersey', sport: 'basketball', images: [], active: true,
+        totalStock: 99, sizes: { create: [{ size: 'M', stock: 99 }] },
+      },
+    });
+    products.push(product);
+    for (const quantity of spec.quantities) {
+      itemCreates.push({ productId: product.id, name: product.name, price: spec.price, quantity, size: 'M', image: 'x.jpg' });
+      subtotal += spec.price * quantity;
+    }
+  }
+
+  const promoCode = promo
+    ? await prisma.promoCode.create({
+        data: {
+          code: `RETURNTEST-${suffix}`,
+          discountType: promo.discountType,
+          scope: promo.scope,
+          percentOff: promo.percentOff ?? null,
+          amountOff: promo.amountOff ?? null,
+          ...(promo.productIndexes
+            ? { products: { create: promo.productIndexes.map((index) => ({ productId: products[index].id })) } }
+            : {}),
+        },
+      })
+    : null;
+
+  const order = await prisma.order.create({
+    data: {
+      orderNumber: `PS-${MARKER}-D-${suffix}`, email: 'return-discount-test@example.com',
+      shipToFullName: 'Test Buyer', shipToPhone: '09171234567', shipToAddress: '1 St',
+      shipToCity: 'QC', shipToProvince: 'Metro Manila', shipToZipCode: '1100',
+      subtotal, discountAmount, total: subtotal - discountAmount,
+      promoCodeId: promoCode?.id ?? null,
+      paymentStatus: 'paid', orderStatus: 'delivered',
+      items: { create: itemCreates },
+    },
+    include: { items: true },
+  });
+
+  const payment = await prisma.payment.create({
+    data: { orderId: order.id, provider: 'epaygames', status: 'succeeded', paidAt: new Date() },
+  });
+  const shipment = shipmentStatus
+    ? await prisma.shipment.create({ data: { orderId: order.id, status: shipmentStatus } })
+    : null;
+
+  return { products, promoCode, order, payment, shipment };
+}
+
+async function cleanupDiscounted({ products, promoCode, order, payment, shipment }) {
+  await prisma.returnItem.deleteMany({ where: { returnRequest: { orderId: order.id } } });
+  await prisma.returnRequest.deleteMany({ where: { orderId: order.id } });
+  await prisma.stockAdjustment.deleteMany({ where: { relatedOrderId: order.id } });
+  await prisma.refund.deleteMany({ where: { orderId: order.id } });
+  if (shipment) {
+    await prisma.shipmentEvent.deleteMany({ where: { shipmentId: shipment.id } });
+    await prisma.shipment.deleteMany({ where: { orderId: order.id } });
+  }
+  await prisma.payment.delete({ where: { id: payment.id } });
+  await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+  await prisma.order.delete({ where: { id: order.id } });
+  for (const product of products) {
+    // eslint-disable-next-line no-await-in-loop
+    await prisma.product.delete({ where: { id: product.id } });
+  }
+  if (promoCode) await prisma.promoCode.delete({ where: { id: promoCode.id } });
+}
+
+async function advanceToReceived(order, items) {
+  const created = await request(app).post('/api/returns').send({
+    orderNumber: order.orderNumber, reason: 'Wrong size', items,
+  });
+  const id = created.body.data._id;
+  for (const status of ['under_review', 'approved', 'return_shipped', 'received']) {
+    // eslint-disable-next-line no-await-in-loop
+    await request(app).patch(`/api/admin/returns/${id}/status`).send({ status });
+  }
+  return { id, returnItems: created.body.data.items };
+}
+
+async function inspectReturn(id, returnItemId, condition = 'sellable') {
+  return request(app).post(`/api/admin/returns/${id}/inspect`).send({ items: [{ returnItemId, condition }] });
+}
+
+describe('Stage 2 — inspection prices refunds at the attributable amount', () => {
+  it('prices a discounted full return at list price minus the line discount', async () => {
+    const fixture = await makeDiscountedPaidOrder({
+      productsSpec: [{ price: 500, quantities: [3] }],
+      discountAmount: 300,
+      promo: { discountType: 'PERCENTAGE', scope: 'ORDER' },
+    });
+    const { order } = fixture;
+    try {
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 3 }]);
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(200);
+      expect(res.body.data.refund.amount).toBe(1200); // 1500 list - 300 discount, not 1500
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('floors a partial discounted return to centavos', async () => {
+    const fixture = await makeDiscountedPaidOrder({
+      productsSpec: [{ price: 500, quantities: [3] }],
+      discountAmount: 300,
+      promo: { discountType: 'PERCENTAGE', scope: 'ORDER' },
+    });
+    const { order } = fixture;
+    try {
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 2 }]);
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(200);
+      expect(res.body.data.refund.amount).toBe(800); // floor(1200 * 2/3)
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('bears a PRODUCT-scope discount only on the matching line', async () => {
+    const fixture = await makeDiscountedPaidOrder({
+      productsSpec: [{ price: 500, quantities: [1] }, { price: 500, quantities: [1] }],
+      discountAmount: 250,
+      promo: { discountType: 'PERCENTAGE', scope: 'PRODUCT', productIndexes: [0] },
+    });
+    const { order } = fixture;
+    try {
+      const discountedItem = order.items.find((item) => item.productId === fixture.products[0].id);
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: discountedItem.id, quantity: 1 }]);
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(200);
+      expect(res.body.data.refund.amount).toBe(250); // 500 list - the 250 discount that targeted this product
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+});
+
+describe('Stage 2 — inspection lifecycle and safeguards', () => {
+  it('mirrors the Shipment returned -> refund_pending on inspection', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }] });
+    const { order, shipment } = fixture;
+    try {
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 1 }]);
+      const before = await prisma.shipment.findUnique({ where: { id: shipment.id } });
+      expect(before.status).toBe('returned');
+
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(200);
+
+      const after = await prisma.shipment.findUnique({ where: { id: shipment.id } });
+      expect(after.status).toBe('refund_pending');
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('still creates the refund when the order has no Shipment (mirror logs and skips)', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }], shipmentStatus: null });
+    const { order } = fixture;
+    try {
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 1 }]);
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(200);
+      expect(res.body.data.refund.amount).toBe(500);
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('rejects inspection (409) when the order already has a cancellation-origin refund, without side effects', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }] });
+    const { order } = fixture;
+    try {
+      // A full cancellation refund recorded as succeeded, with no return link.
+      await prisma.refund.create({
+        data: { orderId: order.id, amount: 500, reason: 'Order cancelled', status: 'succeeded', processedAt: new Date() },
+      });
+
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 1 }]);
+      const res = await inspectReturn(id, returnItems[0]._id);
+      expect(res.status).toBe(409);
+
+      // The transaction rolled back — the return is still 'received' and no
+      // second refund was created.
+      const currentReturn = await prisma.returnRequest.findUnique({ where: { id } });
+      expect(currentReturn.status).toBe('received');
+      expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(1);
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+});
+
+describe('Stage 2 — inspection requires a complete, valid item set (regression)', () => {
+  async function twoItemReturn(order) {
+    const { id, returnItems } = await advanceToReceived(order, [
+      { orderItemId: order.items[0].id, quantity: 1 },
+      { orderItemId: order.items[1].id, quantity: 1 },
+    ]);
+    const byOrderItem = new Map(returnItems.map((ri) => [ri.orderItemId, ri]));
+    return { id, first: byOrderItem.get(order.items[0].id), second: byOrderItem.get(order.items[1].id) };
+  }
+
+  it('rejects a partial inspection and creates no refund for uninspected items', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }, { price: 500, quantities: [1] }] });
+    const { order, shipment } = fixture;
+    try {
+      const { id, first } = await twoItemReturn(order);
+      // Only the first of the two items is inspected.
+      const res = await request(app).post(`/api/admin/returns/${id}/inspect`)
+        .send({ items: [{ returnItemId: first._id, condition: 'sellable' }] });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/every item/i);
+
+      // Nothing mutated — no refund, return still received, shipment unchanged,
+      // no stock adjustment for the (un)inspected item, order payment untouched.
+      expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(0);
+      expect((await prisma.returnRequest.findUnique({ where: { id } })).status).toBe('received');
+      expect(await prisma.stockAdjustment.count({ where: { relatedOrderId: order.id } })).toBe(0);
+      expect((await prisma.order.findUnique({ where: { id: order.id } })).paymentStatus).toBe('paid');
+      if (shipment) expect((await prisma.shipment.findUnique({ where: { id: shipment.id } })).status).toBe('returned');
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('creates the correct refund for a complete valid inspection of all items', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }, { price: 300, quantities: [1] }] });
+    const { order } = fixture;
+    try {
+      const { id, first, second } = await twoItemReturn(order);
+      const res = await request(app).post(`/api/admin/returns/${id}/inspect`)
+        .send({ items: [
+          { returnItemId: first._id, condition: 'sellable' },
+          { returnItemId: second._id, condition: 'damaged' },
+        ] });
+      expect(res.status).toBe(200);
+      expect(res.body.data.refund.amount).toBe(800); // 500 + 300, one item each
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('rejects duplicate, unknown, or over-quantity entries before any state change', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }, { price: 500, quantities: [1] }] });
+    const { order } = fixture;
+    try {
+      const { id, first, second } = await twoItemReturn(order);
+      const url = `/api/admin/returns/${id}/inspect`;
+
+      const dup = await request(app).post(url).send({ items: [
+        { returnItemId: first._id, condition: 'sellable' },
+        { returnItemId: first._id, condition: 'damaged' },
+      ] });
+      expect(dup.status).toBe(400);
+      expect(dup.body.message).toMatch(/more than once/i);
+
+      const unknown = await request(app).post(url).send({ items: [
+        { returnItemId: first._id, condition: 'sellable' },
+        { returnItemId: 'not-a-real-item', condition: 'sellable' },
+      ] });
+      expect(unknown.status).toBe(400);
+      expect(unknown.body.message).toMatch(/not found/i);
+
+      const overQuantity = await request(app).post(url).send({ items: [
+        { returnItemId: first._id, condition: 'sellable', quantity: 5 },
+        { returnItemId: second._id, condition: 'sellable' },
+      ] });
+      expect(overQuantity.status).toBe(400);
+      expect(overQuantity.body.message).toMatch(/quantity/i);
+
+      // Every attempt rejected: no refund, still received, nothing restocked.
+      expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(0);
+      expect((await prisma.returnRequest.findUnique({ where: { id } })).status).toBe('received');
+      expect(await prisma.stockAdjustment.count({ where: { relatedOrderId: order.id } })).toBe(0);
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+
+  it('returns a controlled 409 for an unresolvable return without mutating state', async () => {
+    const fixture = await makeDiscountedPaidOrder({ productsSpec: [{ price: 500, quantities: [1] }] });
+    const { order, shipment } = fixture;
+    try {
+      const { id, returnItems } = await advanceToReceived(order, [{ orderItemId: order.items[0].id, quantity: 1 }]);
+      // Corrupt the stored return item's quantity beyond the purchased amount so
+      // it can no longer be priced (attributableReturnAmount throws).
+      await prisma.returnItem.update({ where: { id: returnItems[0]._id }, data: { quantity: order.items[0].quantity + 1 } });
+
+      const res = await request(app).post(`/api/admin/returns/${id}/inspect`)
+        .send({ items: [{ returnItemId: returnItems[0]._id, condition: 'sellable' }] });
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/cannot be established|no longer resolve/i);
+
+      expect(await prisma.refund.count({ where: { orderId: order.id } })).toBe(0);
+      expect((await prisma.returnRequest.findUnique({ where: { id } })).status).toBe('received');
+      expect(await prisma.stockAdjustment.count({ where: { relatedOrderId: order.id } })).toBe(0);
+      expect((await prisma.order.findUnique({ where: { id: order.id } })).paymentStatus).toBe('paid');
+      if (shipment) expect((await prisma.shipment.findUnique({ where: { id: shipment.id } })).status).toBe('returned');
+    } finally {
+      await cleanupDiscounted(fixture);
+    }
+  }, 60000);
+});
+

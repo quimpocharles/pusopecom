@@ -47,6 +47,15 @@ export const PERMISSIONS = Object.freeze({
   RETURNS_VIEW: 'returns.view',
   RETURNS_APPROVE: 'returns.approve',
 
+  // Refund-queue capabilities — deliberately separate from returns.* so that
+  // recording a manually-completed refund (ePayGames, the only integrated
+  // gateway, exposes no automated refund API) can be a Finance-scoped action
+  // without also granting the wider returns approval workflow. `refunds.manage`
+  // implies `refunds.view` via impliedPermissions below, matching every other
+  // '<resource>.manage' pair in this vocabulary.
+  REFUNDS_VIEW: 'refunds.view',
+  REFUNDS_MANAGE: 'refunds.manage',
+
   USERS_VIEW: 'users.view',
   USERS_MANAGE: 'users.manage',
 
@@ -91,6 +100,7 @@ export const DEPARTMENT_DEFAULTS = Object.freeze({
     PERMISSIONS.ORDERS_VIEW,
     PERMISSIONS.RETURNS_VIEW,
     PERMISSIONS.RETURNS_APPROVE,
+    PERMISSIONS.REFUNDS_MANAGE,
   ],
 
   operations: [

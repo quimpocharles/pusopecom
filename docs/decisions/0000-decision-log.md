@@ -328,3 +328,32 @@ It matches a working reference implementation's own proven shape (`ticket-sys`) 
 
 **Future implications**
 The "a mixed-category Order already works today" claim in the original ADR-011 entry and in `CLAUDE.md`'s Commerce Engine table is now superseded, not true — corrected there, not silently left stale. Applying a promo code during a Pass-only checkout now validates against an empty `items` array (never the untouched Merchandise cart) — whether platform-wide promos should discount Pass tiers at all is an open question this pass doesn't resolve, since no behavior change was needed to fix the actual bug (sending the wrong cart's contents for validation). If Membership (the next planned commerce category, `docs/EXECUTION_PLAN.md`) ever wants to combine with something else in one checkout, that decision should be made fresh against its own real requirements, not inherited from Pass's now-reversed precedent.
+
+---
+
+## ADR-012 — Refunds are recorded, not initiated: the manual-refund workflow supersedes the automated `/process` route
+
+**Context**
+ADR-009/§7 of the Fulfillment Blueprint established `Refund` as its own entity and named the "Issue Refund" gateway call as a future step, but the only route that ever attempted to move money — `POST /api/admin/refunds/:id/process` — was built against a payment-resolution path that never populated `Payment.providerPaymentReference`. The platform's only integrated gateway today is ePayGames, whose documented API surface has no refund/reversal/void endpoint, so its adapter's `issueRefund` throws by design. The net effect: `/process` could never successfully refund anything; it typically marked a refund `failed`, it never completed the related `ReturnRequest`/`Shipment`/`Pass` states, and its claim step (`where status != 'processing'`) could even flip an already-recorded refund back to `processing`. Separately, return-inspection refund amounts were computed from undiscounted list prices, so on a discounted order they could exceed what the customer actually paid for the returned items.
+
+**Decision**
+Refunds are moved out-of-band by staff and **recorded** through a hardened `POST /api/admin/refunds/:id/record` route, which never calls a gateway and never changes an amount:
+
+- requires an explicit `confirmCompleted` and a declared `externalAmount` that must equal `Refund.amount` to the centavo;
+- runs under the same order-row lock every order-level money mutation uses, and enforces **both** the remaining **order-level** ceiling (amount actually paid) and the remaining **attributable merchandise** ceiling (the returned items' share of what was paid, discounts included), rejecting violations with 422 rather than clamping;
+- rejects a second success for the same `returnRequestId`; validates the mandatory correction note against the authoritative status read under the lock; caps `providerReference`/`note`;
+- performs the status-guarded update and its `refund_recorded` `OrderEvent` in one transaction, then runs shared lifecycle completion (`lib/refundCompletion.js`): `Order.paymentStatus='refunded'` only when fully refunded, `ReturnRequest`/`Shipment` → `refunded`, and eligible `issued` `Pass`es → `refunded` (never `checked_in`, which is surfaced as a Finance exception).
+
+Amounts are corrected — not clamped at recording — through `POST /api/admin/refunds/:id/adjust`, which is allowed only for `pending`/`failed` refunds and bounded by the same ceilings, in two declared modes: `externalPayment:'none'` (normal pre-payment recompute/explicit amount, audited) and `externalPayment:'already_sent'` (a narrow, still-bounded reconciliation to the amount that actually left). The legacy `POST /:id/process` route is **removed**; `paymentService.issueRefund()` is retained, documented as unused, as the future integration point for a gateway that does support automated refunds — and any such future route must reuse the same lock, ceilings, recording transaction, lifecycle completion, and audit safeguards.
+
+**Alternatives considered**
+- *Keep `/process` as a fallback.* Rejected — for the only active gateway it can never succeed and actively corrupts state (marks refunds failed, can revert a recorded refund).
+- *Wait for an automated ePayGames refund API.* Rejected as a launch dependency — the workflow must be correct and useful with today's capabilities; automation can be added behind the same safeguards later.
+- *Clamp an overstated amount at recording time.* Rejected — recording confirms money already left the business, so silently changing the stored amount would misstate reality; the correction belongs before payment (`/adjust`), and a mismatch at recording is rejected.
+- *A general override flag to record above the attributable ceiling.* Rejected — it would normalize over-refunds and reopen the loophole the ceiling exists to close; over-ceiling cases are a manual reconciliation runbook, not a routine control.
+
+**Why the chosen approach won**
+It matches the platform's actual payment capability instead of an assumed one, and it puts every financial bound **before** money moves while making recording a pure, atomic confirmation. Money math is single-sourced in an integer-centavo, scope-aware allocator (`lib/refundMath.js`) with conservative floor rounding for partial returns; concurrency is handled by the order-row lock plus status-guarded conditional updates; and every state change is auditable (`refund_recorded`/`refund_adjusted` events carrying amounts, reasons, actor, and lifecycle outcomes).
+
+**Future implications**
+Any future automated refund (a gateway that supports one, or ePayGames adding an endpoint) must be built as a caller of the exact `/record` safeguards, not a second money path — `paymentService.issueRefund` is kept only for that purpose. The frontend's manual-recording UI (replacing the dead-end "Process Refund" action) is a separate, later step. `Order.paymentStatus` stays the coarse enum (partial refunds remain `paid`, with the detail in refund rows/events). The pre-existing `Payment.providerPaymentReference` population gap is intentionally **not** in scope here — it is only meaningful to a future automated path.

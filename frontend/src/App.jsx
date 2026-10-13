@@ -159,7 +159,7 @@ function App() {
               <Route path="orders" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrders /></PermissionRoute>} />
               <Route path="orders/:orderNumber" element={<PermissionRoute permission={PERMISSIONS.ORDERS_VIEW}><AdminOrderDetail /></PermissionRoute>} />
               <Route path="shipments" element={<PermissionRoute permission={PERMISSIONS.FULFILLMENT_MANAGE}><AdminShipments /></PermissionRoute>} />
-              <Route path="returns" element={<PermissionRoute permission={PERMISSIONS.RETURNS_VIEW}><AdminReturns /></PermissionRoute>} />
+              <Route path="returns" element={<PermissionRoute anyOf={[PERMISSIONS.RETURNS_VIEW, PERMISSIONS.REFUNDS_MANAGE]}><AdminReturns /></PermissionRoute>} />
               <Route path="users" element={<PermissionRoute permission={PERMISSIONS.USERS_VIEW}><AdminUsers /></PermissionRoute>} />
               <Route path="reports" element={<PermissionRoute anyOf={REPORTS_ANY_VIEW}><ReportsLayout /></PermissionRoute>}>
                 <Route index element={<PermissionRoute permission={PERMISSIONS.REPORTS_EXECUTIVE_VIEW}><ExecutiveDashboard /></PermissionRoute>} />

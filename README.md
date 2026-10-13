@@ -84,6 +84,7 @@ A full-stack ecommerce platform for Philippine sports merchandise, featuring the
 - Product management (CRUD with color variant support, try-on toggle)
 - Soft delete for all admins; hard (permanent) delete restricted to `quimpo.charles@gmail.com`
 - Order management with status updates, courier selection (LBC, J&T Express, Ninja Van, etc.), and tracking number — saved as read-only text with an edit button to revise
+- **Returns & Refunds** — return inspection (restock/quarantine) and manual refund recording/adjustment for Finance (`refunds.manage`); refunds are completed with the provider and *recorded*, never initiated — see `docs/REFUNDS_RUNBOOK.md`
 - User management with pagination, search, and role filter
 - Site settings management (try-on feature configuration)
 - Reports dashboard (sales trends, top products, order analytics, customer insights, virtual try-on analytics)

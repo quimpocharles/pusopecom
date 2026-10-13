@@ -41,6 +41,10 @@ const eventDotColors = {
   status_changed: 'bg-blue-500',
   assigned: 'bg-purple-400',
   note_added: 'bg-gray-300',
+  // Money actually moving back out — same semantic green as payment_succeeded,
+  // the other "money/stock state changed" event.
+  refund_recorded: 'bg-green-500',
+  refund_adjusted: 'bg-green-500',
 };
 
 const actorLabels = {
