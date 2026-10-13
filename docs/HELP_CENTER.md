@@ -30,4 +30,25 @@ If the source Google Doc is updated later, re-diff it against `helpCenterContent
 
 ## Screenshots
 
-Each article's `body` can include `{ type: 'image', src, alt }` blocks. `src` is `null` until a real screenshot has been extracted from the source PDF/Doc and placed under `frontend/public/help/images/`; both `AdminHelpArticle.jsx`'s renderer and this content file's own contract require rendering **nothing** (never a broken `<img>`, never an unrelated placeholder) when `src` is `null`. Do not fabricate a screenshot — leave the block's `src` as `null` until a real one is extracted.
+Each article's `body` can include `{ type: 'image', src, alt, caption? }` blocks. `src` is `null` until a real screenshot has been extracted/captured and placed under `frontend/public/help/images/`; both `AdminHelpArticle.jsx`'s renderer and this content file's own contract require rendering **nothing** (never a broken `<img>`, never an unrelated placeholder) when `src` is `null`. Do not fabricate a screenshot — leave the block's `src` as `null` until a real one is available. `caption` is optional, free-text, shown under the image — use it to flag something the screenshot itself doesn't make obvious (e.g. "this example uses seed/fixture data, not a universal label").
+
+**Storage and naming.** Screenshots live at `frontend/public/help/images/<descriptive-name>.png` (served statically, same convention as `frontend/public/Logo.png`) — a plain static asset, not something passing through Cloudinary or the CMS pipeline. Name files for *what they show*, not the article slug or a source page number (e.g. `delete-product-modal.png`, not `article-17.png`) — several articles can reasonably reuse or reference the same screenshot by its descriptive name. Each `src` in `helpCenterContent.js` must point at a file that actually exists; each file under that directory should be referenced by at least one `src` — an orphaned, unreferenced image is as much a defect as a broken path. A quick integrity check:
+
+```bash
+# every referenced src has a real file
+grep -oE "/help/images/[a-zA-Z0-9-]+\.png" backend/data/helpCenterContent.js | sort -u | \
+  while read -r p; do [ -f "frontend/public${p}" ] || echo "MISSING: $p"; done
+
+# every file is referenced by something
+for f in frontend/public/help/images/*.png; do
+  grep -q "/help/images/$(basename "$f")" backend/data/helpCenterContent.js || echo "UNUSED: $f"
+done
+```
+
+**Sourcing a screenshot.** Two ways, in order of preference:
+1. **Extract from the source PDF/Doc**, if it has a genuine, still-accurate one: `pdfimages -png -p "<pdf path>" <prefix>` (poppler-utils) dumps every embedded image tagged with its page number (`<prefix>-<page>-<num>.png`); `pdfimages -list "<pdf path>"` lists them first without extracting. Open each candidate and confirm by eye what it actually shows and whether it still matches the live UI — do not assume page order or a figure caption tells you the content; verify directly.
+2. **Capture fresh from the running app**, using the documented local dev setup (`npm run dev:local`, seeded via `scripts/seedLocal.js` — never the production stack) when no source screenshot exists or the one that does is stale. This repo has no headless-browser tool (no Playwright/Puppeteer, no system Chromium) and no image-optimization tool (no ImageMagick/pngquant/PIL) as of this writing — capturing and trimming a fresh screenshot today is a manual, human step, not something an agent can script unassisted.
+
+**Replacing a stale screenshot:** drop the new file in under a new, descriptive name (don't silently overwrite an old filename someone might still reference elsewhere), update the `src` (and `alt`/`caption` if the content changed), and delete the now-unused old file.
+
+**Avoiding real customer data.** Every screenshot in this app must come from seeded/fixture data (`scripts/seedLocal.js`'s `docs-customer@pusostore.com` / `docs-admin@pusostore.com` and its sample orders), never a real customer record, real payment reference, or real credential — crop out anything that looks like it could be a live secret (API key, token, full card/reference number) even in fixture data, since a screenshot can't tell the difference by itself. If you're not sure whether a captured screen is showing seed data or something real, don't ship it.

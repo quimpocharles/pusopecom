@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AdminHelpArticle from '../AdminHelpArticle';
+import { getReadHistory } from '../../../utils/helpReadHistory';
 
 vi.mock('../../../services/helpService', () => ({
   default: { getArticle: vi.fn() },
@@ -39,6 +40,7 @@ function renderAt(slug) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe('AdminHelpArticle', () => {
@@ -96,5 +98,49 @@ describe('AdminHelpArticle', () => {
 
     await screen.findByText('Recording and Adjusting a Refund');
     expect(screen.getByText('Back to Help Center').closest('a').getAttribute('href')).toBe('/admin/help');
+  });
+
+  it('records a read-history visit once the article loads successfully', async () => {
+    helpService.getArticle.mockResolvedValue({ data: ARTICLE });
+    renderAt('recording-and-adjusting-refunds');
+
+    await screen.findByText('Recording and Adjusting a Refund');
+    const history = getReadHistory();
+    expect(Object.keys(history)).toEqual(['recording-and-adjusting-refunds']);
+    expect(new Date(history['recording-and-adjusting-refunds']).toISOString()).toBe(history['recording-and-adjusting-refunds']);
+  });
+
+  it('updates the timestamp on reopening the same article', async () => {
+    helpService.getArticle.mockResolvedValue({ data: ARTICLE });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-01T00:00:00.000Z'));
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/admin/help/recording-and-adjusting-refunds']}>
+        <Routes><Route path="/admin/help/:slug" element={<AdminHelpArticle />} /></Routes>
+      </MemoryRouter>
+    );
+    await vi.waitFor(() => expect(getReadHistory()['recording-and-adjusting-refunds']).toBeTruthy());
+    const first = getReadHistory()['recording-and-adjusting-refunds'];
+    unmount();
+
+    vi.setSystemTime(new Date('2026-10-05T00:00:00.000Z'));
+    render(
+      <MemoryRouter initialEntries={['/admin/help/recording-and-adjusting-refunds']}>
+        <Routes><Route path="/admin/help/:slug" element={<AdminHelpArticle />} /></Routes>
+      </MemoryRouter>
+    );
+    await vi.waitFor(() => expect(getReadHistory()['recording-and-adjusting-refunds']).not.toBe(first));
+    expect(new Date(getReadHistory()['recording-and-adjusting-refunds']).getTime()).toBeGreaterThan(new Date(first).getTime());
+    vi.useRealTimers();
+  });
+
+  it('does not record a visit when the article fails to load (404)', async () => {
+    helpService.getArticle.mockRejectedValue({ response: { status: 404 } });
+    renderAt('does-not-exist');
+
+    await waitFor(() => {
+      expect(screen.getByText('This article could not be found.')).toBeTruthy();
+    });
+    expect(getReadHistory()).toEqual({});
   });
 });

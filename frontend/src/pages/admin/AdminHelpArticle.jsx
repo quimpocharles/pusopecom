@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ChevronLeftIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import helpService from '../../services/helpService';
+import { recordArticleVisit } from '../../utils/helpReadHistory';
 
 function Block({ block }) {
   switch (block.type) {
@@ -37,7 +38,13 @@ function Block({ block }) {
       // Per backend/data/helpCenterContent.js's own contract: render nothing
       // (never a broken image or a fake placeholder) until a real screenshot
       // has been extracted and src is set.
-      return block.src ? <img src={block.src} alt={block.alt} className="rounded-lg border border-gray-200" /> : null;
+      if (!block.src) return null;
+      return (
+        <figure>
+          <img src={block.src} alt={block.alt} className="rounded-lg border border-gray-200 w-full" />
+          {block.caption && <figcaption className="text-xs text-gray-500 mt-1.5">{block.caption}</figcaption>}
+        </figure>
+      );
     default:
       return null;
   }
@@ -58,7 +65,13 @@ const AdminHelpArticle = () => {
     setError('');
     setArticle(null);
     helpService.getArticle(slug)
-      .then((res) => setArticle(res.data))
+      .then((res) => {
+        setArticle(res.data);
+        // Record the visit only once the article is confirmed to actually
+        // exist — a 404 shouldn't count as "read." Re-opening the same
+        // article (e.g. a refresh) is expected to update the timestamp.
+        recordArticleVisit(slug);
+      })
       .catch((err) => {
         if (err.response?.status === 404) setError('This article could not be found.');
         else setError('Failed to load this article.');
